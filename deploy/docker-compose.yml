@@ -8,12 +8,28 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - nginx-logs:/var/log/nginx
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
     depends_on:
       backend:
         condition: service_healthy
       ai:
         condition: service_healthy
     restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: gachi-certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: /bin/sh
+    command: -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done"
+    depends_on:
+      - nginx
+    restart: unless-stopped
+    profiles:
+      - tls
 
   db:
     image: postgres:16-alpine
@@ -80,3 +96,5 @@ volumes:
   redis-data:
   nginx-logs:
   db-data:
+  letsencrypt:
+  certbot-www:
