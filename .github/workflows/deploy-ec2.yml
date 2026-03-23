@@ -1,0 +1,49 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,EC2_DEPLOY_PATH
+          script: |
+            set -e
+            DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
+
+            cd "$DEPLOY_PATH"
+            test -f .env || { echo ".env not found in $DEPLOY_PATH"; exit 1; }
+
+            if grep -q '^BACKEND_IMAGE=' .env; then
+              sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest|" .env
+            else
+              echo "BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest" >> .env
+            fi
+
+            if grep -q '^AI_IMAGE=' .env; then
+              sed -i "s|^AI_IMAGE=.*|AI_IMAGE=${DOCKERHUB_USERNAME}/gachi-ai:latest|" .env
+            else
+              echo "AI_IMAGE=${DOCKERHUB_USERNAME}/gachi-ai:latest" >> .env
+            fi
+
+            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+            docker compose --env-file .env pull backend ai
+            docker compose --env-file .env up -d --remove-orphans
+            docker image prune -f
+            docker compose --env-file .env ps
