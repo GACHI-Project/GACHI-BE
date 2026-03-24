@@ -51,7 +51,7 @@ services:
     image: ${BACKEND_IMAGE:-gachi-be:latest}
     container_name: gachi-backend
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       DB_URL: ${DB_URL}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
