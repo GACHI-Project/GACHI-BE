@@ -31,6 +31,9 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Spotless check
+        run: ./gradlew --no-daemon spotlessCheck
+
       - name: Test
         run: ./gradlew --no-daemon test
 
