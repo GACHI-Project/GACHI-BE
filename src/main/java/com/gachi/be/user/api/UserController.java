@@ -15,16 +15,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/users")
 public class UserController {
 
-    @GetMapping("/me")
-    public ApiResponse<UserMeResponse> getMyInfo() {
-        return ApiResponse.success(SuccessCode.OK, new UserMeResponse("api 테스트 중입니다."));
-    }
+  @GetMapping("/me")
+  public ApiResponse<UserMeResponse> getMyInfo() {
+    return ApiResponse.success(SuccessCode.OK, new UserMeResponse("api 테스트 중입니다."));
+  }
 
-    @GetMapping("/me/error")
-    public ApiResponse<Void> getMyInfoError(@RequestParam(defaultValue = "user") String type) {
-        if ("external".equalsIgnoreCase(type)) {
-            throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR);
-        }
-        throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+  @GetMapping("/me/error")
+  public ApiResponse<Void> getMyInfoError(@RequestParam(defaultValue = "user") String type) {
+    if ("external".equalsIgnoreCase(type)) {
+      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR);
     }
+    throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+  }
 }

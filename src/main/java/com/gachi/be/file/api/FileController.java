@@ -16,10 +16,10 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/files")
 public class FileController {
-    private final S3FileService s3FileService;
+  private final S3FileService s3FileService;
 
-    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<S3UploadResponse> uploadImage(@RequestPart("file") MultipartFile file) {
-        return ApiResponse.success(SuccessCode.OK, s3FileService.uploadImage(file));
-    }
+  @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ApiResponse<S3UploadResponse> uploadImage(@RequestPart("file") MultipartFile file) {
+    return ApiResponse.success(SuccessCode.OK, s3FileService.uploadImage(file));
+  }
 }

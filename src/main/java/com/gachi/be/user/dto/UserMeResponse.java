@@ -1,4 +1,3 @@
 package com.gachi.be.user.dto;
 
-public record UserMeResponse(String testString) {
-}
+public record UserMeResponse(String testString) {}

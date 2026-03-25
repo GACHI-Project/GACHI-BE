@@ -10,12 +10,9 @@ import org.springframework.context.annotation.Profile;
 @Profile({"dev", "stage"})
 public class SwaggerConfig {
 
-    @Bean
-    public OpenAPI gachiOpenApi() {
-        return new OpenAPI()
-                .info(new Info()
-                        .title("GACHI-BE API")
-                        .description("GACHI 백엔드 API 문서")
-                        .version("v1"));
-    }
+  @Bean
+  public OpenAPI gachiOpenApi() {
+    return new OpenAPI()
+        .info(new Info().title("GACHI-BE API").description("GACHI 백엔드 API 문서").version("v1"));
+  }
 }

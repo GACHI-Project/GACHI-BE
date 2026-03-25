@@ -10,10 +10,8 @@ import software.amazon.awssdk.services.s3.S3Client;
 @EnableConfigurationProperties(S3Properties.class)
 public class S3Config {
 
-    @Bean
-    public S3Client s3Client(S3Properties s3Properties) {
-        return S3Client.builder()
-                .region(Region.of(s3Properties.getRegion()))
-                .build();
-    }
+  @Bean
+  public S3Client s3Client(S3Properties s3Properties) {
+    return S3Client.builder().region(Region.of(s3Properties.getRegion())).build();
+  }
 }
