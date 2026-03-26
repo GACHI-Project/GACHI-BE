@@ -1,11 +1,11 @@
-package com.gachi.be.user.api;
+package com.gachi.be.domain.user.api.controller;
 
+import com.gachi.be.domain.user.dto.response.UserMeResponse;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.code.SuccessCode;
 import com.gachi.be.global.exception.BusinessException;
 import com.gachi.be.global.exception.ExternalApiException;
-import com.gachi.be.user.dto.UserMeResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;

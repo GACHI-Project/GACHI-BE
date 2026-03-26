@@ -1,7 +1,8 @@
-package com.gachi.be.file.application;
+package com.gachi.be.file.service.impl;
 
 import com.gachi.be.file.config.S3Properties;
-import com.gachi.be.file.dto.S3UploadResponse;
+import com.gachi.be.file.dto.response.S3UploadResponse;
+import com.gachi.be.file.service.S3FileService;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.io.IOException;
@@ -21,13 +22,14 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @Service
 @RequiredArgsConstructor
-public class S3FileService {
+public class S3FileServiceImpl implements S3FileService {
   private static final Set<String> ALLOWED_IMAGE_TYPES =
       Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
 
   private final S3Client s3Client;
   private final S3Properties s3Properties;
 
+  @Override
   public S3UploadResponse uploadImage(MultipartFile file) {
     validateImage(file);
     String bucket = s3Properties.getBucket();

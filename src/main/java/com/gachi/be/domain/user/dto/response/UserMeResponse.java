@@ -1,3 +1,3 @@
-package com.gachi.be.user.dto;
+package com.gachi.be.domain.user.dto.response;
 
 public record UserMeResponse(String testString) {}

@@ -1,7 +1,7 @@
-package com.gachi.be.file.api;
+package com.gachi.be.file.api.controller;
 
-import com.gachi.be.file.application.S3FileService;
-import com.gachi.be.file.dto.S3UploadResponse;
+import com.gachi.be.file.dto.response.S3UploadResponse;
+import com.gachi.be.file.service.S3FileService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
 import lombok.RequiredArgsConstructor;
