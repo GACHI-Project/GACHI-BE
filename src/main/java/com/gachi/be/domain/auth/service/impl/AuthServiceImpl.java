@@ -24,11 +24,15 @@ import com.gachi.be.global.exception.AppException;
 import com.gachi.be.global.exception.BusinessException;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 /** 회원가입/로그인/토큰재발급/이메일인증 유스케이스를 처리한다. */
@@ -86,8 +90,13 @@ public class AuthServiceImpl implements AuthService {
             .passwordUpdatedAt(now)
             .build();
 
-    User savedUser = userRepository.save(user);
-    emailVerificationStore.consumeVerifiedEmail(email);
+    User savedUser;
+    try {
+      savedUser = userRepository.saveAndFlush(user);
+    } catch (DataIntegrityViolationException e) {
+      throw mapDuplicateSignupException(e);
+    }
+    consumeVerifiedEmailAfterCommit(email);
     return new SignupResponse(
         savedUser.getId(),
         savedUser.getLoginId(),
@@ -237,5 +246,34 @@ public class AuthServiceImpl implements AuthService {
   private String mergeNullable(String latest, String fallback) {
     String normalizedLatest = normalizeNullable(latest);
     return StringUtils.hasText(normalizedLatest) ? normalizedLatest : normalizeNullable(fallback);
+  }
+
+  private void consumeVerifiedEmailAfterCommit(String email) {
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              emailVerificationStore.consumeVerifiedEmail(email);
+            }
+          });
+      return;
+    }
+    emailVerificationStore.consumeVerifiedEmail(email);
+  }
+
+  private BusinessException mapDuplicateSignupException(DataIntegrityViolationException e) {
+    String message = e.getMostSpecificCause() == null ? "" : e.getMostSpecificCause().getMessage();
+    String normalizedMessage = message.toLowerCase(Locale.ROOT);
+    if (normalizedMessage.contains("users_email_key")) {
+      return new BusinessException(ErrorCode.AUTH_DUPLICATE_EMAIL);
+    }
+    if (normalizedMessage.contains("uk_users_login_id")) {
+      return new BusinessException(ErrorCode.AUTH_DUPLICATE_LOGIN_ID);
+    }
+    if (normalizedMessage.contains("uk_users_phone_number")) {
+      return new BusinessException(ErrorCode.AUTH_DUPLICATE_PHONE_NUMBER);
+    }
+    return new BusinessException(ErrorCode.BUSINESS_RULE_VIOLATION);
   }
 }

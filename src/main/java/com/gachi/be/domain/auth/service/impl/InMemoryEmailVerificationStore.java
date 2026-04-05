@@ -48,6 +48,7 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
     String normalizedEmail = normalizeEmail(email);
     codeStore.remove(normalizedEmail);
     attemptStore.remove(normalizedEmail);
+    cooldownStore.remove(normalizedEmail);
   }
 
   @Override

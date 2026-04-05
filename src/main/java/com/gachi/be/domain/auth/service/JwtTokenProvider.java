@@ -74,6 +74,9 @@ public class JwtTokenProvider {
       if (!"refresh".equals(type)) {
         throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID);
       }
+      if (!authProperties.getJwt().getIssuer().equals(claims.getIssuer())) {
+        throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID);
+      }
 
       return new RefreshTokenClaims(Long.parseLong(claims.getSubject()), claims.getId());
     } catch (ExpiredJwtException e) {

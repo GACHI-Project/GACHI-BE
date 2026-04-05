@@ -14,10 +14,12 @@ import com.gachi.be.global.code.SuccessCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 인증 API 엔드포인트를 제공한다. */
@@ -28,6 +30,7 @@ public class AuthController {
   private final AuthService authService;
 
   @PostMapping("/signup")
+  @ResponseStatus(HttpStatus.CREATED)
   public ApiResponse<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
     return ApiResponse.success(SuccessCode.AUTH_SIGNUP_SUCCESS, authService.signup(request));
   }
@@ -72,6 +75,10 @@ public class AuthController {
     if (StringUtils.hasText(forwardedFor)) {
       String[] split = forwardedFor.split(",");
       return split[0].trim();
+    }
+    String realIp = request.getHeader("X-Real-IP");
+    if (StringUtils.hasText(realIp)) {
+      return realIp.trim();
     }
     return request.getRemoteAddr();
   }

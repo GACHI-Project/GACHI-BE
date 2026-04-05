@@ -31,17 +31,17 @@ public class RedisEmailVerificationStore implements EmailVerificationStore {
   public String issueCode(String email) {
     String normalizedEmail = normalizeEmail(email);
     String cooldownKey = cooldownKey(normalizedEmail);
-    if (Boolean.TRUE.equals(redisTemplate.hasKey(cooldownKey))) {
+    Duration cooldownTtl = Duration.ofSeconds(authProperties.getEmail().getResendCooldownSeconds());
+    Boolean acquired = redisTemplate.opsForValue().setIfAbsent(cooldownKey, "1", cooldownTtl);
+    if (!Boolean.TRUE.equals(acquired)) {
       throw new BusinessException(ErrorCode.AUTH_EMAIL_SEND_COOLDOWN);
     }
 
     String code = generateCode();
     Duration codeTtl = Duration.ofSeconds(authProperties.getEmail().getCodeTtlSeconds());
-    Duration cooldownTtl = Duration.ofSeconds(authProperties.getEmail().getResendCooldownSeconds());
 
     redisTemplate.opsForValue().set(codeKey(normalizedEmail), code, codeTtl);
     redisTemplate.opsForValue().set(attemptKey(normalizedEmail), "0", codeTtl);
-    redisTemplate.opsForValue().set(cooldownKey, "1", cooldownTtl);
     return code;
   }
 
@@ -50,6 +50,7 @@ public class RedisEmailVerificationStore implements EmailVerificationStore {
     String normalizedEmail = normalizeEmail(email);
     redisTemplate.delete(codeKey(normalizedEmail));
     redisTemplate.delete(attemptKey(normalizedEmail));
+    redisTemplate.delete(cooldownKey(normalizedEmail));
   }
 
   @Override

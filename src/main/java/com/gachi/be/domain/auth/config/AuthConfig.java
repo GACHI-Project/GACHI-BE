@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.util.StringUtils;
 
 /** 선택적 인프라 의존성이 있는 인증 빈을 등록한다. */
 @Slf4j
@@ -22,6 +23,10 @@ public class AuthConfig {
       ObjectProvider<JavaMailSender> javaMailSenderProvider, AuthProperties authProperties) {
     JavaMailSender javaMailSender = javaMailSenderProvider.getIfAvailable();
     if (javaMailSender != null) {
+      if (!StringUtils.hasText(authProperties.getEmail().getFromAddress())) {
+        throw new IllegalStateException(
+            "app.auth.email.from-address must be configured when SMTP is enabled.");
+      }
       log.info("AuthMailService selected: SMTP sender");
       return new SmtpAuthMailService(javaMailSender, authProperties);
     }

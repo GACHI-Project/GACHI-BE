@@ -5,12 +5,14 @@ import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.ExternalApiException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.util.StringUtils;
 
 /** SMTP를 통해 인증 코드를 메일로 발송한다. */
+@Slf4j
 @RequiredArgsConstructor
 public class SmtpAuthMailService implements AuthMailService {
   private final JavaMailSender javaMailSender;
@@ -34,6 +36,7 @@ public class SmtpAuthMailService implements AuthMailService {
     try {
       javaMailSender.send(message);
     } catch (MailException e) {
+      log.error("Verification email send failed. email={}", email, e);
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "Failed to send verification email.");
     }
