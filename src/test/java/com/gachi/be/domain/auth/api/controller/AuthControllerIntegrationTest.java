@@ -115,7 +115,7 @@ class AuthControllerIntegrationTest {
               "consentAgreed":true
             }
             """)
-        .andExpect(status().isOk())
+        .andExpect(status().isCreated())
         .andExpect(jsonPath("$.code").value("AUTH2011"));
 
     sendEmail(email)
@@ -195,7 +195,7 @@ class AuthControllerIntegrationTest {
                 "password123",
                 registeredPhoneNumber,
                 true))
-        .andExpect(status().isOk());
+        .andExpect(status().isCreated());
 
     signup(
             signupPayload(
