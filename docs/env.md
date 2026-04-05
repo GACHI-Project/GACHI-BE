@@ -1,4 +1,4 @@
-﻿# BE Environment Variables
+# BE Environment Variables
 
 ## Required
 - `SPRING_PROFILES_ACTIVE`: `dev` / `stage` / `prod`
@@ -26,7 +26,7 @@
 - `AUTH_EMAIL_RESEND_COOLDOWN_SECONDS`: resend cooldown seconds (default: `60`)
 - `AUTH_EMAIL_MAX_ATTEMPTS`: max verification attempts per code (default: `5`)
 - `AUTH_EMAIL_VERIFIED_TTL_SECONDS`: verified mark TTL before signup (default: `1800`)
-- `AUTH_EMAIL_FROM_ADDRESS`: from address for verification emails
+- `AUTH_EMAIL_FROM_ADDRESS`: from address for verification emails (required when SMTP is enabled)
 - `AUTH_EMAIL_SUBJECT`: subject line for verification email
 
 ## AWS Credential
