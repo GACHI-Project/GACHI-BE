@@ -8,6 +8,7 @@
 - `JWT_SECRET`: JWT signing secret (at least 32 bytes)
 
 ## Optional
+
 - `AI_BASE_URL`: AI service base URL
 - `AWS_REGION`: S3 region (e.g. `ap-northeast-2`)
 - `AWS_S3_BUCKET`: S3 bucket name for uploads

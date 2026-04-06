@@ -27,6 +27,7 @@ import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.util.StringUtils;
 
 /** 회원가입/로그인/토큰재발급/이메일인증 유스케이스를 처리한다. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -254,12 +256,21 @@ public class AuthServiceImpl implements AuthService {
           new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-              emailVerificationStore.consumeVerifiedEmail(email);
+              try {
+                emailVerificationStore.consumeVerifiedEmail(email);
+              } catch (Exception e) {
+                // 가입 자체는 커밋된 상태이므로 후처리 실패만 별도로 로깅하고 요청은 실패시키지 않는다.
+                log.warn("Failed to consume verified email mark after commit. email={}", email, e);
+              }
             }
           });
       return;
     }
-    emailVerificationStore.consumeVerifiedEmail(email);
+    try {
+      emailVerificationStore.consumeVerifiedEmail(email);
+    } catch (Exception e) {
+      log.warn("Failed to consume verified email mark without tx sync. email={}", email, e);
+    }
   }
 
   private BusinessException mapDuplicateSignupException(DataIntegrityViolationException e) {

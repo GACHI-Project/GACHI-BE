@@ -38,12 +38,16 @@ public class RedisEmailVerificationStore implements EmailVerificationStore {
           if not code then
             return 0
           end
+          local attempts = tonumber(redis.call('GET', KEYS[2]) or '0')
+          if attempts >= tonumber(ARGV[2]) then
+            return 3
+          end
           if code == ARGV[1] then
             redis.call('SET', KEYS[3], '1', 'EX', ARGV[3])
             redis.call('DEL', KEYS[1], KEYS[2])
             return 1
           end
-          local attempts = redis.call('INCR', KEYS[2])
+          attempts = redis.call('INCR', KEYS[2])
           local ttl = redis.call('TTL', KEYS[1])
           if ttl > 0 then
             redis.call('EXPIRE', KEYS[2], ttl)

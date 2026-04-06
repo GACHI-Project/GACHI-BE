@@ -18,13 +18,14 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "app.auth.email", name = "store", havingValue = "memory")
 public class InMemoryEmailVerificationStore implements EmailVerificationStore {
+  private static final int LOCK_STRIPE_COUNT = 256;
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
   private final Map<String, ExpiringValue<String>> codeStore = new ConcurrentHashMap<>();
   private final Map<String, ExpiringValue<Integer>> attemptStore = new ConcurrentHashMap<>();
   private final Map<String, ExpiringValue<Boolean>> cooldownStore = new ConcurrentHashMap<>();
   private final Map<String, ExpiringValue<Boolean>> verifiedStore = new ConcurrentHashMap<>();
-  private final Map<String, Object> emailLocks = new ConcurrentHashMap<>();
+  private final Object[] emailLocks = initializeLocks();
   private final AuthProperties authProperties;
 
   @Override
@@ -95,17 +96,22 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
   @Override
   public boolean isEmailVerified(String email) {
     String normalizedEmail = normalizeEmail(email);
-    ExpiringValue<Boolean> verified = verifiedStore.get(normalizedEmail);
-    if (!isValid(verified)) {
-      verifiedStore.remove(normalizedEmail);
-      return false;
+    synchronized (lockFor(normalizedEmail)) {
+      ExpiringValue<Boolean> verified = verifiedStore.get(normalizedEmail);
+      if (!isValid(verified)) {
+        verifiedStore.remove(normalizedEmail);
+        return false;
+      }
+      return Boolean.TRUE.equals(verified.value);
     }
-    return Boolean.TRUE.equals(verified.value);
   }
 
   @Override
   public void consumeVerifiedEmail(String email) {
-    verifiedStore.remove(normalizeEmail(email));
+    String normalizedEmail = normalizeEmail(email);
+    synchronized (lockFor(normalizedEmail)) {
+      verifiedStore.remove(normalizedEmail);
+    }
   }
 
   private void cleanupExpired(String email) {
@@ -126,8 +132,17 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
     return String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
   }
 
+  private Object[] initializeLocks() {
+    Object[] locks = new Object[LOCK_STRIPE_COUNT];
+    for (int i = 0; i < LOCK_STRIPE_COUNT; i++) {
+      locks[i] = new Object();
+    }
+    return locks;
+  }
+
   private Object lockFor(String normalizedEmail) {
-    return emailLocks.computeIfAbsent(normalizedEmail, ignored -> new Object());
+    int index = Math.floorMod(normalizedEmail.hashCode(), LOCK_STRIPE_COUNT);
+    return emailLocks[index];
   }
 
   private static class ExpiringValue<T> {
