@@ -227,7 +227,7 @@ public class AuthServiceImpl implements AuthService {
   }
 
   private String normalizeEmail(String email) {
-    return normalizeText(email).toLowerCase();
+    return normalizeText(email).toLowerCase(Locale.ROOT);
   }
 
   private String normalizePhone(String phoneNumber) {

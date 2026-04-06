@@ -26,3 +26,4 @@ app:
       resend-cooldown-seconds: 60
       max-attempts: 5
       verified-ttl-seconds: 1800
+      noop-allowed: true

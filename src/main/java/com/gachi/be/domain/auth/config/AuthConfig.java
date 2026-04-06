@@ -31,7 +31,11 @@ public class AuthConfig {
       return new SmtpAuthMailService(javaMailSender, authProperties);
     }
 
-    log.info("AuthMailService selected: Noop sender (SMTP not configured)");
-    return new NoopAuthMailService();
+    if (authProperties.getEmail().isNoopAllowed()) {
+      log.warn("AuthMailService selected: Noop sender (explicitly allowed)");
+      return new NoopAuthMailService();
+    }
+    throw new IllegalStateException(
+        "JavaMailSender is not configured. Configure SMTP or set app.auth.email.noop-allowed=true.");
   }
 }

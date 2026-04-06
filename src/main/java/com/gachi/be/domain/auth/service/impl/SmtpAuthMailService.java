@@ -36,9 +36,21 @@ public class SmtpAuthMailService implements AuthMailService {
     try {
       javaMailSender.send(message);
     } catch (MailException e) {
-      log.error("Verification email send failed. email={}", email, e);
+      // 장애 분석에 필요한 정보는 남기되 개인정보는 로그에 그대로 남기지 않는다.
+      log.error("Verification email send failed. email={}", maskEmail(email), e);
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "Failed to send verification email.");
     }
+  }
+
+  private String maskEmail(String email) {
+    if (!StringUtils.hasText(email)) {
+      return "***";
+    }
+    int atIndex = email.indexOf('@');
+    if (atIndex <= 1) {
+      return "***";
+    }
+    return email.substring(0, 2) + "***" + email.substring(atIndex);
   }
 }

@@ -24,7 +24,7 @@ app:
     consent-version: ${AUTH_CONSENT_VERSION:2026-04-v1}
     jwt:
       issuer: ${JWT_ISSUER:gachi-be}
-      secret: ${JWT_SECRET:}
+      secret: ${JWT_SECRET}
       access-token-minutes: ${JWT_ACCESS_TOKEN_MINUTES:15}
       refresh-token-days: ${JWT_REFRESH_TOKEN_DAYS:7}
       refresh-token-remember-days: ${JWT_REFRESH_TOKEN_REMEMBER_DAYS:30}
@@ -35,6 +35,7 @@ app:
       max-attempts: ${AUTH_EMAIL_MAX_ATTEMPTS:5}
       verified-ttl-seconds: ${AUTH_EMAIL_VERIFIED_TTL_SECONDS:1800}
       from-address: ${AUTH_EMAIL_FROM_ADDRESS:}
+      noop-allowed: ${AUTH_EMAIL_NOOP_ALLOWED:false}
       subject: ${AUTH_EMAIL_SUBJECT:[GACHI] Email verification code}
   s3:
     region: ${AWS_REGION:ap-northeast-2}

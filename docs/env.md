@@ -16,6 +16,7 @@
 - `REDIS_HOST`: Redis host (default: `localhost`)
 - `REDIS_PORT`: Redis port (default: `6379`)
 - `REDIS_PASSWORD`: Redis password
+- `REDIS_TIMEOUT_MS`: Redis timeout duration (default: `2000ms`)
 - `JWT_ISSUER`: token issuer (default: `gachi-be`)
 - `JWT_ACCESS_TOKEN_MINUTES`: access token TTL minutes (default: `15`)
 - `JWT_REFRESH_TOKEN_DAYS`: refresh token TTL days when remember-me is off (default: `7`)
@@ -27,6 +28,7 @@
 - `AUTH_EMAIL_MAX_ATTEMPTS`: max verification attempts per code (default: `5`)
 - `AUTH_EMAIL_VERIFIED_TTL_SECONDS`: verified mark TTL before signup (default: `1800`)
 - `AUTH_EMAIL_FROM_ADDRESS`: from address for verification emails (required when SMTP is enabled)
+- `AUTH_EMAIL_NOOP_ALLOWED`: allow log-only mail sender when SMTP is missing (default: `false`)
 - `AUTH_EMAIL_SUBJECT`: subject line for verification email
 
 ## AWS Credential

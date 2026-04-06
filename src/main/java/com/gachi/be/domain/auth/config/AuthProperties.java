@@ -33,5 +33,6 @@ public class AuthProperties {
     private long verifiedTtlSeconds = 1800;
     private String fromAddress = "";
     private String subject = "[GACHI] Email verification code";
+    private boolean noopAllowed = false;
   }
 }
