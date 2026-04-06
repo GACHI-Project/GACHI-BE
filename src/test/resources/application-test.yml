@@ -10,3 +10,20 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+app:
+  auth:
+    consent-version: 2026-04-v1
+    jwt:
+      issuer: gachi-test
+      secret: test-secret-key-that-is-longer-than-32-bytes
+      access-token-minutes: 15
+      refresh-token-days: 7
+      refresh-token-remember-days: 30
+    email:
+      store: memory
+      code-ttl-seconds: 300
+      resend-cooldown-seconds: 60
+      max-attempts: 5
+      verified-ttl-seconds: 1800
+      noop-allowed: true

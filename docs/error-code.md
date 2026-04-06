@@ -1,10 +1,12 @@
-﻿# Error Code Table
+# Error Codes
 
-| ERROR_CODE | HTTP_STATUS | message | 설명 | 로그레벨 |
-|---|---|---|---|---|
-| COMMON4001 | 400 BAD_REQUEST | 입력값이 올바르지 않습니다. | 요청 DTO/파라미터 검증 실패 | WARN |
-| COMMON4002 | 405 METHOD_NOT_ALLOWED | 지원하지 않는 HTTP 메서드입니다. | 잘못된 메서드 요청 | WARN |
-| BUS4001 | 400 BAD_REQUEST | 비즈니스 규칙 위반입니다. | 도메인 정책 위반 | WARN |
-| USER4041 | 404 NOT_FOUND | 사용자를 찾을 수 없습니다. | 식별자에 해당하는 사용자 없음 | INFO |
-| EXT5021 | 502 BAD_GATEWAY | 외부 API 호출 중 오류가 발생했습니다. | 외부 연동 실패/타임아웃 | ERROR |
-| COMMON5001 | 500 INTERNAL_SERVER_ERROR | 서버 내부 오류가 발생했습니다. | 처리되지 않은 예외 | ERROR |
+상세 에러 코드는 아래 Google Sheets를 단일 원본으로 관리합니다.
+
+- Google Sheets: [Error Code Single Source](https://docs.google.com/spreadsheets/d/1sUG_JJsVl6a8nR6k8jO_b7UrIEZzuvQdPB6S2S6fqgo/edit?usp=sharing)
+
+## 운영 원칙
+
+1. 코드 추가/수정은 시트에서 먼저 반영합니다.
+2. 코드 반영 시 `src/main/java/com/gachi/be/global/code/ErrorCode.java`와 동기화합니다.
+3. PR에는 변경된 코드와 설명(의도/상태코드/메시지)을 함께 남깁니다.
+4. PR 시점의 에러코드 스냅샷은 팀 비공개 문서에 보관하고, PR 본문에 커밋 해시를 기록합니다.
