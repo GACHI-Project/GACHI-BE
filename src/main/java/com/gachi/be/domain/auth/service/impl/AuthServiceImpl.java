@@ -171,10 +171,10 @@ public class AuthServiceImpl implements AuthService {
     try {
       authMailService.sendVerificationCode(email, code);
     } catch (AppException e) {
-      emailVerificationStore.rollbackIssuedCode(email);
+      rollbackIssuedCodeSafely(email);
       throw e;
     } catch (Exception e) {
-      emailVerificationStore.rollbackIssuedCode(email);
+      rollbackIssuedCodeSafely(email);
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "Failed to send verification code.");
     }
@@ -260,7 +260,7 @@ public class AuthServiceImpl implements AuthService {
                 emailVerificationStore.consumeVerifiedEmail(email);
               } catch (Exception e) {
                 // 가입 자체는 커밋된 상태이므로 후처리 실패만 별도로 로깅하고 요청은 실패시키지 않는다.
-                log.warn("Failed to consume verified email mark after commit. email={}", email, e);
+                log.warn("Failed to consume verified email mark after commit.", e);
               }
             }
           });
@@ -269,7 +269,15 @@ public class AuthServiceImpl implements AuthService {
     try {
       emailVerificationStore.consumeVerifiedEmail(email);
     } catch (Exception e) {
-      log.warn("Failed to consume verified email mark without tx sync. email={}", email, e);
+      log.warn("Failed to consume verified email mark without tx sync.", e);
+    }
+  }
+
+  private void rollbackIssuedCodeSafely(String email) {
+    try {
+      emailVerificationStore.rollbackIssuedCode(email);
+    } catch (Exception rollbackException) {
+      log.warn("Failed to rollback issued email verification code.", rollbackException);
     }
   }
 
