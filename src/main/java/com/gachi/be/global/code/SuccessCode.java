@@ -13,7 +13,11 @@ public enum SuccessCode {
   AUTH_LOGIN_SUCCESS(HttpStatus.OK, "AUTH2001", "로그인에 성공하였습니다."),
   AUTH_REISSUE_SUCCESS(HttpStatus.OK, "AUTH2002", "토큰 재발급에 성공하였습니다."),
   AUTH_EMAIL_CODE_SENT(HttpStatus.OK, "AUTH2003", "이메일 인증 코드가 발송되었습니다."),
-  AUTH_EMAIL_VERIFIED(HttpStatus.OK, "AUTH2004", "이메일 인증이 완료되었습니다.");
+  AUTH_EMAIL_VERIFIED(HttpStatus.OK, "AUTH2004", "이메일 인증이 완료되었습니다."),
+
+  //Newsletter
+  NEWSLETTER_UPLOAD_SUCCESS(HttpStatus.CREATED, "NL2011", "업로드가 시작되었습니다."),
+  NEWSLETTER_STATUS_SUCCESS(HttpStatus.OK, "NL2001", "요청에 성공하였습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;

@@ -91,6 +91,21 @@ public enum ErrorCode {
       "철회된 리프레시 토큰입니다.",
       "로그아웃/회전으로 무효화된 토큰",
       ErrorLogLevel.WARN),
+
+   // Newsletter
+    NEWSLETTER_NOT_FOUND(
+        HttpStatus.NOT_FOUND,
+        "NL4041",
+        "가정통신문을 찾을 수 없습니다.",
+        "newsletterId에 해당하는 레코드 없음 또는 소유권 불일치",
+        ErrorLogLevel.INFO),
+    NEWSLETTER_DUPLICATE(
+        HttpStatus.CONFLICT,
+        "NL4091",
+        "이미 업로드된 가정통신문입니다.",
+        "동일한 file_hash를 가진 가정통신문이 이미 존재함",
+        ErrorLogLevel.WARN),
+
   EXTERNAL_API_ERROR(
       HttpStatus.BAD_GATEWAY,
       "EXT5021",
