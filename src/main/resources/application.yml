@@ -44,3 +44,11 @@ app:
     image-prefix: ${AWS_S3_IMAGE_PREFIX:images}
     access-key-id: ${AWS_ACCESS_KEY_ID:}
     secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
+  clova:
+    ocr:
+      invoke-url: ${CLOVA_OCR_AP_URL:}
+      secret-key: ${CLOVA_OCR_SECRET_KEY:}
+    papago:
+      client-id: ${PAPAGO_CLIENT_ID:}
+      client-secret: ${PAPAGO_CLIENT_SECRET:}
+#      api-url: https://naveropenapi.apigw.ntruss.com/nmt/v1/translation
