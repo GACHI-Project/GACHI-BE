@@ -6,6 +6,7 @@ import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
+import com.gachi.be.domain.newsletter.pipeline.NewsletterPipelineService;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.newsletter.service.NewsletterService;
 import com.gachi.be.file.service.S3FileService;
@@ -20,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -37,6 +40,7 @@ public class NewsletterServiceImpl implements NewsletterService {
     private final NewsletterRepository newsletterRepository;
     private final ChildRepository childRepository;
     private final S3FileService s3FileService;
+    private final NewsletterPipelineService newsletterPipelineService;
 
     /**
      * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
@@ -48,6 +52,7 @@ public class NewsletterServiceImpl implements NewsletterService {
      *   S3 업로드 → file_key 획득
      *   childId가 있으면 children 테이블에서 자녀 정보 조회 (스냅샷용)
      *   newsletter 레코드 DB 저장 (status=PENDING 으로 변경)
+     *   AI 분석 파이프라인 비동기 트리거 -> Asyncㅏ로 별도 스레드에서 실행하게 함.
      */
     @Override
     @Transactional
@@ -104,8 +109,17 @@ public class NewsletterServiceImpl implements NewsletterService {
             .build();
 
         Newsletter saved = newsletterRepository.save(newsletter);
-        log.info("[Newsletter] 업로드 완료. userId={}, newsletterId={}", userId, saved.getId());
+        final Long savedId = saved.getId();
+        log.info("[Newsletter] 업로드 완료. userId={}, newsletterId={}", userId, savedId);
 
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    log.debug("[Newsletter] 트랜잭션 커밋 완료. 파이프라인 트리거. newsletterId={}", savedId);
+                    newsletterPipelineService.runPipeline(savedId);
+                }
+            });
         return new NewsletterUploadResponse(saved.getId(), saved.getStatus());
     }
 

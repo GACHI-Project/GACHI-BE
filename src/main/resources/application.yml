@@ -46,9 +46,10 @@ app:
     secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
   clova:
     ocr:
-      invoke-url: ${CLOVA_OCR_AP_URL:}
+      invoke-url: ${CLOVA_OCR_API_URL:}
       secret-key: ${CLOVA_OCR_SECRET_KEY:}
+      presigned-url-minutes: ${CLOVA_OCR_PRESIGNED_MINUTES:15}
     papago:
       client-id: ${PAPAGO_CLIENT_ID:}
       client-secret: ${PAPAGO_CLIENT_SECRET:}
-#      api-url: https://naveropenapi.apigw.ntruss.com/nmt/v1/translation
+      api-url: https://papago.apigw.ntruss.com/nmt/v1
