@@ -49,12 +49,14 @@ public class AuthServiceImpl implements AuthService {
   private static final int PASSWORD_MIN_LENGTH = 8;
   private static final int PASSWORD_MAX_LENGTH = 20;
   private static final int PASSWORD_MIN_COMPOSITION = 2;
+  private static final int PASSWORD_IDENTIFIER_MIN_LENGTH = 3;
   private static final int PASSWORD_MIN_PHONE_CHUNK_LENGTH = 4;
   private static final int PASSWORD_SEQUENCE_LIMIT = 4;
   private static final Pattern PASSWORD_LETTER_PATTERN = Pattern.compile("[A-Za-z]");
   private static final Pattern PASSWORD_DIGIT_PATTERN = Pattern.compile("[0-9]");
-  private static final Pattern PASSWORD_SPECIAL_PATTERN = Pattern.compile("[^A-Za-z0-9]");
+  private static final Pattern PASSWORD_SPECIAL_PATTERN = Pattern.compile("[\\p{P}\\p{S}]");
   private static final Pattern PASSWORD_REPEAT_PATTERN = Pattern.compile("(.)\\1{2,}");
+  private static final Pattern PASSWORD_CANONICAL_PATTERN = Pattern.compile("[^a-z0-9]");
 
   private final UserRepository userRepository;
   private final AuthRefreshTokenRepository authRefreshTokenRepository;
@@ -354,7 +356,20 @@ public class AuthServiceImpl implements AuthService {
 
   private boolean containsIgnoreCase(String password, String token) {
     String normalizedToken = normalizeText(token).toLowerCase(Locale.ROOT);
-    return normalizedToken.length() >= 3 && password.contains(normalizedToken);
+    if (normalizedToken.length() >= PASSWORD_IDENTIFIER_MIN_LENGTH
+        && password.contains(normalizedToken)) {
+      return true;
+    }
+
+    // '_' '.' '-' 같은 구분자를 제거한 정규형도 비교해서 식별자 우회를 막는다.
+    String canonicalToken = canonicalizePasswordToken(normalizedToken);
+    String canonicalPassword = canonicalizePasswordToken(password);
+    return canonicalToken.length() >= PASSWORD_IDENTIFIER_MIN_LENGTH
+        && canonicalPassword.contains(canonicalToken);
+  }
+
+  private String canonicalizePasswordToken(String value) {
+    return PASSWORD_CANONICAL_PATTERN.matcher(value).replaceAll("");
   }
 
   private boolean containsPhoneChunk(String password, String phoneNumber) {

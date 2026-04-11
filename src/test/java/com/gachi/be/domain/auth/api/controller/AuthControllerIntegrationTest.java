@@ -269,6 +269,9 @@ class AuthControllerIntegrationTest {
     checkEmail(email)
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("AUTH4091"));
+    checkEmail("DUP-CHECK@GACHI.COM")
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4091"));
     checkPhoneNumber(phoneNumber)
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("AUTH4093"));
@@ -317,6 +320,27 @@ class AuthControllerIntegrationTest {
   }
 
   @Test
+  void signupRejectsPasswordCompositionPolicyViolationWithOnlyNonAsciiAndDigits() throws Exception {
+    String email = "policy-composition-unicode@gachi.com";
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "policy-composition-unicode",
+                email,
+                "policy_unicode_user",
+                "한글비밀번호2580",
+                "한글비밀번호2580",
+                "01044556677",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4007"));
+  }
+
+  @Test
   void signupRejectsPasswordForbiddenPatternPolicyViolation() throws Exception {
     String email = "policy-forbidden@gachi.com";
     sendEmail(email).andExpect(status().isOk());
@@ -329,8 +353,8 @@ class AuthControllerIntegrationTest {
                 "policy-forbidden",
                 email,
                 "forbidden_user",
-                "forbidden_user1!",
-                "forbidden_user1!",
+                "ForbiddenUser1!",
+                "ForbiddenUser1!",
                 "01093456789",
                 true))
         .andExpect(status().isBadRequest())
