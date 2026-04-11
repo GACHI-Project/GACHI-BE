@@ -77,6 +77,24 @@ public enum ErrorCode {
       "약관 및 개인정보 처리방침 동의가 필요합니다.",
       "회원가입 동의 미체크",
       ErrorLogLevel.WARN),
+  AUTH_PASSWORD_POLICY_LENGTH_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4006",
+      "비밀번호 길이 정책을 만족하지 않습니다.",
+      "비밀번호 길이 정책 위반",
+      ErrorLogLevel.WARN),
+  AUTH_PASSWORD_POLICY_COMPOSITION_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4007",
+      "비밀번호 문자 조합 정책을 만족하지 않습니다.",
+      "비밀번호 문자 조합 정책 위반",
+      ErrorLogLevel.WARN),
+  AUTH_PASSWORD_POLICY_FORBIDDEN_PATTERN(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4008",
+      "비밀번호 금지 패턴에 해당합니다.",
+      "비밀번호 금지 패턴 정책 위반",
+      ErrorLogLevel.WARN),
   AUTH_REFRESH_TOKEN_INVALID(
       HttpStatus.UNAUTHORIZED,
       "AUTH4012",

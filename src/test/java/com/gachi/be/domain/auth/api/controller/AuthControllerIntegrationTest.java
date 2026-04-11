@@ -234,6 +234,109 @@ class AuthControllerIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH4093"));
   }
 
+  @Test
+  void duplicateCheckApisAvailableAndDuplicate() throws Exception {
+    String email = "dup-check@gachi.com";
+    String loginId = "dup_check_user";
+    String phoneNumber = "01066667777";
+
+    checkLoginId(loginId)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2005"))
+        .andExpect(jsonPath("$.result.available").value(true));
+    checkEmail(email)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2006"))
+        .andExpect(jsonPath("$.result.available").value(true));
+    checkPhoneNumber(phoneNumber)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2007"))
+        .andExpect(jsonPath("$.result.available").value(true));
+
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "dup-check-user", email, loginId, "Policy12!", "Policy12!", phoneNumber, true))
+        .andExpect(status().isCreated());
+
+    checkLoginId(loginId)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4092"));
+    checkEmail(email)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4091"));
+    checkPhoneNumber(phoneNumber)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4093"));
+  }
+
+  @Test
+  void signupRejectsPasswordLengthPolicyViolation() throws Exception {
+    String email = "policy-length@gachi.com";
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "policy-length",
+                email,
+                "policy_length_user",
+                "TooLongPassword1234567!",
+                "TooLongPassword1234567!",
+                "01071234567",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4006"));
+  }
+
+  @Test
+  void signupRejectsPasswordCompositionPolicyViolation() throws Exception {
+    String email = "policy-composition@gachi.com";
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "policy-composition",
+                email,
+                "policy_composition_user",
+                "onlyletters",
+                "onlyletters",
+                "01082345678",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4007"));
+  }
+
+  @Test
+  void signupRejectsPasswordForbiddenPatternPolicyViolation() throws Exception {
+    String email = "policy-forbidden@gachi.com";
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "policy-forbidden",
+                email,
+                "forbidden_user",
+                "forbidden_user1!",
+                "forbidden_user1!",
+                "01093456789",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4008"));
+  }
+
   private org.springframework.test.web.servlet.ResultActions sendEmail(String email)
       throws Exception {
     return mockMvc.perform(
@@ -254,6 +357,30 @@ class AuthControllerIntegrationTest {
       throws Exception {
     return mockMvc.perform(
         post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content(payload));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions checkLoginId(String loginId)
+      throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/check-login-id")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("loginId", loginId))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions checkEmail(String email)
+      throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/check-email")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("email", email))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions checkPhoneNumber(String phoneNumber)
+      throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/check-phone-number")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("phoneNumber", phoneNumber))));
   }
 
   private String signupPayload(
