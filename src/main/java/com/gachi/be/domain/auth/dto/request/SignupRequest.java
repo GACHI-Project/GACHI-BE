@@ -12,7 +12,7 @@ public record SignupRequest(
     @NotBlank
         @Pattern(regexp = "^[a-zA-Z0-9._-]{4,50}$", message = "loginId는 4~50자의 영문/숫자/._-만 허용합니다.")
         String loginId,
-    @NotBlank @Size(min = 8, max = 100) String password,
+    @NotBlank @Size(max = 100) String password,
     @NotBlank String passwordConfirm,
     @NotBlank @Pattern(regexp = "^[0-9]{10,11}$", message = "전화번호는 숫자 10~11자리여야 합니다.")
         String phoneNumber,

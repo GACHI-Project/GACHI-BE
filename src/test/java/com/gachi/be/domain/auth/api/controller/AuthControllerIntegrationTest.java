@@ -299,6 +299,27 @@ class AuthControllerIntegrationTest {
   }
 
   @Test
+  void signupRejectsPasswordLengthPolicyViolationWhenTooShort() throws Exception {
+    String email = "policy-length-short@gachi.com";
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "policy-length-short",
+                email,
+                "policy_length_short_user",
+                "Aa1!234",
+                "Aa1!234",
+                "01071231111",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4006"));
+  }
+
+  @Test
   void signupRejectsPasswordCompositionPolicyViolation() throws Exception {
     String email = "policy-composition@gachi.com";
     sendEmail(email).andExpect(status().isOk());

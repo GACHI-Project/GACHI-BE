@@ -356,15 +356,16 @@ public class AuthServiceImpl implements AuthService {
   }
 
   private boolean containsIgnoreCase(String password, String token) {
+    String normalizedPassword = normalizeText(password).toLowerCase(Locale.ROOT);
     String normalizedToken = normalizeText(token).toLowerCase(Locale.ROOT);
     if (normalizedToken.length() >= PASSWORD_IDENTIFIER_MIN_LENGTH
-        && password.contains(normalizedToken)) {
+        && normalizedPassword.contains(normalizedToken)) {
       return true;
     }
 
     // '_' '.' '-' 같은 구분자를 제거한 정규형도 비교해서 식별자 우회를 막는다.
     String canonicalToken = canonicalizePasswordToken(normalizedToken);
-    String canonicalPassword = canonicalizePasswordToken(password);
+    String canonicalPassword = canonicalizePasswordToken(normalizedPassword);
     return canonicalToken.length() >= PASSWORD_IDENTIFIER_MIN_LENGTH
         && canonicalPassword.contains(canonicalToken);
   }
