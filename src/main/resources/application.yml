@@ -42,3 +42,5 @@ app:
     bucket: ${AWS_S3_BUCKET:}
     public-base-url: ${AWS_S3_PUBLIC_BASE_URL:}
     image-prefix: ${AWS_S3_IMAGE_PREFIX:images}
+    access-key-id: ${AWS_ACCESS_KEY_ID:}
+    secret-access-key: ${AWS_SECRET_ACCESS_KEY:}

@@ -87,7 +87,7 @@ public class NewsletterServiceImpl implements NewsletterService {
         checkDuplicate(userId, childName, fileHash);
 
         // S3 업로드 - 가정통신문 전용 경로에 저장 + 디버깅 로그 추가해서 체크
-        String fileKey = s3FileService.upload(file);
+        String fileKey = s3FileService.uploadNewsletter(file).key();
         log.debug("[Newsletter] S3 업로드 완료. userId={}, fileKey={}", userId, fileKey);
 
         // newsletter 레코드 DB 저장

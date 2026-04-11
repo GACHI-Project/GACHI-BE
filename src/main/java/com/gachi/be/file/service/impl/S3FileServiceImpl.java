@@ -26,36 +26,53 @@ public class S3FileServiceImpl implements S3FileService {
   private static final Set<String> ALLOWED_IMAGE_TYPES =
       Set.of("image/jpeg", "image/png", "image/webp", "image/gif");
 
+  // 가정통신문 허용 형식 (PDF 포함)
+  private static final Set<String> ALLOWED_NEWSLETTER_TYPES =
+      Set.of("image/jpeg", "image/png", "application/pdf");
+
+  // 가정통신문 전용 S3 prefix
+  private static final String NEWSLETTER_PREFIX = "newsletters";
   private final S3Client s3Client;
   private final S3Properties s3Properties;
 
   @Override
   public S3UploadResponse uploadImage(MultipartFile file) {
     validateImage(file);
-    String bucket = s3Properties.getBucket();
-    if (!StringUtils.hasText(bucket)) {
-      throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "AWS_S3_BUCKET is not configured.");
-    }
+    String key = buildObjectKey(file.getOriginalFilename(), s3Properties.getImagePrefix());
+    return doUpload(file, key);
+  }
 
-    String key = buildObjectKey(file.getOriginalFilename());
-    PutObjectRequest request =
-        PutObjectRequest.builder()
-            .bucket(bucket)
-            .key(key)
-            .contentType(file.getContentType())
-            .build();
+  @Override
+  public S3UploadResponse uploadNewsletter(MultipartFile file) {
+      validateNewsletter(file);
+      String key = buildObjectKey(file.getOriginalFilename(), NEWSLETTER_PREFIX);
+      return doUpload(file, key);
+  }
 
-    try (InputStream inputStream = file.getInputStream()) {
-      s3Client.putObject(request, RequestBody.fromInputStream(inputStream, file.getSize()));
-    } catch (IOException e) {
-      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "Failed to read uploaded file.");
-    } catch (S3Exception e) {
-      throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, e.awsErrorDetails().errorMessage());
-    }
+  private S3UploadResponse doUpload(MultipartFile file, String key) {
+      String bucket = s3Properties.getBucket();
+      if (!StringUtils.hasText(bucket)) {
+          throw new ExternalApiException(
+              ErrorCode.EXTERNAL_API_ERROR, "AWS_S3_BUCKET is not configured.");
+      }
 
-    return new S3UploadResponse(key, buildObjectUrl(key));
+      PutObjectRequest request =
+          PutObjectRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .contentType(file.getContentType())
+              .build();
+
+      try (InputStream inputStream = file.getInputStream()) {
+          s3Client.putObject(request, RequestBody.fromInputStream(inputStream, file.getSize()));
+      } catch (IOException e) {
+          throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "Failed to read uploaded file.");
+      } catch (S3Exception e) {
+          throw new ExternalApiException(
+              ErrorCode.EXTERNAL_API_ERROR, e.awsErrorDetails().errorMessage());
+      }
+
+      return new S3UploadResponse(key, buildObjectUrl(key));
   }
 
   private void validateImage(MultipartFile file) {
@@ -70,13 +87,24 @@ public class S3FileServiceImpl implements S3FileService {
     }
   }
 
-  private String buildObjectKey(String originalFilename) {
+  private void validateNewsletter(MultipartFile file) {
+      if (file == null || file.isEmpty()) {
+          throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "File is empty.");
+      }
+      String contentType = file.getContentType();
+      if (!StringUtils.hasText(contentType) || !ALLOWED_NEWSLETTER_TYPES.contains(contentType)) {
+          throw new ExternalApiException(
+              ErrorCode.EXTERNAL_API_ERROR, "Unsupported newsletter content type.");
+      }
+  }
+
+  private String buildObjectKey(String originalFilename, String prefix) {
     String safeFilename =
-        StringUtils.cleanPath(originalFilename == null ? "image.bin" : originalFilename);
+        StringUtils.cleanPath(originalFilename == null ? "file.bin" : originalFilename);
     LocalDate today = LocalDate.now();
     return String.format(
         "%s/%d/%02d/%02d/%s-%s",
-        s3Properties.getImagePrefix(),
+        prefix,
         today.getYear(),
         today.getMonthValue(),
         today.getDayOfMonth(),
