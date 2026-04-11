@@ -361,6 +361,71 @@ class AuthControllerIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH4008"));
   }
 
+  @Test
+  void signupRejectsPasswordForbiddenPatternPolicyViolationByPhoneChunkWithSeparators()
+      throws Exception {
+    String email = "policy-forbidden-phone@gachi.com";
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "policy-forbidden-phone",
+                email,
+                "phone_guard_user",
+                "Aa!010-9345-z",
+                "Aa!010-9345-z",
+                "01093456789",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4008"));
+  }
+
+  @Test
+  void signupRejectsPasswordForbiddenPatternPolicyViolationByRepeatedCharacters() throws Exception {
+    String email = "policy-forbidden-repeat@gachi.com";
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "policy-forbidden-repeat",
+                email,
+                "repeat_guard_user",
+                "Aaa!2580",
+                "Aaa!2580",
+                "01055667788",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4008"));
+  }
+
+  @Test
+  void signupRejectsPasswordForbiddenPatternPolicyViolationBySequentialCharacters()
+      throws Exception {
+    String email = "policy-forbidden-sequence@gachi.com";
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
+
+    signup(
+            signupPayload(
+                "policy-forbidden-sequence",
+                email,
+                "sequence_guard_user",
+                "Abcd!258",
+                "Abcd!258",
+                "01099887766",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4008"));
+  }
+
   private org.springframework.test.web.servlet.ResultActions sendEmail(String email)
       throws Exception {
     return mockMvc.perform(

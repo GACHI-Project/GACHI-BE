@@ -57,6 +57,7 @@ public class AuthServiceImpl implements AuthService {
   private static final Pattern PASSWORD_SPECIAL_PATTERN = Pattern.compile("[\\p{P}\\p{S}]");
   private static final Pattern PASSWORD_REPEAT_PATTERN = Pattern.compile("(.)\\1{2,}");
   private static final Pattern PASSWORD_CANONICAL_PATTERN = Pattern.compile("[^a-z0-9]");
+  private static final Pattern PASSWORD_NON_DIGIT_PATTERN = Pattern.compile("[^0-9]");
 
   private final UserRepository userRepository;
   private final AuthRefreshTokenRepository authRefreshTokenRepository;
@@ -374,6 +375,8 @@ public class AuthServiceImpl implements AuthService {
 
   private boolean containsPhoneChunk(String password, String phoneNumber) {
     String normalizedPhone = normalizePhone(phoneNumber);
+    // 원문 비밀번호는 구분자 삽입으로 우회 가능하므로 숫자만 추출해서 비교한다.
+    String digitOnlyPassword = extractDigits(password);
     if (normalizedPhone.length() < PASSWORD_MIN_PHONE_CHUNK_LENGTH) {
       return false;
     }
@@ -381,11 +384,15 @@ public class AuthServiceImpl implements AuthService {
         start <= normalizedPhone.length() - PASSWORD_MIN_PHONE_CHUNK_LENGTH;
         start++) {
       String chunk = normalizedPhone.substring(start, start + PASSWORD_MIN_PHONE_CHUNK_LENGTH);
-      if (password.contains(chunk)) {
+      if (digitOnlyPassword.contains(chunk)) {
         return true;
       }
     }
     return false;
+  }
+
+  private String extractDigits(String value) {
+    return PASSWORD_NON_DIGIT_PATTERN.matcher(value).replaceAll("");
   }
 
   private boolean containsSequentialPattern(String password) {
