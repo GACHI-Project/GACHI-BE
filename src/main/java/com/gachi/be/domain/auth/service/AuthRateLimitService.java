@@ -90,7 +90,8 @@ public class AuthRateLimitService {
               String.valueOf(policy.getWindowSeconds()));
 
       if (result == null || result.isEmpty()) {
-        log.warn("Rate limit script returned empty result. key={}", key);
+        log.warn(
+            "Rate limit script returned empty result. errorCode={}", exceedErrorCode.getCode());
         return;
       }
 
@@ -102,7 +103,7 @@ public class AuthRateLimitService {
       throw e;
     } catch (Exception e) {
       // 인증 가용성을 위해 Redis 일시 장애 시 요청을 열어두고, 장애 감지는 로그로 빠르게 대응한다.
-      log.warn("Rate limit check failed unexpectedly. key={}", key, e);
+      log.warn("Rate limit check failed unexpectedly. errorCode={}", exceedErrorCode.getCode(), e);
     }
   }
 

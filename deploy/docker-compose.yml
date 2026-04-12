@@ -59,6 +59,7 @@ services:
       AWS_S3_BUCKET: ${AWS_S3_BUCKET}
       AWS_S3_PUBLIC_BASE_URL: ${AWS_S3_PUBLIC_BASE_URL}
       AWS_S3_IMAGE_PREFIX: ${AWS_S3_IMAGE_PREFIX:-images}
+      AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET: ${AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET}
     depends_on:
       db:
         condition: service_healthy

@@ -112,6 +112,29 @@ class AuthRateLimitIntegrationTest {
   }
 
   @Test
+  void emailSendSeparatesBucketsByEmailOnSameIp() throws Exception {
+    String clientIp = "198.51.100.30";
+
+    sendEmailWithForwardedFor("bucket-a@gachi.com", clientIp).andExpect(status().isOk());
+    sendEmailWithForwardedFor("bucket-b@gachi.com", clientIp).andExpect(status().isOk());
+    sendEmailWithForwardedFor("bucket-a@gachi.com", clientIp).andExpect(status().isOk());
+    sendEmailWithForwardedFor("bucket-a@gachi.com", clientIp)
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("AUTH4294"));
+  }
+
+  @Test
+  void emailSendUsesFirstForwardedIpOnly() throws Exception {
+    sendEmailWithForwardedFor("first-hop@gachi.com", "198.51.100.40, 10.0.0.1")
+        .andExpect(status().isOk());
+    sendEmailWithForwardedFor("first-hop@gachi.com", "198.51.100.40, 10.0.0.2")
+        .andExpect(status().isOk());
+    sendEmailWithForwardedFor("first-hop@gachi.com", "198.51.100.40, 10.0.0.3")
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("AUTH4294"));
+  }
+
+  @Test
   void loginBlocksWhenIpLimitExceeded() throws Exception {
     createActiveUser("ratelimit_login_1", "RateLimit12!", "login-limit-1@gachi.com", "01012345670");
     String realIp = "203.0.113.20";
@@ -142,6 +165,19 @@ class AuthRateLimitIntegrationTest {
     loginWithRealIp("ratelimit_login_2", "RateLimit12!", realIp)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("AUTH2001"));
+  }
+
+  @Test
+  void loginSharesBucketAcrossAccountsOnSameIp() throws Exception {
+    createActiveUser("ratelimit_login_3", "RateLimit12!", "login-limit-3@gachi.com", "01012345672");
+    createActiveUser("ratelimit_login_4", "RateLimit12!", "login-limit-4@gachi.com", "01012345673");
+    String realIp = "203.0.113.30";
+
+    loginWithRealIp("ratelimit_login_3", "RateLimit12!", realIp).andExpect(status().isOk());
+    loginWithRealIp("ratelimit_login_4", "RateLimit12!", realIp).andExpect(status().isOk());
+    loginWithRealIp("ratelimit_login_3", "RateLimit12!", realIp)
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("AUTH4293"));
   }
 
   private ResultActions sendEmailWithForwardedFor(String email, String forwardedFor)

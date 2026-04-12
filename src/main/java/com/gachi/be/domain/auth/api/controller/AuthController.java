@@ -18,6 +18,8 @@ import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
@@ -100,15 +102,43 @@ public class AuthController {
   }
 
   private String extractClientIp(HttpServletRequest request) {
+    String remoteAddr = normalizeIp(request.getRemoteAddr());
+    if (!isTrustedProxy(remoteAddr)) {
+      return remoteAddr;
+    }
+
     String forwardedFor = request.getHeader("X-Forwarded-For");
     if (StringUtils.hasText(forwardedFor)) {
       String[] split = forwardedFor.split(",");
-      return split[0].trim();
+      String firstHop = normalizeIp(split[0]);
+      if (StringUtils.hasText(firstHop)) {
+        return firstHop;
+      }
     }
     String realIp = request.getHeader("X-Real-IP");
     if (StringUtils.hasText(realIp)) {
-      return realIp.trim();
+      return normalizeIp(realIp);
     }
-    return request.getRemoteAddr();
+    return remoteAddr;
+  }
+
+  private String normalizeIp(String rawIp) {
+    return StringUtils.hasText(rawIp) ? rawIp.trim() : "";
+  }
+
+  private boolean isTrustedProxy(String remoteAddr) {
+    if (!StringUtils.hasText(remoteAddr)) {
+      return false;
+    }
+    try {
+      InetAddress address = InetAddress.getByName(remoteAddr);
+      // 신뢰 가능한 프록시(내부망/루프백)에서 온 요청만 Forwarded 헤더를 신뢰한다.
+      return address.isAnyLocalAddress()
+          || address.isLoopbackAddress()
+          || address.isSiteLocalAddress()
+          || address.isLinkLocalAddress();
+    } catch (UnknownHostException e) {
+      return false;
+    }
   }
 }
