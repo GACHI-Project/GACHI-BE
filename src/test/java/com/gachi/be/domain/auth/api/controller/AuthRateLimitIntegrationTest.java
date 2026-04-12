@@ -196,6 +196,22 @@ class AuthRateLimitIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH4293"));
   }
 
+  @Test
+  void loginPrefersXRealIpWhenBothHeadersExist() throws Exception {
+    createActiveUser("ratelimit_login_6", "RateLimit12!", "login-limit-6@gachi.com", "01012345675");
+
+    loginWithRealIpAndForwardedFor(
+            "ratelimit_login_6", "RateLimit12!", "203.0.113.50", "198.51.100.1")
+        .andExpect(status().isOk());
+    loginWithRealIpAndForwardedFor(
+            "ratelimit_login_6", "RateLimit12!", "203.0.113.50", "198.51.100.2")
+        .andExpect(status().isOk());
+    loginWithRealIpAndForwardedFor(
+            "ratelimit_login_6", "RateLimit12!", "203.0.113.50", "198.51.100.3")
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("AUTH4293"));
+  }
+
   private ResultActions sendEmailWithForwardedFor(String email, String forwardedFor)
       throws Exception {
     return mockMvc.perform(
@@ -222,6 +238,18 @@ class AuthRateLimitIntegrationTest {
         post("/api/v1/auth/login")
             .with(remoteAddress(remoteAddr))
             .header("X-Real-IP", realIp)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                objectMapper.writeValueAsString(
+                    Map.of("loginId", loginId, "password", password, "rememberMe", false))));
+  }
+
+  private ResultActions loginWithRealIpAndForwardedFor(
+      String loginId, String password, String realIp, String forwardedFor) throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/login")
+            .header("X-Real-IP", realIp)
+            .header("X-Forwarded-For", forwardedFor)
             .contentType(MediaType.APPLICATION_JSON)
             .content(
                 objectMapper.writeValueAsString(
