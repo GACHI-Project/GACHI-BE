@@ -34,6 +34,7 @@
 - `AUTH_RATE_LIMIT_ENABLED`: enable auth endpoint rate limiting (default: `true`)
 - `AUTH_RATE_LIMIT_KEY_PREFIX`: Redis key prefix for auth rate-limit counters (default: `auth:rate-limit:`)
 - `AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET`: HMAC secret for email identifier hashing (required when rate limit is enabled)
+- `AUTH_RATE_LIMIT_TRUSTED_PROXIES`: trusted proxy list for forwarded headers (IP/CIDR/host, comma-separated; default: `127.0.0.1,::1,nginx`)
 - `AUTH_RATE_LIMIT_EMAIL_SEND_LIMIT`: max allowed requests per window for `/api/v1/auth/email/send` (default: `3`)
 - `AUTH_RATE_LIMIT_EMAIL_SEND_WINDOW_SECONDS`: window size seconds for `/api/v1/auth/email/send` (default: `300`)
 - `AUTH_RATE_LIMIT_LOGIN_LIMIT`: max allowed requests per window for `/api/v1/auth/login` (default: `5`)

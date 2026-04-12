@@ -24,6 +24,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
@@ -46,6 +47,7 @@ import org.testcontainers.utility.DockerImageName;
       "app.auth.rate-limit.enabled=true",
       "app.auth.rate-limit.key-prefix=auth:rate-limit:test:",
       "app.auth.rate-limit.email-hmac-secret=test-rate-limit-hmac-secret",
+      "app.auth.rate-limit.trusted-proxies=127.0.0.1,::1",
       "app.auth.rate-limit.email-send.limit=2",
       "app.auth.rate-limit.email-send.window-seconds=1",
       "app.auth.rate-limit.login.limit=2",
@@ -124,12 +126,12 @@ class AuthRateLimitIntegrationTest {
   }
 
   @Test
-  void emailSendUsesFirstForwardedIpOnly() throws Exception {
-    sendEmailWithForwardedFor("first-hop@gachi.com", "198.51.100.40, 10.0.0.1")
+  void emailSendUsesLastForwardedIpWhenXRealIpMissing() throws Exception {
+    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 10.0.0.1")
         .andExpect(status().isOk());
-    sendEmailWithForwardedFor("first-hop@gachi.com", "198.51.100.40, 10.0.0.2")
+    sendEmailWithForwardedFor("last-hop@gachi.com", "203.0.113.40, 10.0.0.1")
         .andExpect(status().isOk());
-    sendEmailWithForwardedFor("first-hop@gachi.com", "198.51.100.40, 10.0.0.3")
+    sendEmailWithForwardedFor("last-hop@gachi.com", "192.0.2.40, 10.0.0.1")
         .andExpect(status().isTooManyRequests())
         .andExpect(jsonPath("$.code").value("AUTH4294"));
   }
@@ -180,6 +182,20 @@ class AuthRateLimitIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH4293"));
   }
 
+  @Test
+  void loginIgnoresForwardedHeadersWhenRemoteAddrNotTrusted() throws Exception {
+    createActiveUser("ratelimit_login_5", "RateLimit12!", "login-limit-5@gachi.com", "01012345674");
+    String remoteAddr = "198.51.100.250";
+
+    loginWithRemoteAddrAndRealIp("ratelimit_login_5", "RateLimit12!", remoteAddr, "203.0.113.41")
+        .andExpect(status().isOk());
+    loginWithRemoteAddrAndRealIp("ratelimit_login_5", "RateLimit12!", remoteAddr, "203.0.113.42")
+        .andExpect(status().isOk());
+    loginWithRemoteAddrAndRealIp("ratelimit_login_5", "RateLimit12!", remoteAddr, "203.0.113.43")
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("AUTH4293"));
+  }
+
   private ResultActions sendEmailWithForwardedFor(String email, String forwardedFor)
       throws Exception {
     return mockMvc.perform(
@@ -198,6 +214,25 @@ class AuthRateLimitIntegrationTest {
             .content(
                 objectMapper.writeValueAsString(
                     Map.of("loginId", loginId, "password", password, "rememberMe", false))));
+  }
+
+  private ResultActions loginWithRemoteAddrAndRealIp(
+      String loginId, String password, String remoteAddr, String realIp) throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/login")
+            .with(remoteAddress(remoteAddr))
+            .header("X-Real-IP", realIp)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                objectMapper.writeValueAsString(
+                    Map.of("loginId", loginId, "password", password, "rememberMe", false))));
+  }
+
+  private RequestPostProcessor remoteAddress(String remoteAddr) {
+    return request -> {
+      request.setRemoteAddr(remoteAddr);
+      return request;
+    };
   }
 
   private void createActiveUser(

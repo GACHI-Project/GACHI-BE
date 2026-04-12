@@ -11,9 +11,10 @@
 
 ## 클라이언트 IP 추출 규칙
 
-1. `X-Forwarded-For` 헤더가 있으면 첫 번째 IP 사용
-2. 없으면 `X-Real-IP` 사용
-3. 둘 다 없으면 `HttpServletRequest#getRemoteAddr()` 사용
+1. `remoteAddr`가 `app.auth.rate-limit.trusted-proxies`에 포함될 때만 전달 헤더를 신뢰
+2. 신뢰 프록시 요청이면 `X-Real-IP` 우선 사용
+3. `X-Real-IP`가 없으면 `X-Forwarded-For`의 마지막 hop 사용
+4. 둘 다 없거나 신뢰 프록시가 아니면 `HttpServletRequest#getRemoteAddr()` 사용
 
 ## 식별자 정책
 

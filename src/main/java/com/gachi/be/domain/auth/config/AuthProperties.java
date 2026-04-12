@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -119,6 +120,7 @@ public record AuthProperties(
       @DefaultValue("true") boolean enabled,
       @DefaultValue("auth:rate-limit:") String keyPrefix,
       @DefaultValue("") String emailHmacSecret,
+      @DefaultValue("127.0.0.1,::1,nginx") List<String> trustedProxies,
       @Valid @DefaultValue Policy emailSend,
       @Valid @DefaultValue Policy login) {
 
@@ -132,6 +134,10 @@ public record AuthProperties(
 
     public String getEmailHmacSecret() {
       return emailHmacSecret;
+    }
+
+    public List<String> getTrustedProxies() {
+      return trustedProxies;
     }
 
     public Policy getEmailSend() {
