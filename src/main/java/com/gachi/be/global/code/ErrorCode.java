@@ -17,7 +17,7 @@ public enum ErrorCode {
       HttpStatus.METHOD_NOT_ALLOWED,
       "COMMON4002",
       "지원하지 않는 HTTP 메서드입니다.",
-      "잘못된 메서드 요청",
+      "허용되지 않은 메서드 요청",
       ErrorLogLevel.WARN),
   BUSINESS_RULE_VIOLATION(
       HttpStatus.BAD_REQUEST, "BUS4001", "비즈니스 규칙 위반입니다.", "도메인 정책 위반", ErrorLogLevel.WARN),
@@ -28,7 +28,7 @@ public enum ErrorCode {
       "요청 경로에 해당하는 리소스 없음",
       ErrorLogLevel.INFO),
   USER_NOT_FOUND(
-      HttpStatus.NOT_FOUND, "USER4041", "사용자를 찾을 수 없습니다.", "식별자에 해당하는 사용자 없음", ErrorLogLevel.INFO),
+      HttpStatus.NOT_FOUND, "USER4041", "사용자를 찾을 수 없습니다.", "계정에 해당하는 사용자 없음", ErrorLogLevel.INFO),
   AUTH_DUPLICATE_EMAIL(
       HttpStatus.CONFLICT, "AUTH4091", "이미 사용 중인 이메일입니다.", "회원가입 이메일 중복", ErrorLogLevel.WARN),
   AUTH_DUPLICATE_LOGIN_ID(
@@ -45,7 +45,7 @@ public enum ErrorCode {
       HttpStatus.TOO_MANY_REQUESTS,
       "AUTH4291",
       "인증 코드 재발송 대기 시간입니다.",
-      "재발송 쿨타임 위반",
+      "재발송 쿨다운 정책 위반",
       ErrorLogLevel.WARN),
   AUTH_EMAIL_CODE_MISMATCH(
       HttpStatus.BAD_REQUEST, "AUTH4002", "인증 코드가 일치하지 않습니다.", "인증 코드 불일치", ErrorLogLevel.WARN),
@@ -56,6 +56,18 @@ public enum ErrorCode {
       "AUTH4292",
       "인증 코드 입력 시도 횟수를 초과했습니다.",
       "인증 코드 최대 시도 초과",
+      ErrorLogLevel.WARN),
+  AUTH_LOGIN_RATE_LIMITED(
+      HttpStatus.TOO_MANY_REQUESTS,
+      "AUTH4293",
+      "로그인 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+      "로그인 엔드포인트 IP 기준 rate limit 초과",
+      ErrorLogLevel.WARN),
+  AUTH_EMAIL_SEND_RATE_LIMITED(
+      HttpStatus.TOO_MANY_REQUESTS,
+      "AUTH4294",
+      "이메일 인증코드 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+      "이메일 발송 엔드포인트 IP+email 기준 rate limit 초과",
       ErrorLogLevel.WARN),
   AUTH_INVALID_CREDENTIALS(
       HttpStatus.UNAUTHORIZED,

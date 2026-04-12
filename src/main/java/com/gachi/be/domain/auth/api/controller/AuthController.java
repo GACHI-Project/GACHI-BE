@@ -12,6 +12,7 @@ import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.dto.response.DuplicateCheckResponse;
 import com.gachi.be.domain.auth.dto.response.EmailSendResponse;
 import com.gachi.be.domain.auth.dto.response.SignupResponse;
+import com.gachi.be.domain.auth.service.AuthRateLimitService;
 import com.gachi.be.domain.auth.service.AuthService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
   private final AuthService authService;
+  private final AuthRateLimitService authRateLimitService;
 
   @PostMapping("/check-login-id")
   public ApiResponse<DuplicateCheckResponse> checkLoginId(
@@ -63,10 +65,11 @@ public class AuthController {
   @PostMapping("/login")
   public ApiResponse<AuthTokenResponse> login(
       @Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+    String clientIp = extractClientIp(servletRequest);
+    authRateLimitService.checkLoginRateLimit(clientIp);
     return ApiResponse.success(
         SuccessCode.AUTH_LOGIN_SUCCESS,
-        authService.login(
-            request, extractDeviceInfo(servletRequest), extractClientIp(servletRequest)));
+        authService.login(request, extractDeviceInfo(servletRequest), clientIp));
   }
 
   @PostMapping("/reissue")
@@ -80,7 +83,8 @@ public class AuthController {
 
   @PostMapping("/email/send")
   public ApiResponse<EmailSendResponse> sendEmailVerificationCode(
-      @Valid @RequestBody EmailSendRequest request) {
+      @Valid @RequestBody EmailSendRequest request, HttpServletRequest servletRequest) {
+    authRateLimitService.checkEmailSendRateLimit(extractClientIp(servletRequest), request.email());
     return ApiResponse.success(
         SuccessCode.AUTH_EMAIL_CODE_SENT, authService.sendEmailVerificationCode(request));
   }
