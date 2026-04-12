@@ -1,11 +1,15 @@
 package com.gachi.be.domain.auth.api.controller;
 
+import com.gachi.be.domain.auth.dto.request.CheckEmailRequest;
+import com.gachi.be.domain.auth.dto.request.CheckLoginIdRequest;
+import com.gachi.be.domain.auth.dto.request.CheckPhoneNumberRequest;
 import com.gachi.be.domain.auth.dto.request.EmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
 import com.gachi.be.domain.auth.dto.request.ReissueRequest;
 import com.gachi.be.domain.auth.dto.request.SignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
+import com.gachi.be.domain.auth.dto.response.DuplicateCheckResponse;
 import com.gachi.be.domain.auth.dto.response.EmailSendResponse;
 import com.gachi.be.domain.auth.dto.response.SignupResponse;
 import com.gachi.be.domain.auth.service.AuthService;
@@ -28,6 +32,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
   private final AuthService authService;
+
+  @PostMapping("/check-login-id")
+  public ApiResponse<DuplicateCheckResponse> checkLoginId(
+      @Valid @RequestBody CheckLoginIdRequest request) {
+    return ApiResponse.success(
+        SuccessCode.AUTH_CHECK_LOGIN_ID_AVAILABLE, authService.checkLoginId(request));
+  }
+
+  @PostMapping("/check-email")
+  public ApiResponse<DuplicateCheckResponse> checkEmail(
+      @Valid @RequestBody CheckEmailRequest request) {
+    return ApiResponse.success(
+        SuccessCode.AUTH_CHECK_EMAIL_AVAILABLE, authService.checkEmail(request));
+  }
+
+  @PostMapping("/check-phone-number")
+  public ApiResponse<DuplicateCheckResponse> checkPhoneNumber(
+      @Valid @RequestBody CheckPhoneNumberRequest request) {
+    return ApiResponse.success(
+        SuccessCode.AUTH_CHECK_PHONE_NUMBER_AVAILABLE, authService.checkPhoneNumber(request));
+  }
 
   @PostMapping("/signup")
   @ResponseStatus(HttpStatus.CREATED)
