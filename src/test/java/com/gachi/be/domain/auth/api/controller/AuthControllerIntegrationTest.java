@@ -252,6 +252,10 @@ class AuthControllerIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("AUTH2007"))
         .andExpect(jsonPath("$.result.available").value(true));
+    checkPhoneNumber("010-6666-7777")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2007"))
+        .andExpect(jsonPath("$.result.available").value(true));
 
     sendEmail(email).andExpect(status().isOk());
     String code = capturingAuthMailService.getCode(email);
@@ -273,6 +277,9 @@ class AuthControllerIntegrationTest {
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("AUTH4091"));
     checkPhoneNumber(phoneNumber)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4093"));
+    checkPhoneNumber("010-6666-7777")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("AUTH4093"));
   }
