@@ -120,9 +120,13 @@ public record AuthProperties(
       @DefaultValue("true") boolean enabled,
       @DefaultValue("auth:rate-limit:") String keyPrefix,
       @DefaultValue("") String emailHmacSecret,
-      @DefaultValue("127.0.0.1,::1,nginx") List<String> trustedProxies,
+      @DefaultValue("127.0.0.1,::1") List<String> trustedProxies,
       @Valid @DefaultValue Policy emailSend,
       @Valid @DefaultValue Policy login) {
+
+    public RateLimit {
+      trustedProxies = trustedProxies == null ? List.of() : List.copyOf(trustedProxies);
+    }
 
     public boolean isEnabled() {
       return enabled;

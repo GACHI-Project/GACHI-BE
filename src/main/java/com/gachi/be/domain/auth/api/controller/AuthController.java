@@ -149,25 +149,7 @@ public class AuthController {
     if (normalizedTrustedProxy.contains("/")) {
       return isInCidr(remoteAddr, normalizedTrustedProxy);
     }
-    if (normalizedTrustedProxy.equals(remoteAddr)) {
-      return true;
-    }
-    return resolvesToSameAddress(remoteAddr, normalizedTrustedProxy);
-  }
-
-  private boolean resolvesToSameAddress(String remoteAddr, String trustedHost) {
-    try {
-      InetAddress remoteAddress = InetAddress.getByName(remoteAddr);
-      InetAddress[] resolvedTrustedHosts = InetAddress.getAllByName(trustedHost);
-      for (InetAddress resolvedTrustedHost : resolvedTrustedHosts) {
-        if (remoteAddress.equals(resolvedTrustedHost)) {
-          return true;
-        }
-      }
-      return false;
-    } catch (UnknownHostException e) {
-      return false;
-    }
+    return normalizedTrustedProxy.equals(remoteAddr);
   }
 
   private boolean isInCidr(String remoteAddr, String cidr) {

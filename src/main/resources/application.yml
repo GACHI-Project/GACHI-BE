@@ -41,7 +41,7 @@ app:
       enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
       key-prefix: ${AUTH_RATE_LIMIT_KEY_PREFIX:auth:rate-limit:}
       email-hmac-secret: ${AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET:}
-      trusted-proxies: ${AUTH_RATE_LIMIT_TRUSTED_PROXIES:127.0.0.1,::1,nginx}
+      trusted-proxies: ${AUTH_RATE_LIMIT_TRUSTED_PROXIES:127.0.0.1,::1}
       email-send:
         limit: ${AUTH_RATE_LIMIT_EMAIL_SEND_LIMIT:3}
         window-seconds: ${AUTH_RATE_LIMIT_EMAIL_SEND_WINDOW_SECONDS:300}

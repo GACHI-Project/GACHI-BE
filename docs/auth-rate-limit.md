@@ -16,6 +16,8 @@
 3. `X-Real-IP`가 없으면 `X-Forwarded-For`의 마지막 hop 사용
 4. 둘 다 없거나 신뢰 프록시가 아니면 `HttpServletRequest#getRemoteAddr()` 사용
 
+> `trusted-proxies`는 IP/CIDR만 허용하며 hostname은 사용하지 않는다.
+
 ## 식별자 정책
 
 - 이메일 발송 제한(`email/send`): `clientIp + HMAC_SHA256(normalizedEmail)`
