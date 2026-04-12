@@ -15,8 +15,6 @@ public record SignupRequest(
     @NotBlank @Size(max = 100) String password,
     @NotBlank String passwordConfirm,
     @NotBlank
-        @Pattern(
-            regexp = "^[0-9]{3}-?[0-9]{3,4}-?[0-9]{4}$",
-            message = "전화번호는 숫자만 입력하거나 하이픈(-)을 포함해 주세요.")
+        @Pattern(regexp = PhoneNumberValidation.REGEXP, message = PhoneNumberValidation.MESSAGE)
         String phoneNumber,
     @NotNull Boolean consentAgreed) {}

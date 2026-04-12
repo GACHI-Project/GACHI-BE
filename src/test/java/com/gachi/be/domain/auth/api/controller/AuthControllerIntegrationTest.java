@@ -181,10 +181,7 @@ class AuthControllerIntegrationTest {
     String registeredLoginId = "priority_login";
     String registeredPhoneNumber = "01099998888";
 
-    sendEmail(registeredEmail).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(registeredEmail);
-    assertThat(code).isNotBlank();
-    verifyEmail(registeredEmail, code).andExpect(status().isOk());
+    verifyEmailForSignup(registeredEmail);
 
     signup(
             signupPayload(
@@ -257,10 +254,7 @@ class AuthControllerIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH2007"))
         .andExpect(jsonPath("$.result.available").value(true));
 
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -287,10 +281,7 @@ class AuthControllerIntegrationTest {
   @Test
   void signupRejectsPasswordLengthPolicyViolation() throws Exception {
     String email = "policy-length@gachi.com";
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -308,10 +299,7 @@ class AuthControllerIntegrationTest {
   @Test
   void signupRejectsPasswordLengthPolicyViolationWhenTooShort() throws Exception {
     String email = "policy-length-short@gachi.com";
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -329,10 +317,7 @@ class AuthControllerIntegrationTest {
   @Test
   void signupRejectsPasswordCompositionPolicyViolation() throws Exception {
     String email = "policy-composition@gachi.com";
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -350,10 +335,7 @@ class AuthControllerIntegrationTest {
   @Test
   void signupRejectsPasswordCompositionPolicyViolationWithOnlyNonAsciiAndDigits() throws Exception {
     String email = "policy-composition-unicode@gachi.com";
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -371,10 +353,7 @@ class AuthControllerIntegrationTest {
   @Test
   void signupRejectsPasswordForbiddenPatternPolicyViolation() throws Exception {
     String email = "policy-forbidden@gachi.com";
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -393,10 +372,7 @@ class AuthControllerIntegrationTest {
   void signupRejectsPasswordForbiddenPatternPolicyViolationByPhoneChunkWithSeparators()
       throws Exception {
     String email = "policy-forbidden-phone@gachi.com";
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -414,10 +390,7 @@ class AuthControllerIntegrationTest {
   @Test
   void signupRejectsPasswordForbiddenPatternPolicyViolationByRepeatedCharacters() throws Exception {
     String email = "policy-forbidden-repeat@gachi.com";
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -436,10 +409,7 @@ class AuthControllerIntegrationTest {
   void signupRejectsPasswordForbiddenPatternPolicyViolationBySequentialCharacters()
       throws Exception {
     String email = "policy-forbidden-sequence@gachi.com";
-    sendEmail(email).andExpect(status().isOk());
-    String code = capturingAuthMailService.getCode(email);
-    assertThat(code).isNotBlank();
-    verifyEmail(email, code).andExpect(status().isOk());
+    verifyEmailForSignup(email);
 
     signup(
             signupPayload(
@@ -474,6 +444,13 @@ class AuthControllerIntegrationTest {
       throws Exception {
     return mockMvc.perform(
         post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content(payload));
+  }
+
+  private void verifyEmailForSignup(String email) throws Exception {
+    sendEmail(email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyEmail(email, code).andExpect(status().isOk());
   }
 
   private org.springframework.test.web.servlet.ResultActions checkLoginId(String loginId)
