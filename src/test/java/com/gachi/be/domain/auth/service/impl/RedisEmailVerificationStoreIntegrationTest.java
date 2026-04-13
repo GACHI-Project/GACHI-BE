@@ -37,7 +37,7 @@ class RedisEmailVerificationStoreIntegrationTest {
 
   @Container
   static final GenericContainer<?> REDIS_CONTAINER =
-      new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+      new GenericContainer<>(DockerImageName.parse("redis:7.4-alpine")).withExposedPorts(6379);
 
   @DynamicPropertySource
   static void redisProperties(DynamicPropertyRegistry registry) {

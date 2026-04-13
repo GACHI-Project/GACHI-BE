@@ -1,5 +1,6 @@
 package com.gachi.be.domain.auth.api.controller;
 
+import com.gachi.be.domain.auth.config.AuthProperties;
 import com.gachi.be.domain.auth.dto.request.CheckEmailRequest;
 import com.gachi.be.domain.auth.dto.request.CheckLoginIdRequest;
 import com.gachi.be.domain.auth.dto.request.CheckPhoneNumberRequest;
@@ -12,11 +13,15 @@ import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.dto.response.DuplicateCheckResponse;
 import com.gachi.be.domain.auth.dto.response.EmailSendResponse;
 import com.gachi.be.domain.auth.dto.response.SignupResponse;
+import com.gachi.be.domain.auth.service.AuthRateLimitService;
 import com.gachi.be.domain.auth.service.AuthService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
@@ -32,6 +37,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
   private final AuthService authService;
+  private final AuthRateLimitService authRateLimitService;
+  private final AuthProperties authProperties;
 
   @PostMapping("/check-login-id")
   public ApiResponse<DuplicateCheckResponse> checkLoginId(
@@ -63,10 +70,11 @@ public class AuthController {
   @PostMapping("/login")
   public ApiResponse<AuthTokenResponse> login(
       @Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+    String clientIp = extractClientIp(servletRequest);
+    authRateLimitService.checkLoginRateLimit(clientIp);
     return ApiResponse.success(
         SuccessCode.AUTH_LOGIN_SUCCESS,
-        authService.login(
-            request, extractDeviceInfo(servletRequest), extractClientIp(servletRequest)));
+        authService.login(request, extractDeviceInfo(servletRequest), clientIp));
   }
 
   @PostMapping("/reissue")
@@ -80,7 +88,8 @@ public class AuthController {
 
   @PostMapping("/email/send")
   public ApiResponse<EmailSendResponse> sendEmailVerificationCode(
-      @Valid @RequestBody EmailSendRequest request) {
+      @Valid @RequestBody EmailSendRequest request, HttpServletRequest servletRequest) {
+    authRateLimitService.checkEmailSendRateLimit(extractClientIp(servletRequest), request.email());
     return ApiResponse.success(
         SuccessCode.AUTH_EMAIL_CODE_SENT, authService.sendEmailVerificationCode(request));
   }
@@ -96,15 +105,97 @@ public class AuthController {
   }
 
   private String extractClientIp(HttpServletRequest request) {
+    String remoteAddr = normalizeIp(request.getRemoteAddr());
+    if (!isTrustedProxy(remoteAddr)) {
+      return remoteAddr;
+    }
+
+    // nginx가 X-Forwarded-For를 append하는 구성일 수 있으므로 위조 영향이 적은 X-Real-IP를 우선 사용한다.
+    String realIp = normalizeIp(request.getHeader("X-Real-IP"));
+    if (StringUtils.hasText(realIp)) {
+      return realIp;
+    }
+
     String forwardedFor = request.getHeader("X-Forwarded-For");
     if (StringUtils.hasText(forwardedFor)) {
-      String[] split = forwardedFor.split(",");
-      return split[0].trim();
+      String lastHop = extractLastForwardedIp(forwardedFor);
+      if (StringUtils.hasText(lastHop)) {
+        return lastHop;
+      }
     }
-    String realIp = request.getHeader("X-Real-IP");
-    if (StringUtils.hasText(realIp)) {
-      return realIp.trim();
+    return remoteAddr;
+  }
+
+  private String normalizeIp(String rawIp) {
+    return StringUtils.hasText(rawIp) ? rawIp.trim() : "";
+  }
+
+  private boolean isTrustedProxy(String remoteAddr) {
+    if (!StringUtils.hasText(remoteAddr)) {
+      return false;
     }
-    return request.getRemoteAddr();
+    List<String> trustedProxies = authProperties.getRateLimit().getTrustedProxies();
+    if (trustedProxies == null || trustedProxies.isEmpty()) {
+      return false;
+    }
+    return trustedProxies.stream().anyMatch(proxy -> matchesTrustedProxy(remoteAddr, proxy));
+  }
+
+  private boolean matchesTrustedProxy(String remoteAddr, String trustedProxy) {
+    String normalizedTrustedProxy = normalizeIp(trustedProxy);
+    if (!StringUtils.hasText(normalizedTrustedProxy)) {
+      return false;
+    }
+    if (normalizedTrustedProxy.contains("/")) {
+      return isInCidr(remoteAddr, normalizedTrustedProxy);
+    }
+    return normalizedTrustedProxy.equals(remoteAddr);
+  }
+
+  private boolean isInCidr(String remoteAddr, String cidr) {
+    String[] split = cidr.split("/");
+    if (split.length != 2) {
+      return false;
+    }
+    try {
+      InetAddress remoteAddress = InetAddress.getByName(remoteAddr);
+      InetAddress networkAddress = InetAddress.getByName(split[0]);
+      int prefixLength = Integer.parseInt(split[1]);
+      byte[] remoteBytes = remoteAddress.getAddress();
+      byte[] networkBytes = networkAddress.getAddress();
+      if (remoteBytes.length != networkBytes.length || prefixLength < 0) {
+        return false;
+      }
+      if (prefixLength > remoteBytes.length * 8) {
+        return false;
+      }
+
+      int fullBytes = prefixLength / 8;
+      int remainingBits = prefixLength % 8;
+      for (int i = 0; i < fullBytes; i++) {
+        if (remoteBytes[i] != networkBytes[i]) {
+          return false;
+        }
+      }
+      if (remainingBits == 0) {
+        return true;
+      }
+
+      int mask = (-1) << (8 - remainingBits);
+      return (remoteBytes[fullBytes] & mask) == (networkBytes[fullBytes] & mask);
+    } catch (UnknownHostException | NumberFormatException e) {
+      return false;
+    }
+  }
+
+  private String extractLastForwardedIp(String forwardedFor) {
+    String[] split = forwardedFor.split(",");
+    for (int i = split.length - 1; i >= 0; i--) {
+      String candidate = normalizeIp(split[i]);
+      if (StringUtils.hasText(candidate)) {
+        return candidate;
+      }
+    }
+    return "";
   }
 }

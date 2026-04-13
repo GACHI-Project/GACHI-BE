@@ -27,3 +27,6 @@ app:
       max-attempts: 5
       verified-ttl-seconds: 1800
       noop-allowed: true
+    rate-limit:
+      enabled: false
+      email-hmac-secret: test-rate-limit-hmac-secret

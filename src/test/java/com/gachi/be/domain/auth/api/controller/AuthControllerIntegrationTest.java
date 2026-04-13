@@ -38,6 +38,7 @@ import org.springframework.web.context.WebApplicationContext;
       "app.auth.email.resend-cooldown-seconds=2",
       "app.auth.email.max-attempts=2",
       "app.auth.email.verified-ttl-seconds=60",
+      "app.auth.rate-limit.enabled=false",
       "app.auth.jwt.secret=test-secret-key-that-is-longer-than-32-bytes"
     })
 class AuthControllerIntegrationTest {
