@@ -17,7 +17,7 @@ public enum ErrorCode {
       HttpStatus.METHOD_NOT_ALLOWED,
       "COMMON4002",
       "지원하지 않는 HTTP 메서드입니다.",
-      "허용되지 않은 메서드 요청",
+      "허용하지 않은 메서드 요청",
       ErrorLogLevel.WARN),
   BUSINESS_RULE_VIOLATION(
       HttpStatus.BAD_REQUEST, "BUS4001", "비즈니스 규칙 위반입니다.", "도메인 정책 위반", ErrorLogLevel.WARN),
@@ -113,6 +113,20 @@ public enum ErrorCode {
       "비밀번호 보안 강도가 위험 등급입니다.",
       "회원가입 비밀번호 위험 등급 차단",
       ErrorLogLevel.WARN),
+  AUTH_ACCESS_TOKEN_MISSING(
+      HttpStatus.UNAUTHORIZED,
+      "AUTH4015",
+      "액세스 토큰이 필요합니다.",
+      "Authorization Bearer 헤더 누락",
+      ErrorLogLevel.WARN),
+  AUTH_ACCESS_TOKEN_INVALID(
+      HttpStatus.UNAUTHORIZED,
+      "AUTH4016",
+      "유효하지 않은 액세스 토큰입니다.",
+      "액세스 토큰 서명/형식/클레임 오류",
+      ErrorLogLevel.WARN),
+  AUTH_ACCESS_TOKEN_EXPIRED(
+      HttpStatus.UNAUTHORIZED, "AUTH4017", "액세스 토큰이 만료되었습니다.", "액세스 토큰 만료", ErrorLogLevel.WARN),
   AUTH_REFRESH_TOKEN_INVALID(
       HttpStatus.UNAUTHORIZED,
       "AUTH4012",
