@@ -55,6 +55,7 @@ import org.testcontainers.utility.DockerImageName;
       "app.auth.jwt.secret=test-secret-key-that-is-longer-than-32-bytes"
     })
 class AuthRateLimitIntegrationTest {
+  private static final long RATE_LIMIT_WINDOW_WAIT_MILLIS = 1500L;
 
   @Container
   static final GenericContainer<?> REDIS_CONTAINER =
@@ -106,7 +107,7 @@ class AuthRateLimitIntegrationTest {
         .andExpect(status().isTooManyRequests())
         .andExpect(jsonPath("$.code").value("AUTH4294"));
 
-    Thread.sleep(1100);
+    waitForRateLimitWindowExpiry();
 
     sendEmailWithForwardedFor(email, forwardedFor)
         .andExpect(status().isOk())
@@ -164,7 +165,7 @@ class AuthRateLimitIntegrationTest {
         .andExpect(status().isTooManyRequests())
         .andExpect(jsonPath("$.code").value("AUTH4293"));
 
-    Thread.sleep(1100);
+    waitForRateLimitWindowExpiry();
 
     loginWithRealIp("ratelimit_login_2", "RateLimit12!", realIp)
         .andExpect(status().isOk())
@@ -289,5 +290,9 @@ class AuthRateLimitIntegrationTest {
     if (keys != null && !keys.isEmpty()) {
       redisTemplate.delete(keys);
     }
+  }
+
+  private void waitForRateLimitWindowExpiry() throws InterruptedException {
+    Thread.sleep(RATE_LIMIT_WINDOW_WAIT_MILLIS);
   }
 }

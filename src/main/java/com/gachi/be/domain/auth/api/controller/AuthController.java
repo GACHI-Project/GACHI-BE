@@ -154,6 +154,9 @@ public class AuthController {
     if (normalizedTrustedProxy.contains("/")) {
       return isInCidr(remoteAddr, normalizedTrustedProxy);
     }
+    if (isIpLiteral(remoteAddr) && isIpLiteral(normalizedTrustedProxy)) {
+      return isSameIpLiteral(remoteAddr, normalizedTrustedProxy);
+    }
     return normalizedTrustedProxy.equals(remoteAddr);
   }
 
@@ -200,6 +203,16 @@ public class AuthController {
     String normalized = normalizeIp(value);
     return IPV4_LITERAL_PATTERN.matcher(normalized).matches()
         || IPV6_LITERAL_PATTERN.matcher(normalized).matches();
+  }
+
+  private boolean isSameIpLiteral(String left, String right) {
+    try {
+      InetAddress leftAddress = InetAddress.getByName(left);
+      InetAddress rightAddress = InetAddress.getByName(right);
+      return leftAddress.equals(rightAddress);
+    } catch (UnknownHostException e) {
+      return false;
+    }
   }
 
   private String extractClientIpFromForwardedFor(String forwardedFor) {
