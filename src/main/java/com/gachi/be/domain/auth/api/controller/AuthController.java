@@ -123,9 +123,9 @@ public class AuthController {
 
     String forwardedFor = request.getHeader("X-Forwarded-For");
     if (StringUtils.hasText(forwardedFor)) {
-      String lastHop = extractLastForwardedIp(forwardedFor);
-      if (StringUtils.hasText(lastHop)) {
-        return lastHop;
+      String clientIp = extractClientIpFromForwardedFor(forwardedFor);
+      if (StringUtils.hasText(clientIp)) {
+        return clientIp;
       }
     }
     return remoteAddr;
@@ -202,11 +202,11 @@ public class AuthController {
         || IPV6_LITERAL_PATTERN.matcher(normalized).matches();
   }
 
-  private String extractLastForwardedIp(String forwardedFor) {
+  private String extractClientIpFromForwardedFor(String forwardedFor) {
     String[] split = forwardedFor.split(",");
     for (int i = split.length - 1; i >= 0; i--) {
       String candidate = normalizeIp(split[i]);
-      if (StringUtils.hasText(candidate)) {
+      if (StringUtils.hasText(candidate) && !isTrustedProxy(candidate)) {
         return candidate;
       }
     }

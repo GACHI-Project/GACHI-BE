@@ -126,12 +126,14 @@ class AuthRateLimitIntegrationTest {
   }
 
   @Test
-  void emailSendUsesLastForwardedIpWhenXRealIpMissing() throws Exception {
-    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 10.0.0.1")
+  void emailSendUsesLastUntrustedForwardedIpWhenXRealIpMissing() throws Exception {
+    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 127.0.0.1")
         .andExpect(status().isOk());
-    sendEmailWithForwardedFor("last-hop@gachi.com", "203.0.113.40, 10.0.0.1")
+    sendEmailWithForwardedFor("last-hop@gachi.com", "203.0.113.40, 127.0.0.1")
         .andExpect(status().isOk());
-    sendEmailWithForwardedFor("last-hop@gachi.com", "192.0.2.40, 10.0.0.1")
+    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 127.0.0.1")
+        .andExpect(status().isOk());
+    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 127.0.0.1")
         .andExpect(status().isTooManyRequests())
         .andExpect(jsonPath("$.code").value("AUTH4294"));
   }
