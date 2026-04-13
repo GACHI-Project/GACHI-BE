@@ -465,7 +465,8 @@ public class AuthServiceImpl implements AuthService {
   }
 
   private BusinessException mapDuplicateSignupException(DataIntegrityViolationException e) {
-    String message = normalizeText(e.getMostSpecificCause().getMessage());
+    Throwable cause = e.getMostSpecificCause();
+    String message = cause != null ? normalizeText(cause.getMessage()) : "";
     String normalizedMessage = message.toLowerCase(Locale.ROOT);
     if (normalizedMessage.contains("users_email_key")) {
       return new BusinessException(ErrorCode.AUTH_DUPLICATE_EMAIL);

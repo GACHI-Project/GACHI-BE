@@ -14,6 +14,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -27,25 +28,8 @@ import org.springframework.util.StringUtils;
 public class AuthRateLimitService {
   private static final String EMAIL_SEND_SCOPE = "email-send";
   private static final String LOGIN_SCOPE = "login";
-  private static final RedisScript<List> FIXED_WINDOW_RATE_LIMIT_SCRIPT =
-      new DefaultRedisScript<>(
-          """
-          local current = redis.call('INCR', KEYS[1])
-          if current == 1 then
-            redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
-          end
-          local ttl = redis.call('TTL', KEYS[1])
-          if ttl < 0 then
-            redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
-            ttl = tonumber(ARGV[2])
-          end
-          local allowed = 0
-          if current <= tonumber(ARGV[1]) then
-            allowed = 1
-          end
-          return {allowed, current, ttl}
-          """,
-          List.class);
+  private static final RedisScript<List<Long>> FIXED_WINDOW_RATE_LIMIT_SCRIPT =
+      createFixedWindowRateLimitScript();
 
   private final StringRedisTemplate redisTemplate;
   private final AuthProperties authProperties;
@@ -82,7 +66,7 @@ public class AuthRateLimitService {
 
   private void enforceOrThrow(String key, Policy policy, ErrorCode exceedErrorCode) {
     try {
-      List<?> result =
+      List<Long> result =
           redisTemplate.execute(
               FIXED_WINDOW_RATE_LIMIT_SCRIPT,
               List.of(key),
@@ -101,10 +85,38 @@ public class AuthRateLimitService {
       }
     } catch (BusinessException e) {
       throw e;
-    } catch (Exception e) {
+    } catch (DataAccessException e) {
       // 인증 가용성을 위해 Redis 일시 장애 시 요청을 열어두고, 장애 감지는 로그로 빠르게 대응한다.
-      log.warn("Rate limit check failed unexpectedly. errorCode={}", exceedErrorCode.getCode(), e);
+      log.warn(
+          "Rate limit backend unavailable. errorCode={}, exceptionType={}",
+          exceedErrorCode.getCode(),
+          e.getClass().getSimpleName(),
+          e);
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static RedisScript<List<Long>> createFixedWindowRateLimitScript() {
+    return (RedisScript<List<Long>>)
+        (RedisScript<?>)
+            new DefaultRedisScript<>(
+                """
+                local current = redis.call('INCR', KEYS[1])
+                if current == 1 then
+                  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+                end
+                local ttl = redis.call('TTL', KEYS[1])
+                if ttl < 0 then
+                  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+                  ttl = tonumber(ARGV[2])
+                end
+                local allowed = 0
+                if current <= tonumber(ARGV[1]) then
+                  allowed = 1
+                end
+                return {allowed, current, ttl}
+                """,
+                List.class);
   }
 
   private String buildKey(String scope, String subject) {

@@ -22,6 +22,7 @@ import jakarta.validation.Valid;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.List;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
@@ -36,6 +37,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
 public class AuthController {
+  private static final Pattern IPV4_LITERAL_PATTERN =
+      Pattern.compile("^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$");
+  private static final Pattern IPV6_LITERAL_PATTERN = Pattern.compile("^(?=.*:)[0-9a-fA-F:]+$");
+
   private final AuthService authService;
   private final AuthRateLimitService authRateLimitService;
   private final AuthProperties authProperties;
@@ -157,6 +162,9 @@ public class AuthController {
     if (split.length != 2) {
       return false;
     }
+    if (!isIpLiteral(remoteAddr) || !isIpLiteral(split[0])) {
+      return false;
+    }
     try {
       InetAddress remoteAddress = InetAddress.getByName(remoteAddr);
       InetAddress networkAddress = InetAddress.getByName(split[0]);
@@ -186,6 +194,12 @@ public class AuthController {
     } catch (UnknownHostException | NumberFormatException e) {
       return false;
     }
+  }
+
+  private boolean isIpLiteral(String value) {
+    String normalized = normalizeIp(value);
+    return IPV4_LITERAL_PATTERN.matcher(normalized).matches()
+        || IPV6_LITERAL_PATTERN.matcher(normalized).matches();
   }
 
   private String extractLastForwardedIp(String forwardedFor) {

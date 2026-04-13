@@ -216,6 +216,7 @@ class AuthRateLimitIntegrationTest {
       throws Exception {
     return mockMvc.perform(
         post("/api/v1/auth/email/send")
+            .with(remoteAddress("127.0.0.1"))
             .header("X-Forwarded-For", forwardedFor)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(Map.of("email", email))));
