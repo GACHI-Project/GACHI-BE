@@ -55,6 +55,7 @@ import org.testcontainers.utility.DockerImageName;
       "app.auth.jwt.secret=test-secret-key-that-is-longer-than-32-bytes"
     })
 class AuthRateLimitIntegrationTest {
+  private static final long RATE_LIMIT_WINDOW_WAIT_MILLIS = 1500L;
 
   @Container
   static final GenericContainer<?> REDIS_CONTAINER =
@@ -106,7 +107,7 @@ class AuthRateLimitIntegrationTest {
         .andExpect(status().isTooManyRequests())
         .andExpect(jsonPath("$.code").value("AUTH4294"));
 
-    Thread.sleep(1100);
+    waitForRateLimitWindowExpiry();
 
     sendEmailWithForwardedFor(email, forwardedFor)
         .andExpect(status().isOk())
@@ -126,12 +127,14 @@ class AuthRateLimitIntegrationTest {
   }
 
   @Test
-  void emailSendUsesLastForwardedIpWhenXRealIpMissing() throws Exception {
-    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 10.0.0.1")
+  void emailSendUsesLastUntrustedForwardedIpWhenXRealIpMissing() throws Exception {
+    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 127.0.0.1")
         .andExpect(status().isOk());
-    sendEmailWithForwardedFor("last-hop@gachi.com", "203.0.113.40, 10.0.0.1")
+    sendEmailWithForwardedFor("last-hop@gachi.com", "203.0.113.40, 127.0.0.1")
         .andExpect(status().isOk());
-    sendEmailWithForwardedFor("last-hop@gachi.com", "192.0.2.40, 10.0.0.1")
+    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 127.0.0.1")
+        .andExpect(status().isOk());
+    sendEmailWithForwardedFor("last-hop@gachi.com", "198.51.100.40, 127.0.0.1")
         .andExpect(status().isTooManyRequests())
         .andExpect(jsonPath("$.code").value("AUTH4294"));
   }
@@ -162,7 +165,7 @@ class AuthRateLimitIntegrationTest {
         .andExpect(status().isTooManyRequests())
         .andExpect(jsonPath("$.code").value("AUTH4293"));
 
-    Thread.sleep(1100);
+    waitForRateLimitWindowExpiry();
 
     loginWithRealIp("ratelimit_login_2", "RateLimit12!", realIp)
         .andExpect(status().isOk())
@@ -216,6 +219,7 @@ class AuthRateLimitIntegrationTest {
       throws Exception {
     return mockMvc.perform(
         post("/api/v1/auth/email/send")
+            .with(remoteAddress("127.0.0.1"))
             .header("X-Forwarded-For", forwardedFor)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(Map.of("email", email))));
@@ -286,5 +290,9 @@ class AuthRateLimitIntegrationTest {
     if (keys != null && !keys.isEmpty()) {
       redisTemplate.delete(keys);
     }
+  }
+
+  private void waitForRateLimitWindowExpiry() throws InterruptedException {
+    Thread.sleep(RATE_LIMIT_WINDOW_WAIT_MILLIS);
   }
 }

@@ -107,6 +107,12 @@ public enum ErrorCode {
       "비밀번호 금지 패턴에 해당합니다.",
       "비밀번호 금지 패턴 정책 위반",
       ErrorLogLevel.WARN),
+  AUTH_PASSWORD_STRENGTH_DANGEROUS(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4009",
+      "비밀번호 보안 강도가 위험 등급입니다.",
+      "회원가입 비밀번호 위험 등급 차단",
+      ErrorLogLevel.WARN),
   AUTH_REFRESH_TOKEN_INVALID(
       HttpStatus.UNAUTHORIZED,
       "AUTH4012",

@@ -352,6 +352,24 @@ class AuthControllerIntegrationTest {
   }
 
   @Test
+  void signupRejectsWhenConsentNotAgreed() throws Exception {
+    String email = "consent-required@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "consent-required",
+                email,
+                "consent_required_user",
+                "Policy12!",
+                "Policy12!",
+                "01011112222",
+                false))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4005"));
+  }
+
+  @Test
   void signupRejectsPasswordForbiddenPatternPolicyViolation() throws Exception {
     String email = "policy-forbidden@gachi.com";
     verifyEmailForSignup(email);
@@ -423,6 +441,170 @@ class AuthControllerIntegrationTest {
                 true))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("AUTH4008"));
+  }
+
+  @Test
+  void signupRejectsDangerousPasswordStrength() throws Exception {
+    String email = "strength-danger@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "strength-danger",
+                email,
+                "level1_guard_user",
+                "Qa1x2w3e",
+                "Qa1x2w3e",
+                "01054871236",
+                true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4009"));
+  }
+
+  @Test
+  void signupAllowsNormalPasswordStrength() throws Exception {
+    String email = "strength-normal@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "strength-normal",
+                email,
+                "level2_guard_user",
+                "Normal12ab",
+                "Normal12ab",
+                "01011223344",
+                true))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("AUTH2011"));
+  }
+
+  @Test
+  void signupAllowsSafePasswordStrength() throws Exception {
+    String email = "strength-safe@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "strength-safe",
+                email,
+                "level3_guard_user",
+                "C0mp!exAlpha9",
+                "C0mp!exAlpha9",
+                "01022334455",
+                true))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("AUTH2011"));
+  }
+
+  @Test
+  void signupAllowsVerySafePasswordStrength() throws Exception {
+    String email = "strength-very-safe@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "strength-very-safe",
+                email,
+                "level4_guard_user",
+                "T9!mQ2#vL7@rN5$wX",
+                "T9!mQ2#vL7@rN5$wX",
+                "01033445566",
+                true))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("AUTH2011"));
+  }
+
+  @Test
+  void signupAllowsRetryAfterDangerousStrengthRejectionWithoutReverify() throws Exception {
+    String email = "strength-retry@gachi.com";
+    String loginId = "strength_retry_user";
+    String phoneNumber = "01077665544";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "strength-retry", email, loginId, "Qa1x2w3e", "Qa1x2w3e", phoneNumber, true))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4009"));
+
+    signup(
+            signupPayload(
+                "strength-retry", email, loginId, "Recover12ab", "Recover12ab", phoneNumber, true))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("AUTH2011"));
+  }
+
+  @Test
+  void signupAllowsPasswordAtMinimumLengthBoundary() throws Exception {
+    String email = "policy-min-boundary@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "policy-min-boundary",
+                email,
+                "min_boundary_user",
+                "A1!b2@c3",
+                "A1!b2@c3",
+                "01066778899",
+                true))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("AUTH2011"));
+  }
+
+  @Test
+  void signupAllowsPasswordAtMaximumLengthBoundary() throws Exception {
+    String email = "policy-max-boundary@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "policy-max-boundary",
+                email,
+                "max_boundary_user",
+                "Ab1!Cd2@Ef3#Gh4$Ij5K",
+                "Ab1!Cd2@Ef3#Gh4$Ij5K",
+                "01077889900",
+                true))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("AUTH2011"));
+  }
+
+  @Test
+  void signupAllowsPasswordAtCompositionBoundary() throws Exception {
+    String email = "policy-composition-boundary@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "policy-composition-boundary",
+                email,
+                "composition_boundary_user",
+                "Mix2Value8",
+                "Mix2Value8",
+                "01088990011",
+                true))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("AUTH2011"));
+  }
+
+  @Test
+  void signupAllowsForbiddenPatternBoundaryWhenSequenceLengthIsThree() throws Exception {
+    String email = "policy-sequence-boundary@gachi.com";
+    verifyEmailForSignup(email);
+
+    signup(
+            signupPayload(
+                "policy-sequence-boundary",
+                email,
+                "sequence_boundary_user",
+                "Abc!95xy",
+                "Abc!95xy",
+                "01066554433",
+                true))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value("AUTH2011"));
   }
 
   private org.springframework.test.web.servlet.ResultActions sendEmail(String email)

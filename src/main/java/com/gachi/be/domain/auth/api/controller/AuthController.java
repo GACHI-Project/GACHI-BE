@@ -22,6 +22,7 @@ import jakarta.validation.Valid;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.List;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
@@ -36,6 +37,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
 public class AuthController {
+  private static final Pattern IPV4_LITERAL_PATTERN =
+      Pattern.compile("^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$");
+  private static final Pattern IPV6_LITERAL_PATTERN = Pattern.compile("^(?=.*:)[0-9a-fA-F:]+$");
+
   private final AuthService authService;
   private final AuthRateLimitService authRateLimitService;
   private final AuthProperties authProperties;
@@ -118,9 +123,9 @@ public class AuthController {
 
     String forwardedFor = request.getHeader("X-Forwarded-For");
     if (StringUtils.hasText(forwardedFor)) {
-      String lastHop = extractLastForwardedIp(forwardedFor);
-      if (StringUtils.hasText(lastHop)) {
-        return lastHop;
+      String clientIp = extractClientIpFromForwardedFor(forwardedFor);
+      if (StringUtils.hasText(clientIp)) {
+        return clientIp;
       }
     }
     return remoteAddr;
@@ -149,12 +154,18 @@ public class AuthController {
     if (normalizedTrustedProxy.contains("/")) {
       return isInCidr(remoteAddr, normalizedTrustedProxy);
     }
+    if (isIpLiteral(remoteAddr) && isIpLiteral(normalizedTrustedProxy)) {
+      return isSameIpLiteral(remoteAddr, normalizedTrustedProxy);
+    }
     return normalizedTrustedProxy.equals(remoteAddr);
   }
 
   private boolean isInCidr(String remoteAddr, String cidr) {
     String[] split = cidr.split("/");
     if (split.length != 2) {
+      return false;
+    }
+    if (!isIpLiteral(remoteAddr) || !isIpLiteral(split[0])) {
       return false;
     }
     try {
@@ -188,11 +199,27 @@ public class AuthController {
     }
   }
 
-  private String extractLastForwardedIp(String forwardedFor) {
+  private boolean isIpLiteral(String value) {
+    String normalized = normalizeIp(value);
+    return IPV4_LITERAL_PATTERN.matcher(normalized).matches()
+        || IPV6_LITERAL_PATTERN.matcher(normalized).matches();
+  }
+
+  private boolean isSameIpLiteral(String left, String right) {
+    try {
+      InetAddress leftAddress = InetAddress.getByName(left);
+      InetAddress rightAddress = InetAddress.getByName(right);
+      return leftAddress.equals(rightAddress);
+    } catch (UnknownHostException e) {
+      return false;
+    }
+  }
+
+  private String extractClientIpFromForwardedFor(String forwardedFor) {
     String[] split = forwardedFor.split(",");
     for (int i = split.length - 1; i >= 0; i--) {
       String candidate = normalizeIp(split[i]);
-      if (StringUtils.hasText(candidate)) {
+      if (StringUtils.hasText(candidate) && !isTrustedProxy(candidate)) {
         return candidate;
       }
     }
