@@ -20,6 +20,7 @@ import com.gachi.be.domain.auth.service.AuthService;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
 import com.gachi.be.domain.auth.service.TokenHashService;
+import com.gachi.be.domain.auth.service.password.PasswordStrengthEvaluator;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
@@ -111,6 +112,7 @@ public class AuthServiceImpl implements AuthService {
     }
     // 프론트 실시간 검증을 우회한 요청도 차단하기 위해 서버에서 정책을 강제한다.
     validatePasswordPolicy(request.password(), loginId, email, phoneNumber);
+    enforcePasswordStrength(request.password());
     if (!Boolean.TRUE.equals(request.consentAgreed())) {
       throw new BusinessException(ErrorCode.AUTH_CONSENT_REQUIRED);
     }
@@ -325,6 +327,13 @@ public class AuthServiceImpl implements AuthService {
     }
   }
 
+  /** 강도 판정 결과가 위험이면 회원가입을 차단한다. */
+  private void enforcePasswordStrength(String password) {
+    if (!PasswordStrengthEvaluator.evaluate(password).canSignup()) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_STRENGTH_DANGEROUS);
+    }
+  }
+
   private boolean containsForbiddenPattern(
       String password, String loginId, String email, String phoneNumber) {
     // 계정 식별자/예측 가능한 문자열이 비밀번호에 포함되는 케이스를 묶어서 차단한다.
@@ -456,7 +465,7 @@ public class AuthServiceImpl implements AuthService {
   }
 
   private BusinessException mapDuplicateSignupException(DataIntegrityViolationException e) {
-    String message = e.getMostSpecificCause() == null ? "" : e.getMostSpecificCause().getMessage();
+    String message = normalizeText(e.getMostSpecificCause().getMessage());
     String normalizedMessage = message.toLowerCase(Locale.ROOT);
     if (normalizedMessage.contains("users_email_key")) {
       return new BusinessException(ErrorCode.AUTH_DUPLICATE_EMAIL);
