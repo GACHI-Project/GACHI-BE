@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS checklist_items (
     detail        VARCHAR(500) NULL,
     is_checked    BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT fk_checklist_newsletter
     FOREIGN KEY (newsletter_id) REFERENCES newsletter (id) ON DELETE CASCADE
     );
@@ -20,7 +19,6 @@ CREATE TABLE IF NOT EXISTS todo_items (
     target_date       DATE         NULL,
     target_date_label VARCHAR(50)  NULL,
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     CONSTRAINT fk_todo_newsletter
     FOREIGN KEY (newsletter_id) REFERENCES newsletter (id) ON DELETE CASCADE
     );
