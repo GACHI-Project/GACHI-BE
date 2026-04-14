@@ -10,10 +10,11 @@ public record SignupRequest(
     @NotBlank @Size(max = 50) String name,
     @NotBlank @Email String email,
     @NotBlank
-        @Pattern(regexp = "^[a-zA-Z0-9._-]{4,50}$", message = "loginId는 4~50자 영문/숫자/._-만 허용됩니다.")
+        @Pattern(regexp = "^[a-zA-Z0-9._-]{4,50}$", message = "loginId는 4~50자의 영문/숫자/._-만 허용합니다.")
         String loginId,
-    @NotBlank @Size(min = 8, max = 100) String password,
+    @NotBlank @Size(max = 100) String password,
     @NotBlank String passwordConfirm,
-    @NotBlank @Pattern(regexp = "^[0-9]{10,11}$", message = "전화번호는 숫자 10~11자리여야 합니다.")
+    @NotBlank
+        @Pattern(regexp = PhoneNumberValidation.REGEXP, message = PhoneNumberValidation.MESSAGE)
         String phoneNumber,
     @NotNull Boolean consentAgreed) {}
