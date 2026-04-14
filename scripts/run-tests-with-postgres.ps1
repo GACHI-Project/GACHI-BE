@@ -47,6 +47,11 @@ if (-not $isReady) {
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Push-Location $repoRoot
 
+$previousDbUrl = $env:DB_URL
+$previousDbUsername = $env:DB_USERNAME
+$previousDbPassword = $env:DB_PASSWORD
+$previousGradleUserHome = $env:GRADLE_USER_HOME
+
 try {
     $env:DB_URL = "jdbc:postgresql://localhost:$HostPort/$DbName"
     $env:DB_USERNAME = $DbUser
@@ -57,6 +62,34 @@ try {
     .\gradlew.bat --no-daemon test
 }
 finally {
+    if ($null -ne $previousDbUrl) {
+        $env:DB_URL = $previousDbUrl
+    }
+    else {
+        Remove-Item Env:DB_URL -ErrorAction SilentlyContinue
+    }
+
+    if ($null -ne $previousDbUsername) {
+        $env:DB_USERNAME = $previousDbUsername
+    }
+    else {
+        Remove-Item Env:DB_USERNAME -ErrorAction SilentlyContinue
+    }
+
+    if ($null -ne $previousDbPassword) {
+        $env:DB_PASSWORD = $previousDbPassword
+    }
+    else {
+        Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
+    }
+
+    if ($null -ne $previousGradleUserHome) {
+        $env:GRADLE_USER_HOME = $previousGradleUserHome
+    }
+    else {
+        Remove-Item Env:GRADLE_USER_HOME -ErrorAction SilentlyContinue
+    }
+
     Pop-Location
     Remove-TestContainer -Name $ContainerName
 }

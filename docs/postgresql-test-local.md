@@ -11,7 +11,7 @@
 2. 스크립트가 자동으로 수행한다.
 - `postgres:16-alpine` 컨테이너를 `55432` 포트로 실행
 - 준비 완료(`pg_isready`)까지 대기
-- 테스트 실행 (`gradlew test`)
+- 테스트 실행 (`.\gradlew.bat --no-daemon test`)
 - 테스트 종료 후 컨테이너 정리
 
 ## 기존 컨테이너를 쓰고 싶은 경우
