@@ -2,6 +2,7 @@ package com.gachi.be.domain.newsletter.pipeline;
 
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.pipeline.ClovaOcrClient.OcrField;
+import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisResult;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.file.config.S3Properties;
 import java.util.List;
@@ -24,6 +25,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
  * OCR 결과 파싱 (Y좌표 기준 정렬 후 텍스트 합치기)
  * 텍스트 정제 (노이즈 제거)
  * 파파고 번역 (KO이면 스킵)
+ * OpenAI 분석(제목, 요약, 체크리스트, 해야 할 일)
  * DB 업데이트 (COMPLETED)
  * 예외 발생 시 FAILED로 업데이트하고 종료.
  */
@@ -39,6 +41,7 @@ public class NewsletterPipelineService {
     private final ClovaOcrClient clovaOcrClient;
     private final OcrTextRefiner ocrTextRefiner;
     private final PapagoTranslateClient papagoTranslateClient;
+    private final NewsletterAiAnalyzer newsletterAiAnalyzer;
 
     /**
      * 가정통신문 AI 분석 파이프라인을 비동기로 실행.
@@ -101,9 +104,18 @@ public class NewsletterPipelineService {
             log.debug("[Pipeline][STEP6] 번역 완료. translated={}",
                 translatedText != null ? translatedText.length() + "chars" : "null(KO 스킵)");
 
+            // OpenAI 분석 (제목/요약/체크리스트/해야할일)
+            log.debug("[Pipeline][STEP7] OpenAI 분석 시작.");
+            AiAnalysisResult aiResult = newsletterAiAnalyzer.analyze(
+                newsletterId,
+                originalText,
+                translatedText,
+                newsletter.getLanguage()
+            );
+            log.debug("[Pipeline][STEP7] 완료. title={}", aiResult.title());
+
             // DB 업데이트 (COMPLETED)
-            // title, summary는 추후 OpenAI 연동 시 채워질 예정. 현재는 null.
-            newsletter.complete(ocrText, originalText, translatedText, null, null);
+            newsletter.complete(ocrText, originalText, translatedText, aiResult.title(), aiResult.summary());
             newsletterRepository.save(newsletter);
 
             log.info("[Pipeline] 파이프라인 완료. newsletterId={}", newsletterId);

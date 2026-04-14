@@ -102,13 +102,12 @@ public class NewsletterAiAnalyzer {
         - 가정통신문의 공식 제목만 추출하세요.
         - 30자 이내로 작성하세요.
         - 제목 텍스트만 반환하고, 설명이나 다른 텍스트는 절대 포함하지 마세요.
+        - 앞뒤에 마크다운 코드블록(```), 따옴표, 설명을 붙이지 마세요.
         - 제목을 찾을 수 없으면 "가정통신문 안내"를 반환하세요.
         """;
         String response = callOpenAi(systemPrompt, originalText, 100);
         return response.trim();
     }
-
-    // AI 요약
 
     /**
      * 가정통신문 핵심 내용을 다문화 학부모를 위해 요약
@@ -139,13 +138,12 @@ public class NewsletterAiAnalyzer {
         - 학부모가 바로 이해하고 행동할 수 있도록 명확하게 작성하세요.
         - 어려운 교육 전문 용어는 쉬운 표현으로 바꿔 쓰세요.
         - 요약 텍스트만 반환하고, 제목이나 설명은 포함하지 마세요.
+        - 앞뒤에 마크다운 코드블록(```)을 붙이지 마세요.
         """, responseLanguage);
 
         String response = callOpenAi(systemPrompt, sourceText, 500);
         return response.trim();
     }
-
-    // 체크리스트 추출
 
     /**
      * 가정통신문에서 체크리스트 항목을 추출하고 DB에 저장.
@@ -167,10 +165,13 @@ public class NewsletterAiAnalyzer {
         - 최대 10개까지만 추출하세요.
         - content: 20자 이내의 핵심 항목명 (예: "현장학습 동의서 제출")
         - detail: 30자 이내의 한 줄 상세 설명 (예: "담임 선생님께 원본 직접 제출")
-        - detail이 없으면 null로 설정하세요.
+        - detail이 없으면 문자열 "null"이 아닌 JSON null로 설정하세요.
 
-        반드시 아래 JSON 형식으로만 반환하세요. 다른 텍스트는 절대 포함하지 마세요:
-        [{"content": "항목명", "detail": "상세설명 또는 null"}]
+        출력 규칙:
+        - JSON 배열만 반환하세요.
+        - 앞뒤에 설명, 제목, 마크다운 코드블록(```json)을 절대 붙이지 마세요.
+        - 괄호와 따옴표가 올바르게 닫혔는지 출력 전에 확인하세요.
+        형식: [{"content": "항목명", "detail": null}]
         """;
 
         String response = callOpenAi(systemPrompt, originalText, 800);
@@ -221,8 +222,11 @@ public class NewsletterAiAnalyzer {
         - targetDateLabel: 사용자에게 보여줄 날짜 문구
           → 오늘이면 "오늘", 날짜 있으면 "N월 N일", 즉시 해야 하면 "지금 바로", 없으면 "행사 전날" 등
 
-        반드시 아래 JSON 형식으로만 반환하세요. 다른 텍스트는 절대 포함하지 마세요:
-        [{"content": "할 일", "targetDate": "YYYY-MM-DD 또는 null", "targetDateLabel": "표시 문구"}]
+        출력 규칙:
+        - JSON 배열만 반환하세요.
+        - 앞뒤에 설명, 제목, 마크다운 코드블록(```json)을 절대 붙이지 마세요.
+        - 괄호와 따옴표가 올바르게 닫혔는지 출력 전에 확인하세요.
+        형식: [{"content": "할 일", "targetDate": "2026-05-15 또는 null", "targetDateLabel": "표시 문구"}]
         """, today);
 
         String response = callOpenAi(systemPrompt, originalText, 800);
