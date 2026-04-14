@@ -16,7 +16,9 @@ public enum SuccessCode {
   AUTH_EMAIL_VERIFIED(HttpStatus.OK, "AUTH2004", "이메일 인증이 완료되었습니다."),
   AUTH_CHECK_LOGIN_ID_AVAILABLE(HttpStatus.OK, "AUTH2005", "사용 가능한 아이디입니다."),
   AUTH_CHECK_EMAIL_AVAILABLE(HttpStatus.OK, "AUTH2006", "사용 가능한 이메일입니다."),
-  AUTH_CHECK_PHONE_NUMBER_AVAILABLE(HttpStatus.OK, "AUTH2007", "사용 가능한 전화번호입니다.");
+  AUTH_CHECK_PHONE_NUMBER_AVAILABLE(HttpStatus.OK, "AUTH2007", "사용 가능한 전화번호입니다."),
+  CHILD_CREATE_SUCCESS(HttpStatus.CREATED, "CHILD2011", "자녀 정보 등록에 성공하였습니다."),
+  CHILD_GET_LIST_SUCCESS(HttpStatus.OK, "CHILD2001", "내 자녀 목록 조회에 성공하였습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;
