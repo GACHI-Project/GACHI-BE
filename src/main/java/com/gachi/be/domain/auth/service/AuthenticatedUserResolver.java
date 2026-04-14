@@ -39,11 +39,14 @@ public class AuthenticatedUserResolver {
     if (!StringUtils.hasText(authorizationHeader)) {
       throw new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_MISSING);
     }
-    if (!authorizationHeader.startsWith(BEARER_PREFIX)) {
+
+    String normalizedHeader = authorizationHeader.trim();
+    if (normalizedHeader.length() < BEARER_PREFIX.length()
+        || !normalizedHeader.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
       throw new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_INVALID);
     }
 
-    String token = authorizationHeader.substring(BEARER_PREFIX.length()).trim();
+    String token = normalizedHeader.substring(BEARER_PREFIX.length()).trim();
     if (!StringUtils.hasText(token)) {
       throw new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_INVALID);
     }

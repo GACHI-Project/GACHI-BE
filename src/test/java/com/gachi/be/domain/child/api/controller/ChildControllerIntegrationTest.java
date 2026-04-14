@@ -14,6 +14,7 @@ import com.gachi.be.domain.user.entity.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,8 @@ import org.springframework.web.context.WebApplicationContext;
 @ActiveProfiles("test")
 @Transactional
 class ChildControllerIntegrationTest {
+  private static final AtomicInteger PHONE_SEQUENCE = new AtomicInteger(1000);
+
   private final ObjectMapper objectMapper = new ObjectMapper();
   private MockMvc mockMvc;
 
@@ -185,7 +188,7 @@ class ChildControllerIntegrationTest {
             .email(postfix + "@gachi.com")
             .loginId("login_" + postfix)
             .passwordHash("encoded-password")
-            .phoneNumber("0101234" + String.format("%04d", Math.abs(postfix.hashCode() % 10000)))
+            .phoneNumber("0101234" + String.format("%04d", PHONE_SEQUENCE.getAndIncrement()))
             .status(UserStatus.ACTIVE)
             .emailVerifiedAt(now)
             .consentAgreedAt(now)
