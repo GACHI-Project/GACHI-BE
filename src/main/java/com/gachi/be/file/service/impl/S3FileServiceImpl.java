@@ -44,35 +44,35 @@ public class S3FileServiceImpl implements S3FileService {
 
   @Override
   public S3UploadResponse uploadNewsletter(MultipartFile file) {
-      validateNewsletter(file);
-      String key = buildObjectKey(file.getOriginalFilename(), NEWSLETTER_PREFIX);
-      return doUpload(file, key);
+    validateNewsletter(file);
+    String key = buildObjectKey(file.getOriginalFilename(), NEWSLETTER_PREFIX);
+    return doUpload(file, key);
   }
 
   private S3UploadResponse doUpload(MultipartFile file, String key) {
-      String bucket = s3Properties.getBucket();
-      if (!StringUtils.hasText(bucket)) {
-          throw new ExternalApiException(
-              ErrorCode.EXTERNAL_API_ERROR, "AWS_S3_BUCKET is not configured.");
-      }
+    String bucket = s3Properties.getBucket();
+    if (!StringUtils.hasText(bucket)) {
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, "AWS_S3_BUCKET is not configured.");
+    }
 
-      PutObjectRequest request =
-          PutObjectRequest.builder()
-              .bucket(bucket)
-              .key(key)
-              .contentType(file.getContentType())
-              .build();
+    PutObjectRequest request =
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(key)
+            .contentType(file.getContentType())
+            .build();
 
-      try (InputStream inputStream = file.getInputStream()) {
-          s3Client.putObject(request, RequestBody.fromInputStream(inputStream, file.getSize()));
-      } catch (IOException e) {
-          throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "Failed to read uploaded file.");
-      } catch (S3Exception e) {
-          throw new ExternalApiException(
-              ErrorCode.EXTERNAL_API_ERROR, e.awsErrorDetails().errorMessage());
-      }
+    try (InputStream inputStream = file.getInputStream()) {
+      s3Client.putObject(request, RequestBody.fromInputStream(inputStream, file.getSize()));
+    } catch (IOException e) {
+      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "Failed to read uploaded file.");
+    } catch (S3Exception e) {
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, e.awsErrorDetails().errorMessage());
+    }
 
-      return new S3UploadResponse(key, buildObjectUrl(key));
+    return new S3UploadResponse(key, buildObjectUrl(key));
   }
 
   private void validateImage(MultipartFile file) {
@@ -88,14 +88,14 @@ public class S3FileServiceImpl implements S3FileService {
   }
 
   private void validateNewsletter(MultipartFile file) {
-      if (file == null || file.isEmpty()) {
-          throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "File is empty.");
-      }
-      String contentType = file.getContentType();
-      if (!StringUtils.hasText(contentType) || !ALLOWED_NEWSLETTER_TYPES.contains(contentType)) {
-          throw new ExternalApiException(
-              ErrorCode.EXTERNAL_API_ERROR, "Unsupported newsletter content type.");
-      }
+    if (file == null || file.isEmpty()) {
+      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "File is empty.");
+    }
+    String contentType = file.getContentType();
+    if (!StringUtils.hasText(contentType) || !ALLOWED_NEWSLETTER_TYPES.contains(contentType)) {
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, "Unsupported newsletter content type.");
+    }
   }
 
   private String buildObjectKey(String originalFilename, String prefix) {

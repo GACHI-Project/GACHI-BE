@@ -9,8 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.openai")
 public class OpenAiProperties {
 
-    private String apiKey;
-    private String model = "gpt-4o-mini";
-    private String apiUrl;
-    private int maxTokens = 2000;
+  private String apiKey;
+  private String model = "gpt-4o-mini";
+  private String apiUrl;
+  private int maxTokens = 2000;
 }

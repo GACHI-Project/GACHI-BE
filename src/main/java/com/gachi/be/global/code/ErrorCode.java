@@ -128,13 +128,13 @@ public enum ErrorCode {
       "로그아웃/회전으로 무효화된 토큰",
       ErrorLogLevel.WARN),
 
-   // Newsletter
+  // Newsletter
   NEWSLETTER_NOT_FOUND(
       HttpStatus.NOT_FOUND,
-       "NL4041",
-       "가정통신문을 찾을 수 없습니다.",
-       "newsletterId에 해당하는 레코드 없음 또는 소유권 불일치",
-        ErrorLogLevel.INFO),
+      "NL4041",
+      "가정통신문을 찾을 수 없습니다.",
+      "newsletterId에 해당하는 레코드 없음 또는 소유권 불일치",
+      ErrorLogLevel.INFO),
   NEWSLETTER_DUPLICATE(
       HttpStatus.CONFLICT,
       "NL4091",
@@ -142,11 +142,7 @@ public enum ErrorCode {
       "동일한 file_hash를 가진 가정통신문이 이미 존재함",
       ErrorLogLevel.WARN),
   NEWSLETTER_FILE_EMPTY(
-      HttpStatus.BAD_REQUEST,
-      "NL4001",
-      "파일이 비어있습니다.",
-      "업로드 파일 null 또는 empty",
-      ErrorLogLevel.WARN),
+      HttpStatus.BAD_REQUEST, "NL4001", "파일이 비어있습니다.", "업로드 파일 null 또는 empty", ErrorLogLevel.WARN),
   NEWSLETTER_FILE_TYPE_INVALID(
       HttpStatus.BAD_REQUEST,
       "NL4002",
