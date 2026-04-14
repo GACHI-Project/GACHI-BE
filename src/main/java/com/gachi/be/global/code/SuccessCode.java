@@ -16,7 +16,11 @@ public enum SuccessCode {
   AUTH_EMAIL_VERIFIED(HttpStatus.OK, "AUTH2004", "이메일 인증이 완료되었습니다."),
   AUTH_CHECK_LOGIN_ID_AVAILABLE(HttpStatus.OK, "AUTH2005", "사용 가능한 아이디입니다."),
   AUTH_CHECK_EMAIL_AVAILABLE(HttpStatus.OK, "AUTH2006", "사용 가능한 이메일입니다."),
-  AUTH_CHECK_PHONE_NUMBER_AVAILABLE(HttpStatus.OK, "AUTH2007", "사용 가능한 전화번호입니다.");
+  AUTH_CHECK_PHONE_NUMBER_AVAILABLE(HttpStatus.OK, "AUTH2007", "사용 가능한 전화번호입니다."),
+
+  // Newsletter
+  NEWSLETTER_UPLOAD_SUCCESS(HttpStatus.CREATED, "NL2011", "업로드가 시작되었습니다."),
+  NEWSLETTER_STATUS_SUCCESS(HttpStatus.OK, "NL2001", "요청에 성공하였습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;

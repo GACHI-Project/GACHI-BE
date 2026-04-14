@@ -53,3 +53,20 @@ app:
     bucket: ${AWS_S3_BUCKET:}
     public-base-url: ${AWS_S3_PUBLIC_BASE_URL:}
     image-prefix: ${AWS_S3_IMAGE_PREFIX:images}
+    access-key-id: ${AWS_ACCESS_KEY_ID:}
+    secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
+  clova:
+    ocr:
+      invoke-url: ${CLOVA_OCR_API_URL:}
+      secret-key: ${CLOVA_OCR_SECRET_KEY:}
+      presigned-url-minutes: ${CLOVA_OCR_PRESIGNED_MINUTES:15}
+    papago:
+      client-id: ${PAPAGO_CLIENT_ID:}
+      client-secret: ${PAPAGO_CLIENT_SECRET:}
+      api-url: https://papago.apigw.ntruss.com/nmt/v1
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-4o-mini}
+    api-url: https://api.openai.com/v1/chat/completions
+    # 응답 최대 토큰. 체크리스트/해야할일 JSON이 길어질 수 있어 2000으로 설정
+    max-tokens: ${OPENAI_MAX_TOKENS:2000}
