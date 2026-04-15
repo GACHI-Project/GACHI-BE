@@ -12,36 +12,62 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve deploy path
+        id: deploy-path
+        run: |
+          if [ -n "${{ secrets.EC2_DEPLOY_PATH }}" ]; then
+            echo "value=${{ secrets.EC2_DEPLOY_PATH }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=/home/ubuntu/GACHI-BE/deploy" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync deploy folder via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "deploy/docker-compose.yml,deploy/.env.example,deploy/HTTPS-SETUP.md,deploy/nginx,deploy/secrets/spring_mail_password.example.txt"
+          target: ${{ steps.deploy-path.outputs.value }}
+          strip_components: 1
+          overwrite: true
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
+          EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,EC2_DEPLOY_PATH
+          script_stop: true
           script: |
-            set -e
-            DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
+            bash -se <<'EOF'
+            set -Eeuo pipefail
+            DEPLOY_PATH="$EC2_DEPLOY_PATH"
 
+            echo "[1/7] Move to deploy path: $DEPLOY_PATH"
             cd "$DEPLOY_PATH"
-            test -f .env || { echo ".env not found in $DEPLOY_PATH"; exit 1; }
 
+            trap 'rc=$?; echo "[ERROR] deploy-ec2 failed (exit=${rc})"; docker compose --env-file .env ps || true; docker compose --env-file .env logs --tail=80 backend nginx || true; exit $rc' ERR
+
+            echo "[2/7] Validate server-side .env preservation"
+            test -f .env || { echo ".env not found in $DEPLOY_PATH. Create .env on EC2 before deploy."; exit 1; }
+
+            echo "[3/7] Pin latest backend image tag in .env"
             if grep -q '^BACKEND_IMAGE=' .env; then
               sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest|" .env
             else
               echo "BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest" >> .env
             fi
 
-            if grep -q '^AI_IMAGE=' .env; then
-              sed -i "s|^AI_IMAGE=.*|AI_IMAGE=${DOCKERHUB_USERNAME}/gachi-ai:latest|" .env
-            else
-              echo "AI_IMAGE=${DOCKERHUB_USERNAME}/gachi-ai:latest" >> .env
-            fi
-
+            echo "[4/7] Validate SMTP secret file or fallback path"
             SECRET_FILE_REL="$(grep -E '^SPRING_MAIL_PASSWORD_SECRET_FILE=' .env | tail -n1 | cut -d= -f2-)"
             SECRET_FILE_REL="${SECRET_FILE_REL:-./secrets/spring_mail_password.example.txt}"
             case "$SECRET_FILE_REL" in
@@ -57,8 +83,15 @@ jobs:
               echo "SMTP secret file not found: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
             fi
 
+            echo "[5/7] Pull latest backend image"
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-            docker compose --env-file .env pull backend ai
-            docker compose --env-file .env up -d --remove-orphans
+            docker compose --env-file .env pull backend
+
+            echo "[6/7] Recreate services with synced compose/nginx settings"
+            docker compose --env-file .env up -d --remove-orphans backend
+            docker compose --env-file .env up -d --remove-orphans --force-recreate nginx
+
+            echo "[7/7] Print deploy status"
             docker image prune -f
             docker compose --env-file .env ps
+            EOF
