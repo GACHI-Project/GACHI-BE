@@ -50,6 +50,22 @@ services:
   backend:
     image: ${BACKEND_IMAGE:-gachi-be:latest}
     container_name: gachi-backend
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -s /run/secrets/spring_mail_password ]; then
+          if [ ! -r /run/secrets/spring_mail_password ]; then
+            echo "spring_mail_password secret file is not readable.";
+            exit 1;
+          fi;
+          export SPRING_MAIL_PASSWORD="$$(cat /run/secrets/spring_mail_password)";
+        fi;
+        if [ -z "$${SPRING_MAIL_PASSWORD}" ]; then
+          echo "SPRING_MAIL_PASSWORD is missing. Set docker secret or fallback env.";
+          exit 1;
+        fi;
+        exec java -jar /app/app.jar
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       DB_URL: ${DB_URL}
@@ -58,7 +74,7 @@ services:
       SPRING_MAIL_HOST: ${SPRING_MAIL_HOST}
       SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
       SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME}
-      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-true}
       AWS_REGION: ${AWS_REGION}
@@ -71,6 +87,9 @@ services:
       AUTH_EMAIL_SUBJECT: ${AUTH_EMAIL_SUBJECT:-[GACHI] Email verification code}
       AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET: ${AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET}
       AUTH_RATE_LIMIT_TRUSTED_PROXIES: ${AUTH_RATE_LIMIT_TRUSTED_PROXIES:-127.0.0.1,::1}
+    secrets:
+      - source: spring_mail_password
+        target: spring_mail_password
     depends_on:
       db:
         condition: service_healthy
@@ -116,3 +135,7 @@ volumes:
   db-data:
   letsencrypt:
   certbot-www:
+
+secrets:
+  spring_mail_password:
+    file: ${SPRING_MAIL_PASSWORD_SECRET_FILE:-./secrets/spring_mail_password.example.txt}
