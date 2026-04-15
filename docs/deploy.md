@@ -67,16 +67,16 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - 운영 시크릿 파일(예: `deploy/secrets/spring_mail_password.txt`)은 전송하지 않음
 - 즉, EC2에 이미 존재하는 `.env`/실시크릿 파일을 보존한 상태로 compose/nginx 설정만 동기화함
 
-### 6-3. 원격 배포 실행 순서
+### 6-3. 워크플로우 실행 순서(Actions 기준)
 
 1. `deploy/` 화이트리스트 파일을 SCP로 EC2 배포 경로에 복사
-2. EC2에서 `.env` 존재 여부 확인(없으면 즉시 실패)
-3. `.env` 내 `BACKEND_IMAGE`를 최신 태그로 갱신
-4. SMTP 시크릿 파일 경로 및 권한 검증
-5. `docker compose pull backend`
-6. `docker compose up -d --remove-orphans backend`
-7. `docker compose up -d --remove-orphans --force-recreate nginx`
-8. `docker compose ps`로 최종 상태 출력
+2. (`[1/7]`) EC2 배포 경로로 이동
+3. (`[2/7]`) EC2에서 `.env` 존재 여부 확인(없으면 즉시 실패)
+4. (`[3/7]`) `.env` 내 `BACKEND_IMAGE`를 최신 태그로 갱신
+5. (`[4/7]`) SMTP 시크릿 파일 경로 및 권한 검증
+6. (`[5/7]`) `docker compose pull backend`
+7. (`[6/7]`) `docker compose up -d --remove-orphans backend` 후 `docker compose up -d --remove-orphans --force-recreate nginx` 실행
+8. (`[7/7]`) `docker compose ps`로 최종 상태 출력
 
 ### 6-4. 실패 시 로그 확인
 
