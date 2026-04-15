@@ -61,7 +61,10 @@ services:
           fi;
           export SPRING_MAIL_PASSWORD="$$(cat /run/secrets/spring_mail_password)";
         fi;
-        if [ -z "$${SPRING_MAIL_PASSWORD}" ]; then
+        if [ "$${AUTH_EMAIL_NOOP_ALLOWED:-false}" != "true" ] \
+          && [ "$${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}" = "true" ] \
+          && [ -n "$${SPRING_MAIL_HOST:-}" ] \
+          && [ -z "$${SPRING_MAIL_PASSWORD:-}" ]; then
           echo "SPRING_MAIL_PASSWORD is missing. Set docker secret or fallback env.";
           exit 1;
         fi;

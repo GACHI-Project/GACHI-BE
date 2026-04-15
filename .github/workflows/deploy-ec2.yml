@@ -48,10 +48,13 @@ jobs:
               /*) SECRET_FILE_PATH="$SECRET_FILE_REL" ;;
               *) SECRET_FILE_PATH="$DEPLOY_PATH/${SECRET_FILE_REL#./}" ;;
             esac
-            if [ -s "$SECRET_FILE_PATH" ]; then
+            if [ -e "$SECRET_FILE_PATH" ]; then
               test -r "$SECRET_FILE_PATH" || { echo "SMTP secret file exists but is not readable: $SECRET_FILE_PATH"; exit 1; }
+              if [ ! -s "$SECRET_FILE_PATH" ]; then
+                echo "SMTP secret file is empty: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
+              fi
             else
-              echo "SMTP secret file not found or empty: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
+              echo "SMTP secret file not found: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
             fi
 
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
