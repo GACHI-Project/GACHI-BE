@@ -35,6 +35,7 @@
 - `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`: SMTP AUTH toggle (default provider-recommended value)
 - `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`: STARTTLS toggle (default provider-recommended value)
 - `AUTH_EMAIL_FROM_ADDRESS`: from address for verification emails (required when SMTP is enabled)
+- `AUTH_EMAIL_REPLY_TO`: reply-to address for verification emails (optional)
 - `AUTH_EMAIL_NOOP_ALLOWED`: allow log-only mail sender when SMTP is missing (default: `false`)
 - `AUTH_EMAIL_SUBJECT`: subject line for verification email
 - `AUTH_RATE_LIMIT_ENABLED`: enable auth endpoint rate limiting (default: `true`)
