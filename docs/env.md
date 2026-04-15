@@ -28,6 +28,12 @@
 - `AUTH_EMAIL_RESEND_COOLDOWN_SECONDS`: resend cooldown seconds (default: `60`)
 - `AUTH_EMAIL_MAX_ATTEMPTS`: max verification attempts per code (default: `5`)
 - `AUTH_EMAIL_VERIFIED_TTL_SECONDS`: verified mark TTL before signup (default: `1800`)
+- `SPRING_MAIL_HOST`: SMTP host (required when SMTP mail sender is used)
+- `SPRING_MAIL_PORT`: SMTP port (e.g. `587`)
+- `SPRING_MAIL_USERNAME`: SMTP account username
+- `SPRING_MAIL_PASSWORD`: SMTP account password or app password
+- `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH`: SMTP AUTH toggle (default provider-recommended value)
+- `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE`: STARTTLS toggle (default provider-recommended value)
 - `AUTH_EMAIL_FROM_ADDRESS`: from address for verification emails (required when SMTP is enabled)
 - `AUTH_EMAIL_NOOP_ALLOWED`: allow log-only mail sender when SMTP is missing (default: `false`)
 - `AUTH_EMAIL_SUBJECT`: subject line for verification email
