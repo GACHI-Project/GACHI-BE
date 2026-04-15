@@ -2,7 +2,7 @@ name: Deploy to EC2
 
 on:
   push:
-    branches: [ "deploy" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -55,22 +55,16 @@ jobs:
             echo "[1/7] Move to deploy path: $DEPLOY_PATH"
             cd "$DEPLOY_PATH"
 
-            trap 'rc=$?; echo "[ERROR] deploy-ec2 failed (exit=${rc})"; docker compose --env-file .env ps || true; docker compose --env-file .env logs --tail=80 backend ai nginx || true; exit $rc' ERR
+            trap 'rc=$?; echo "[ERROR] deploy-ec2 failed (exit=${rc})"; docker compose --env-file .env ps || true; docker compose --env-file .env logs --tail=80 backend nginx || true; exit $rc' ERR
 
             echo "[2/7] Validate server-side .env preservation"
             test -f .env || { echo ".env not found in $DEPLOY_PATH. Create .env on EC2 before deploy."; exit 1; }
 
-            echo "[3/7] Pin latest backend/ai image tags in .env"
+            echo "[3/7] Pin latest backend image tag in .env"
             if grep -q '^BACKEND_IMAGE=' .env; then
               sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest|" .env
             else
               echo "BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest" >> .env
-            fi
-
-            if grep -q '^AI_IMAGE=' .env; then
-              sed -i "s|^AI_IMAGE=.*|AI_IMAGE=${DOCKERHUB_USERNAME}/gachi-ai:latest|" .env
-            else
-              echo "AI_IMAGE=${DOCKERHUB_USERNAME}/gachi-ai:latest" >> .env
             fi
 
             echo "[4/7] Validate SMTP secret file or fallback path"
@@ -89,12 +83,12 @@ jobs:
               echo "SMTP secret file not found: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
             fi
 
-            echo "[5/7] Pull latest backend/ai images"
+            echo "[5/7] Pull latest backend image"
             echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-            docker compose --env-file .env pull backend ai
+            docker compose --env-file .env pull backend
 
             echo "[6/7] Recreate services with synced compose/nginx settings"
-            docker compose --env-file .env up -d --remove-orphans backend ai
+            docker compose --env-file .env up -d --remove-orphans backend
             docker compose --env-file .env up -d --remove-orphans --force-recreate nginx
 
             echo "[7/7] Print deploy status"
