@@ -1,8 +1,8 @@
 name: Deploy to EC2
 
-on:
+"on":
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -17,9 +17,14 @@ jobs:
 
       - name: Resolve deploy path
         id: deploy-path
+        env:
+          EC2_DEPLOY_PATH_SECRET: ${{ secrets.EC2_DEPLOY_PATH }}
         run: |
-          if [ -n "${{ secrets.EC2_DEPLOY_PATH }}" ]; then
-            echo "value=${{ secrets.EC2_DEPLOY_PATH }}" >> "$GITHUB_OUTPUT"
+          RESOLVED_PATH="${EC2_DEPLOY_PATH_SECRET:-}"
+          RESOLVED_PATH="${RESOLVED_PATH%$'\r'}"
+          RESOLVED_PATH="$(printf '%s' "$RESOLVED_PATH" | sed 's/[[:space:]]*$//')"
+          if [ -n "$RESOLVED_PATH" ]; then
+            echo "value=$RESOLVED_PATH" >> "$GITHUB_OUTPUT"
           else
             echo "value=/home/ubuntu/GACHI-BE/deploy" >> "$GITHUB_OUTPUT"
           fi
@@ -50,10 +55,15 @@ jobs:
           script: |
             bash -se <<'EOF'
             set -Eeuo pipefail
-            DEPLOY_PATH="$EC2_DEPLOY_PATH"
+            DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
+            DEPLOY_PATH="${DEPLOY_PATH%$'\r'}"
+            DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH" | sed 's/[[:space:]]*$//')"
 
             echo "[1/7] Move to deploy path: $DEPLOY_PATH"
+            test -d "$DEPLOY_PATH" || { echo "Deploy path not found: $DEPLOY_PATH"; exit 1; }
             cd "$DEPLOY_PATH"
+            echo "[debug] host=$(hostname) user=$(whoami) pwd=$(pwd)"
+            ls -al
 
             trap 'rc=$?; echo "[ERROR] deploy-ec2 failed (exit=${rc})"; docker compose --env-file .env ps || true; docker compose --env-file .env logs --tail=80 backend nginx || true; exit $rc' ERR
 
