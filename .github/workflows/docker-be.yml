@@ -1,10 +1,10 @@
 name: BE Docker CI
 
-on:
+"on":
   pull_request:
-    branches: [ "develop", "main" ]
+    branches: ["develop", "main"]
   push:
-    branches: [ "develop", "main" ]
+    branches: ["develop", "main"]
   workflow_dispatch:
 
 permissions:
