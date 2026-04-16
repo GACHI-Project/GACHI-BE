@@ -53,11 +53,19 @@ jobs:
           envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,EC2_DEPLOY_PATH
           script_stop: true
           script: |
-            bash -se <<'EOF'
             set -Eeuo pipefail
+
+            on_error() {
+              rc=$?
+              echo "[ERROR] deploy-ec2 failed (exit=${rc})"
+              docker compose --env-file .env ps || true
+              docker compose --env-file .env logs --tail=80 backend nginx || true
+              exit $rc
+            }
+            trap on_error ERR
+
             DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
-            DEPLOY_PATH="${DEPLOY_PATH%$'\r'}"
-            DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH" | sed 's/[[:space:]]*$//')"
+            DEPLOY_PATH="$(echo "$DEPLOY_PATH" | xargs)"
 
             echo "[1/7] Move to deploy path: $DEPLOY_PATH"
             test -d "$DEPLOY_PATH" || { echo "Deploy path not found: $DEPLOY_PATH"; exit 1; }
@@ -65,20 +73,18 @@ jobs:
             echo "[debug] host=$(hostname) user=$(whoami) pwd=$(pwd)"
             ls -al
 
-            trap 'rc=$?; echo "[ERROR] deploy-ec2 failed (exit=${rc})"; docker compose --env-file .env ps || true; docker compose --env-file .env logs --tail=80 backend nginx || true; exit $rc' ERR
-
             echo "[2/7] Validate server-side .env preservation"
             test -f .env || { echo ".env not found in $DEPLOY_PATH. Create .env on EC2 before deploy."; exit 1; }
 
             echo "[3/7] Pin latest backend image tag in .env"
-            if grep -q '^BACKEND_IMAGE=' .env; then
+            if grep -q "^BACKEND_IMAGE=" .env; then
               sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest|" .env
             else
               echo "BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest" >> .env
             fi
 
             echo "[4/7] Validate SMTP secret file or fallback path"
-            SECRET_FILE_REL="$(grep -E '^SPRING_MAIL_PASSWORD_SECRET_FILE=' .env | tail -n1 | cut -d= -f2-)"
+            SECRET_FILE_REL="$(grep -E "^SPRING_MAIL_PASSWORD_SECRET_FILE=" .env | tail -n1 | cut -d= -f2-)"
             SECRET_FILE_REL="${SECRET_FILE_REL:-./secrets/spring_mail_password.example.txt}"
             case "$SECRET_FILE_REL" in
               /*) SECRET_FILE_PATH="$SECRET_FILE_REL" ;;
@@ -104,4 +110,3 @@ jobs:
             echo "[7/7] Print deploy status"
             docker image prune -f
             docker compose --env-file .env ps
-            EOF
