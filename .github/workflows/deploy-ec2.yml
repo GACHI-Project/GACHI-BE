@@ -110,7 +110,21 @@ jobs:
 
             echo "[6/7] Recreate services with synced compose/nginx settings"
             docker compose --env-file .env up -d --remove-orphans backend
-            docker compose --env-file .env up -d --remove-orphans --force-recreate nginx
+            BACKEND_HEALTH="starting"
+            for _ in $(seq 1 36); do
+              BACKEND_HEALTH="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' gachi-backend 2>/dev/null || echo "missing")"
+              echo "[debug] backend health: $BACKEND_HEALTH"
+              if [ "$BACKEND_HEALTH" = "healthy" ]; then
+                break
+              fi
+              sleep 5
+            done
+            if [ "$BACKEND_HEALTH" != "healthy" ]; then
+              echo "backend health check timed out. Check backend logs."
+              docker compose --env-file .env logs --tail=120 backend || true
+              exit 1
+            fi
+            docker compose --env-file .env up -d --remove-orphans --force-recreate --no-deps nginx
 
             echo "[7/7] Print deploy status"
             docker image prune -f
