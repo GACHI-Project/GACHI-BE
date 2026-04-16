@@ -1,6 +1,10 @@
 package com.gachi.be.global.security;
 
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
+import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.entity.UserStatus;
+import com.gachi.be.domain.user.repository.UserRepository;
+import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -28,6 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   public static final String AUTH_ERROR_CODE_ATTRIBUTE = "authErrorCode";
 
   private final JwtTokenProvider jwtTokenProvider;
+  private final UserRepository userRepository;
 
   @Override
   protected void doFilterInternal(
@@ -37,6 +42,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     if (StringUtils.hasText(token)) {
       try {
         JwtTokenProvider.AccessTokenClaims claims = jwtTokenProvider.parseAccessToken(token);
+        User user =
+            userRepository
+                .findById(claims.getUserId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_INVALID));
+        if (user.getStatus() != UserStatus.ACTIVE) {
+          throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
+        }
+
+        // 토큰 유효성 + 사용자 활성 상태가 모두 확인된 경우에만 인증 컨텍스트를 설정한다.
         UsernamePasswordAuthenticationToken authentication =
             new UsernamePasswordAuthenticationToken(
                 claims.getUserId(), null, Collections.emptyList());

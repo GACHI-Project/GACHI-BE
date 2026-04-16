@@ -77,6 +77,12 @@ public enum ErrorCode {
       ErrorLogLevel.WARN),
   AUTH_ACCOUNT_WITHDRAWN(
       HttpStatus.FORBIDDEN, "AUTH4031", "탈퇴한 계정입니다.", "탈퇴 계정 로그인/토큰 발급 차단", ErrorLogLevel.WARN),
+  AUTH_PASSWORD_CHANGE_REQUIRED(
+      HttpStatus.FORBIDDEN,
+      "AUTH4032",
+      "비밀번호 재설정이 필요합니다.",
+      "비밀번호 변경 강제 계정 로그인/재발급 차단",
+      ErrorLogLevel.WARN),
   AUTH_PASSWORD_CONFIRM_MISMATCH(
       HttpStatus.BAD_REQUEST,
       "AUTH4004",

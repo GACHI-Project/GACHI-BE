@@ -176,10 +176,7 @@ public class AuthServiceImpl implements AuthService {
     if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
       throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
     }
-    if (user.isPasswordChangeRequired()) {
-      throw new BusinessException(
-          ErrorCode.BUSINESS_RULE_VIOLATION, "레거시 계정은 비밀번호 재설정 후 로그인할 수 있습니다.");
-    }
+    ensurePasswordChangeNotRequired(user);
 
     boolean rememberMe = Boolean.TRUE.equals(request.rememberMe());
     return issueTokens(
@@ -209,6 +206,7 @@ public class AuthServiceImpl implements AuthService {
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
     }
+    ensurePasswordChangeNotRequired(user);
 
     existingToken.revoke();
     String nextDeviceInfo = mergeNullable(deviceInfo, existingToken.getDeviceInfo());
@@ -336,6 +334,12 @@ public class AuthServiceImpl implements AuthService {
   private void enforcePasswordStrength(String password) {
     if (!PasswordStrengthEvaluator.evaluate(password).canSignup()) {
       throw new BusinessException(ErrorCode.AUTH_PASSWORD_STRENGTH_DANGEROUS);
+    }
+  }
+
+  private void ensurePasswordChangeNotRequired(User user) {
+    if (user.isPasswordChangeRequired()) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_CHANGE_REQUIRED);
     }
   }
 

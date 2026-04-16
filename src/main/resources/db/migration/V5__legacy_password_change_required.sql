@@ -3,4 +3,4 @@ ALTER TABLE users
 
 UPDATE users
 SET password_change_required = TRUE
-WHERE login_id LIKE 'legacy_%';
+WHERE login_id LIKE 'legacy\_%' ESCAPE '\';
