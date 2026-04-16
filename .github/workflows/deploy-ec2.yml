@@ -105,7 +105,8 @@ jobs:
             fi
 
             SWAGGER_ENABLED_VALUE="$(sed -n "s/^SWAGGER_ENABLED=//p" .env | tail -n1)"
-            if [ "$SWAGGER_ENABLED_VALUE" = "true" ] || [ "$SWAGGER_ENABLED_VALUE" = "TRUE" ] || [ "$SWAGGER_ENABLED_VALUE" = "True" ]; then
+            SWAGGER_ENABLED_VALUE="$(echo "$SWAGGER_ENABLED_VALUE" | tr '[:upper:]' '[:lower:]' | xargs)"
+            if [ "$SWAGGER_ENABLED_VALUE" = "true" ]; then
               SWAGGER_AUTH_FILE_REL="$(sed -n "s/^SWAGGER_BASIC_AUTH_FILE=//p" .env | tail -n1)"
               if [ -z "${SWAGGER_AUTH_FILE_REL:-}" ]; then
                 SWAGGER_AUTH_FILE_REL="./secrets/swagger_htpasswd.txt"
@@ -151,7 +152,7 @@ jobs:
               fi
 
               if [ ! -s "$TLS_CERT_FILE_PATH" ] || [ ! -s "$TLS_KEY_FILE_PATH" ]; then
-                echo "TLS cert/key missing for Swagger HTTPS. Generating self-signed cert."
+                echo "::warning::TLS cert/key missing for Swagger HTTPS. Generating self-signed cert. This is NOT recommended for production!"
                 mkdir -p "$(dirname "$TLS_CERT_FILE_PATH")"
                 mkdir -p "$(dirname "$TLS_KEY_FILE_PATH")"
                 openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
