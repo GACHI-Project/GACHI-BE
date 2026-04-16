@@ -1,13 +1,10 @@
 package com.gachi.be.global.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.ErrorCode;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
@@ -19,10 +16,7 @@ import org.springframework.util.StringUtils;
  * <p>기존 통합테스트/클라이언트가 AUTH4015, AUTH4016 코드를 기반으로 분기하고 있어 보안 필터 도입 시에도 동일 응답을 보장한다.
  */
 @Component
-@RequiredArgsConstructor
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
-  private final ObjectMapper objectMapper;
-
   @Override
   public void commence(
       HttpServletRequest request,
@@ -32,8 +26,23 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     ErrorCode errorCode = resolveErrorCode(request);
 
     response.setStatus(errorCode.getHttpStatus().value());
+    response.setCharacterEncoding("UTF-8");
     response.setContentType("application/json;charset=UTF-8");
-    objectMapper.writeValue(response.getWriter(), ApiResponse.fail(errorCode));
+    response
+        .getWriter()
+        .write(
+            """
+            {
+              "isSuccess": false,
+              "status": "%s",
+              "code": "%s",
+              "message": "%s"
+            }
+            """
+                .formatted(
+                    errorCode.getHttpStatus().name(),
+                    escapeJson(errorCode.getCode()),
+                    escapeJson(errorCode.getMessage())));
   }
 
   private ErrorCode resolveErrorCode(HttpServletRequest request) {
@@ -52,5 +61,12 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
       return ErrorCode.AUTH_ACCESS_TOKEN_MISSING;
     }
     return ErrorCode.AUTH_ACCESS_TOKEN_INVALID;
+  }
+
+  private String escapeJson(String value) {
+    if (value == null) {
+      return "";
+    }
+    return value.replace("\\", "\\\\").replace("\"", "\\\"");
   }
 }
