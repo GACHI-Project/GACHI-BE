@@ -75,7 +75,7 @@ jobs:
             fi
 
             echo "[4/7] Validate SMTP secret file or fallback path"
-            SECRET_FILE_REL="$(grep -E "^SPRING_MAIL_PASSWORD_SECRET_FILE=" .env | tail -n1 | cut -d= -f2-)"
+            SECRET_FILE_REL="$(grep -E "^SPRING_MAIL_PASSWORD_SECRET_FILE=" .env | tail -n1 | cut -d= -f2- || true)"
             SECRET_FILE_REL="${SECRET_FILE_REL:-./secrets/spring_mail_password.example.txt}"
             if [ "${SECRET_FILE_REL#/}" != "$SECRET_FILE_REL" ]; then
               SECRET_FILE_PATH="$SECRET_FILE_REL"
