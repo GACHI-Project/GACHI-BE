@@ -59,13 +59,19 @@ jobs:
             DEPLOY_PATH="$(echo "$DEPLOY_PATH" | xargs)"
 
             echo "[1/7] Move to deploy path: $DEPLOY_PATH"
-            test -d "$DEPLOY_PATH" || { echo "Deploy path not found: $DEPLOY_PATH"; exit 1; }
+            if [ ! -d "$DEPLOY_PATH" ]; then
+              echo "Deploy path not found: $DEPLOY_PATH"
+              exit 1
+            fi
             cd "$DEPLOY_PATH"
             echo "[debug] host=$(hostname) user=$(whoami) pwd=$(pwd)"
             ls -al
 
             echo "[2/7] Validate server-side .env preservation"
-            test -f .env || { echo ".env not found in $DEPLOY_PATH. Create .env on EC2 before deploy."; exit 1; }
+            if [ ! -f .env ]; then
+              echo ".env not found in $DEPLOY_PATH. Create .env on EC2 before deploy."
+              exit 1
+            fi
 
             echo "[3/7] Pin latest backend image tag in .env"
             if grep -q "^BACKEND_IMAGE=" .env; then
@@ -80,19 +86,17 @@ jobs:
               SECRET_FILE_REL="./secrets/spring_mail_password.example.txt"
             fi
             echo "[debug] secret file rel path: $SECRET_FILE_REL"
-
-            case "$SECRET_FILE_REL" in
-              /*)
-                SECRET_FILE_PATH="$SECRET_FILE_REL"
-                ;;
-              *)
-                SECRET_FILE_PATH="$DEPLOY_PATH/${SECRET_FILE_REL#./}"
-                ;;
-            esac
+            SECRET_FILE_PATH="$SECRET_FILE_REL"
+            if [ "${SECRET_FILE_REL#/}" = "$SECRET_FILE_REL" ]; then
+              SECRET_FILE_PATH="$DEPLOY_PATH/${SECRET_FILE_REL#./}"
+            fi
 
             echo "[debug] secret file absolute path: $SECRET_FILE_PATH"
             if [ -e "$SECRET_FILE_PATH" ]; then
-              test -r "$SECRET_FILE_PATH" || { echo "SMTP secret file exists but is not readable: $SECRET_FILE_PATH"; exit 1; }
+              if [ ! -r "$SECRET_FILE_PATH" ]; then
+                echo "SMTP secret file exists but is not readable: $SECRET_FILE_PATH"
+                exit 1
+              fi
               if [ ! -s "$SECRET_FILE_PATH" ]; then
                 echo "SMTP secret file is empty: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
               fi
