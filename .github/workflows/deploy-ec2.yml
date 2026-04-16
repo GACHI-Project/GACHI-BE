@@ -55,15 +55,6 @@ jobs:
           script: |
             set -Eeuo pipefail
 
-            on_error() {
-              rc=$?
-              echo "[ERROR] deploy-ec2 failed (exit=${rc})"
-              docker compose --env-file .env ps || true
-              docker compose --env-file .env logs --tail=80 backend nginx || true
-              exit $rc
-            }
-            trap on_error ERR
-
             DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
             DEPLOY_PATH="$(echo "$DEPLOY_PATH" | xargs)"
 
@@ -86,10 +77,11 @@ jobs:
             echo "[4/7] Validate SMTP secret file or fallback path"
             SECRET_FILE_REL="$(grep -E "^SPRING_MAIL_PASSWORD_SECRET_FILE=" .env | tail -n1 | cut -d= -f2-)"
             SECRET_FILE_REL="${SECRET_FILE_REL:-./secrets/spring_mail_password.example.txt}"
-            case "$SECRET_FILE_REL" in
-              /*) SECRET_FILE_PATH="$SECRET_FILE_REL" ;;
-              *) SECRET_FILE_PATH="$DEPLOY_PATH/${SECRET_FILE_REL#./}" ;;
-            esac
+            if [ "${SECRET_FILE_REL#/}" != "$SECRET_FILE_REL" ]; then
+              SECRET_FILE_PATH="$SECRET_FILE_REL"
+            else
+              SECRET_FILE_PATH="$DEPLOY_PATH/${SECRET_FILE_REL#./}"
+            fi
             if [ -e "$SECRET_FILE_PATH" ]; then
               test -r "$SECRET_FILE_PATH" || { echo "SMTP secret file exists but is not readable: $SECRET_FILE_PATH"; exit 1; }
               if [ ! -s "$SECRET_FILE_PATH" ]; then
@@ -110,3 +102,4 @@ jobs:
             echo "[7/7] Print deploy status"
             docker image prune -f
             docker compose --env-file .env ps
+            docker compose --env-file .env logs --tail=80 backend nginx || true
