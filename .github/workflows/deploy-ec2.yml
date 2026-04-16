@@ -104,13 +104,18 @@ jobs:
               echo "SMTP secret file not found: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
             fi
 
-            SWAGGER_ENABLED_VALUE="$(sed -n "s/^SWAGGER_ENABLED=//p" .env | tail -n1)"
-            SWAGGER_ENABLED_VALUE="$(echo "$SWAGGER_ENABLED_VALUE" | tr '[:upper:]' '[:lower:]' | xargs)"
+            SWAGGER_ENABLED_VALUE="$(sed -n "s/^SWAGGER_ENABLED=//p" .env | tail -n1 || true)"
+            SWAGGER_ENABLED_VALUE="$(printf "%s" "$SWAGGER_ENABLED_VALUE" \
+              | tr -d '\r' \
+              | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//' \
+              | tr '[:upper:]' '[:lower:]')"
+            echo "[debug] SWAGGER_ENABLED normalized value: ${SWAGGER_ENABLED_VALUE:-<empty>}"
             if [ "$SWAGGER_ENABLED_VALUE" = "true" ]; then
-              SWAGGER_AUTH_FILE_REL="$(sed -n "s/^SWAGGER_BASIC_AUTH_FILE=//p" .env | tail -n1)"
+              SWAGGER_AUTH_FILE_REL="$(sed -n "s/^SWAGGER_BASIC_AUTH_FILE=//p" .env | tail -n1 || true)"
               if [ -z "${SWAGGER_AUTH_FILE_REL:-}" ]; then
                 SWAGGER_AUTH_FILE_REL="./secrets/swagger_htpasswd.txt"
               fi
+              SWAGGER_AUTH_FILE_REL="$(printf "%s" "$SWAGGER_AUTH_FILE_REL" | tr -d '\r' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//')"
               echo "[debug] swagger auth file rel path: $SWAGGER_AUTH_FILE_REL"
               SWAGGER_AUTH_FILE_PATH="$SWAGGER_AUTH_FILE_REL"
               if [ "${SWAGGER_AUTH_FILE_REL#/}" = "$SWAGGER_AUTH_FILE_REL" ]; then
