@@ -25,7 +25,30 @@ chmod 600 secrets/spring_mail_password.txt
 ```bash
 SPRING_MAIL_PASSWORD=
 SPRING_MAIL_PASSWORD_SECRET_FILE=./secrets/spring_mail_password.txt
+SWAGGER_ENABLED=false
+SWAGGER_BASIC_AUTH_FILE=./secrets/swagger_htpasswd.txt
 ```
+
+### 2-3. Swagger Basic Auth 파일 준비 예시
+
+```bash
+cd /home/ubuntu/GACHI-BE/deploy
+mkdir -p secrets
+printf "swagger:$(openssl passwd -apr1 'change-me')\n" > secrets/swagger_htpasswd.txt
+chmod 600 secrets/swagger_htpasswd.txt
+```
+
+### 2-4. Swagger 열기/닫기 운영 절차
+
+```bash
+# Swagger 열기
+sed -i 's/^SWAGGER_ENABLED=.*/SWAGGER_ENABLED=true/' .env
+
+# Swagger 닫기
+sed -i 's/^SWAGGER_ENABLED=.*/SWAGGER_ENABLED=false/' .env
+```
+
+- 값 변경 후에는 `deploy-ec2` 워크플로우를 다시 실행해 컨테이너 설정을 반영해야 함
 
 ## 3. Compose로 기동
 
@@ -60,11 +83,13 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - `deploy/HTTPS-SETUP.md`
 - `deploy/nginx/**`
 - `deploy/secrets/spring_mail_password.example.txt`
+- `deploy/secrets/swagger_htpasswd.example.txt`
 
 ### 6-2. 제외 정책
 
 - 서버 운영값이 들어있는 `deploy/.env`는 전송하지 않음
 - 운영 시크릿 파일(예: `deploy/secrets/spring_mail_password.txt`)은 전송하지 않음
+- 운영 Swagger 인증 파일(예: `deploy/secrets/swagger_htpasswd.txt`)은 전송하지 않음
 - 즉, EC2에 이미 존재하는 `.env`/실시크릿 파일을 보존한 상태로 compose/nginx 설정만 동기화함
 
 ### 6-3. 워크플로우 실행 순서(Actions 기준)
@@ -73,9 +98,9 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 2. (`[1/7]`) EC2 배포 경로로 이동
 3. (`[2/7]`) EC2에서 `.env` 존재 여부 확인(없으면 즉시 실패)
 4. (`[3/7]`) `.env` 내 `BACKEND_IMAGE`를 최신 태그로 갱신
-5. (`[4/7]`) SMTP 시크릿 파일 경로 및 권한 검증
+5. (`[4/7]`) SMTP 시크릿 파일 검증 + `SWAGGER_ENABLED=true`인 경우 Swagger Basic Auth 파일 검증
 6. (`[5/7]`) `docker compose pull backend`
-7. (`[6/7]`) `docker compose up -d --remove-orphans backend` 후 `docker compose up -d --remove-orphans --force-recreate nginx` 실행
+7. (`[6/7]`) `docker compose up -d --remove-orphans backend` 실행 후 backend health 확인, 통과 시 `nginx`를 `--no-deps --force-recreate`로 재기동
 8. (`[7/7]`) `docker compose ps`로 최종 상태 출력
 
 ### 6-4. 실패 시 로그 확인
