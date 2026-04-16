@@ -81,11 +81,14 @@ jobs:
             fi
             echo "[debug] secret file rel path: $SECRET_FILE_REL"
 
-            if printf "%s" "$SECRET_FILE_REL" | grep -q "^/"; then
-              SECRET_FILE_PATH="$SECRET_FILE_REL"
-            else
-              SECRET_FILE_PATH="$DEPLOY_PATH/${SECRET_FILE_REL#./}"
-            fi
+            case "$SECRET_FILE_REL" in
+              /*)
+                SECRET_FILE_PATH="$SECRET_FILE_REL"
+                ;;
+              *)
+                SECRET_FILE_PATH="$DEPLOY_PATH/${SECRET_FILE_REL#./}"
+                ;;
+            esac
 
             echo "[debug] secret file absolute path: $SECRET_FILE_PATH"
             if [ -e "$SECRET_FILE_PATH" ]; then
