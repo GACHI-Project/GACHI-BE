@@ -1,0 +1,142 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: gachi-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-logs:/var/log/nginx
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: gachi-certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: /bin/sh
+    command: -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done"
+    depends_on:
+      - nginx
+    restart: unless-stopped
+    profiles:
+      - tls
+
+  db:
+    image: postgres:16-alpine
+    container_name: gachi-db
+    environment:
+      POSTGRES_DB: gachi
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d gachi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    image: ${BACKEND_IMAGE:-gachi-be:latest}
+    container_name: gachi-backend
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -s /run/secrets/spring_mail_password ]; then
+          if [ ! -r /run/secrets/spring_mail_password ]; then
+            echo "spring_mail_password secret file is not readable.";
+            exit 1;
+          fi;
+          export SPRING_MAIL_PASSWORD="$$(cat /run/secrets/spring_mail_password)";
+        fi;
+        if [ "$${AUTH_EMAIL_NOOP_ALLOWED:-false}" != "true" ] \
+          && [ "$${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}" = "true" ] \
+          && [ -n "$${SPRING_MAIL_HOST:-}" ] \
+          && [ -z "$${SPRING_MAIL_PASSWORD:-}" ]; then
+          echo "SPRING_MAIL_PASSWORD is missing. Set docker secret or fallback env.";
+          exit 1;
+        fi;
+        exec java -jar /app/app.jar
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:-true}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:-true}
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_S3_PUBLIC_BASE_URL: ${AWS_S3_PUBLIC_BASE_URL}
+      AWS_S3_IMAGE_PREFIX: ${AWS_S3_IMAGE_PREFIX:-images}
+      AUTH_EMAIL_FROM_ADDRESS: ${AUTH_EMAIL_FROM_ADDRESS}
+      AUTH_EMAIL_REPLY_TO: ${AUTH_EMAIL_REPLY_TO}
+      AUTH_EMAIL_NOOP_ALLOWED: ${AUTH_EMAIL_NOOP_ALLOWED:-false}
+      AUTH_EMAIL_SUBJECT: ${AUTH_EMAIL_SUBJECT:-[GACHI] Email verification code}
+      AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET: ${AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET}
+      AUTH_RATE_LIMIT_TRUSTED_PROXIES: ${AUTH_RATE_LIMIT_TRUSTED_PROXIES:-127.0.0.1,::1}
+    secrets:
+      - source: spring_mail_password
+        target: spring_mail_password
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  ai:
+    image: ${AI_IMAGE:-gachi-ai:latest}
+    container_name: gachi-ai
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ai/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: gachi-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  nginx-logs:
+  db-data:
+  letsencrypt:
+  certbot-www:
+
+secrets:
+  spring_mail_password:
+    file: ${SPRING_MAIL_PASSWORD_SECRET_FILE:-./secrets/spring_mail_password.example.txt}

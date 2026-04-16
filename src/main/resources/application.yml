@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: GACHI-BE
+  profiles:
+    default: dev
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT_MS:2000ms}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+app:
+  auth:
+    consent-version: ${AUTH_CONSENT_VERSION:2026-04-v1}
+    jwt:
+      issuer: ${JWT_ISSUER:gachi-be}
+      secret: ${JWT_SECRET}
+      access-token-minutes: ${JWT_ACCESS_TOKEN_MINUTES:15}
+      refresh-token-days: ${JWT_REFRESH_TOKEN_DAYS:7}
+      refresh-token-remember-days: ${JWT_REFRESH_TOKEN_REMEMBER_DAYS:30}
+    email:
+      store: ${AUTH_EMAIL_STORE:redis}
+      code-ttl-seconds: ${AUTH_EMAIL_CODE_TTL_SECONDS:300}
+      resend-cooldown-seconds: ${AUTH_EMAIL_RESEND_COOLDOWN_SECONDS:60}
+      max-attempts: ${AUTH_EMAIL_MAX_ATTEMPTS:5}
+      verified-ttl-seconds: ${AUTH_EMAIL_VERIFIED_TTL_SECONDS:1800}
+      from-address: ${AUTH_EMAIL_FROM_ADDRESS:}
+      reply-to: ${AUTH_EMAIL_REPLY_TO:}
+      noop-allowed: ${AUTH_EMAIL_NOOP_ALLOWED:false}
+      subject: ${AUTH_EMAIL_SUBJECT:[GACHI] Email verification code}
+    rate-limit:
+      enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+      key-prefix: ${AUTH_RATE_LIMIT_KEY_PREFIX:auth:rate-limit:}
+      email-hmac-secret: ${AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET:}
+      trusted-proxies: ${AUTH_RATE_LIMIT_TRUSTED_PROXIES:127.0.0.1,::1}
+      email-send:
+        limit: ${AUTH_RATE_LIMIT_EMAIL_SEND_LIMIT:3}
+        window-seconds: ${AUTH_RATE_LIMIT_EMAIL_SEND_WINDOW_SECONDS:300}
+      login:
+        limit: ${AUTH_RATE_LIMIT_LOGIN_LIMIT:5}
+        window-seconds: ${AUTH_RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+  s3:
+    region: ${AWS_REGION:ap-northeast-2}
+    bucket: ${AWS_S3_BUCKET:}
+    public-base-url: ${AWS_S3_PUBLIC_BASE_URL:}
+    image-prefix: ${AWS_S3_IMAGE_PREFIX:images}

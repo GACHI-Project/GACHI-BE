@@ -7,6 +7,9 @@ reviews:
   review_status: true
   review_details: false
   poem: false # 불필요한 기능 제거
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
   auto_review:
     enabled: true
     drafts: false

@@ -1,0 +1,13 @@
+.git
+.gitignore
+.github
+.idea
+.gradle
+.gradle-user-home
+build
+out
+*.iml
+*.log
+.env
+.env.*
+deploy/secrets/**

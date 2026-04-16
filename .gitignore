@@ -54,3 +54,8 @@ logs/
 # Test / coverage
 /build/reports/
 coverage/
+.gradle-user-home/
+
+# Deploy secrets
+deploy/secrets/**
+!deploy/secrets/spring_mail_password.example.txt
