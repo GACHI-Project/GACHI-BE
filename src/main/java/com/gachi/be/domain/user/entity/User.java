@@ -62,6 +62,9 @@ public class User {
   @Column(name = "password_updated_at", nullable = false)
   private OffsetDateTime passwordUpdatedAt;
 
+  @Column(name = "password_change_required", nullable = false)
+  private boolean passwordChangeRequired;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
 
@@ -79,7 +82,8 @@ public class User {
       OffsetDateTime emailVerifiedAt,
       OffsetDateTime consentAgreedAt,
       String consentVersion,
-      OffsetDateTime passwordUpdatedAt) {
+      OffsetDateTime passwordUpdatedAt,
+      boolean passwordChangeRequired) {
     this.email = email;
     this.loginId = loginId;
     this.passwordHash = passwordHash;
@@ -90,6 +94,7 @@ public class User {
     this.consentAgreedAt = consentAgreedAt;
     this.consentVersion = consentVersion;
     this.passwordUpdatedAt = passwordUpdatedAt;
+    this.passwordChangeRequired = passwordChangeRequired;
   }
 
   /** 로그인 가능 상태인지 확인한다. */
