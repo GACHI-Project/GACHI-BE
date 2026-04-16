@@ -27,6 +27,9 @@ SPRING_MAIL_PASSWORD=
 SPRING_MAIL_PASSWORD_SECRET_FILE=./secrets/spring_mail_password.txt
 SWAGGER_ENABLED=false
 SWAGGER_BASIC_AUTH_FILE=./secrets/swagger_htpasswd.txt
+SWAGGER_TLS_CERT_FILE=./secrets/swagger_tls.crt
+SWAGGER_TLS_KEY_FILE=./secrets/swagger_tls.key
+SWAGGER_TLS_COMMON_NAME=example.com
 ```
 
 ### 2-3. Swagger Basic Auth 파일 준비 예시
@@ -38,7 +41,13 @@ printf "swagger:$(openssl passwd -apr1 'change-me')\n" > secrets/swagger_htpassw
 chmod 600 secrets/swagger_htpasswd.txt
 ```
 
-### 2-4. Swagger 열기/닫기 운영 절차
+### 2-4. Swagger HTTPS 인증서 파일 준비
+
+- `SWAGGER_ENABLED=true`일 때, 배포 워크플로우는 `SWAGGER_TLS_CERT_FILE`, `SWAGGER_TLS_KEY_FILE` 경로를 확인함
+- 파일이 없거나 비어 있으면 워크플로우가 self-signed 인증서를 자동 생성함
+- 운영용 인증서를 쓰는 경우 해당 경로에 실제 인증서/키를 미리 배치하면 자동 생성을 건너뜀
+
+### 2-5. Swagger 열기/닫기 운영 절차
 
 ```bash
 # Swagger 열기
@@ -90,6 +99,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - 서버 운영값이 들어있는 `deploy/.env`는 전송하지 않음
 - 운영 시크릿 파일(예: `deploy/secrets/spring_mail_password.txt`)은 전송하지 않음
 - 운영 Swagger 인증 파일(예: `deploy/secrets/swagger_htpasswd.txt`)은 전송하지 않음
+- 운영 TLS 인증서/키 파일(예: `deploy/secrets/swagger_tls.crt`, `deploy/secrets/swagger_tls.key`)은 전송하지 않음
 - 즉, EC2에 이미 존재하는 `.env`/실시크릿 파일을 보존한 상태로 compose/nginx 설정만 동기화함
 
 ### 6-3. 워크플로우 실행 순서(Actions 기준)
@@ -98,7 +108,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 2. (`[1/7]`) EC2 배포 경로로 이동
 3. (`[2/7]`) EC2에서 `.env` 존재 여부 확인(없으면 즉시 실패)
 4. (`[3/7]`) `.env` 내 `BACKEND_IMAGE`를 최신 태그로 갱신
-5. (`[4/7]`) SMTP 시크릿 파일 검증 + `SWAGGER_ENABLED=true`인 경우 Swagger Basic Auth 파일 검증
+5. (`[4/7]`) SMTP 시크릿 파일 검증 + `SWAGGER_ENABLED=true`인 경우 Swagger Basic Auth 파일/HTTPS 인증서 파일 검증(없으면 self-signed 생성)
 6. (`[5/7]`) `docker compose pull backend`
 7. (`[6/7]`) `docker compose up -d --remove-orphans backend` 실행 후 backend health 확인, 통과 시 `nginx`를 `--no-deps --force-recreate`로 재기동
 8. (`[7/7]`) `docker compose ps`로 최종 상태 출력
