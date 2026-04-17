@@ -52,7 +52,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,EC2_DEPLOY_PATH,EC2_HOST
-          script_stop: true
+          script_stop: false
           script: |
             set -Eeuo pipefail
 
@@ -187,30 +187,42 @@ jobs:
                 fi
 
                 echo "[debug] issue/renew Let's Encrypt IP cert for $SWAGGER_TLS_IP"
+                set +e
                 docker compose --env-file .env up -d --no-deps nginx
-                if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
-                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
-                    certonly \
-                    --non-interactive \
-                    --agree-tos \
-                    --preferred-profile shortlived \
-                    --keep-until-expiring \
-                    --webroot -w /var/www/certbot \
-                    --cert-name swagger-ip \
-                    --ip-address "$SWAGGER_TLS_IP" \
-                    --email "$CERTBOT_EMAIL_VALUE"
+                NGINX_UP_EXIT_CODE=$?
+                set -e
+                echo "[debug] nginx up exit code: $NGINX_UP_EXIT_CODE"
+                if [ "$NGINX_UP_EXIT_CODE" -ne 0 ]; then
+                  echo "[error] failed to ensure nginx is running for ACME challenge."
+                  docker compose --env-file .env logs --tail=120 nginx || true
+                  exit "$NGINX_UP_EXIT_CODE"
+                fi
+
+                set +e
+                docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1
+                CERTBOT_RM_EXIT_CODE=$?
+                set -e
+                echo "[debug] certbot rm exit code: $CERTBOT_RM_EXIT_CODE"
+
+                set -x
+                CERTBOT_EXIT_CODE=0
+                if [ -n "${CERTBOT_EMAIL_VALUE:-}" ]; then
+                  echo "::warning::CERTBOT_EMAIL is currently ignored in deploy flow to avoid shell compatibility issues; issuing without email."
                 else
                   echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
-                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
-                    certonly \
-                    --non-interactive \
-                    --agree-tos \
-                    --preferred-profile shortlived \
-                    --keep-until-expiring \
-                    --webroot -w /var/www/certbot \
-                    --cert-name swagger-ip \
-                    --ip-address "$SWAGGER_TLS_IP" \
-                    --register-unsafely-without-email
+                fi
+                set +e
+                echo "[debug] running certbot certonly without email mode"
+                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
+                CERTBOT_EXIT_CODE=$?
+                set -e
+                echo "[debug] certbot certonly exit code: $CERTBOT_EXIT_CODE"
+                set +x
+
+                if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
+                  echo "[error] certbot certonly failed (exit=$CERTBOT_EXIT_CODE)."
+                  docker compose --env-file .env logs --tail=120 nginx || true
+                  exit "$CERTBOT_EXIT_CODE"
                 fi
 
                 docker compose --env-file .env --profile tls run --rm --entrypoint /bin/sh certbot -c \
@@ -233,8 +245,9 @@ jobs:
                 chmod 600 "$TLS_KEY_FILE_PATH"
               fi
 
-              if [ ! -r "$TLS_CERT_FILE_PATH" ] || [ ! -r "$TLS_KEY_FILE_PATH" ]; then
-                echo "TLS cert/key files are not readable. cert=$TLS_CERT_FILE_PATH, key=$TLS_KEY_FILE_PATH"
+              if ! docker compose --env-file .env exec -T nginx sh -c "test -r /etc/nginx/secrets/swagger_tls.crt && test -r /etc/nginx/secrets/swagger_tls.key"; then
+                echo "TLS cert/key are not readable from nginx container path."
+                ls -l "$TLS_CERT_FILE_PATH" "$TLS_KEY_FILE_PATH" || true
                 exit 1
               fi
             else
