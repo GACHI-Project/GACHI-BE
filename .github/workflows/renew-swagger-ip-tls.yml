@@ -88,31 +88,38 @@ jobs:
 
             echo "[renew] Ensure nginx is serving ACME challenge endpoint"
             docker compose --env-file .env up -d --no-deps nginx
+            docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1 || true
 
             echo "[renew] Request/renew Let's Encrypt IP certificate"
             if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
-              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
+              if ! docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
                 certonly \
                 --non-interactive \
                 --agree-tos \
-                --preferred-profile shortlived \
                 --keep-until-expiring \
                 --webroot -w /var/www/certbot \
                 --cert-name swagger-ip \
                 --ip-address "$SWAGGER_TLS_IP" \
-                --email "$CERTBOT_EMAIL_VALUE"
+                --email "$CERTBOT_EMAIL_VALUE"; then
+                echo "[renew][error] certbot certonly failed with email mode."
+                docker compose --env-file .env logs --tail=120 nginx || true
+                exit 1
+              fi
             else
               echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
-              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
+              if ! docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
                 certonly \
                 --non-interactive \
                 --agree-tos \
-                --preferred-profile shortlived \
                 --keep-until-expiring \
                 --webroot -w /var/www/certbot \
                 --cert-name swagger-ip \
                 --ip-address "$SWAGGER_TLS_IP" \
-                --register-unsafely-without-email
+                --register-unsafely-without-email; then
+                echo "[renew][error] certbot certonly failed without email mode."
+                docker compose --env-file .env logs --tail=120 nginx || true
+                exit 1
+              fi
             fi
 
             echo "[renew] Sync renewed certificate to nginx secret path"

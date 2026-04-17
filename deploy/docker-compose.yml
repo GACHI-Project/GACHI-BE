@@ -18,7 +18,6 @@ services:
 
   certbot:
     image: certbot/certbot:latest
-    container_name: gachi-certbot
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot-www:/var/www/certbot

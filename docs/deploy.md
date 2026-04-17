@@ -48,7 +48,7 @@ chmod 600 secrets/swagger_htpasswd.txt
 ### 2-4. Swagger HTTPS 인증서 전략
 
 - `SWAGGER_TLS_MODE=letsencrypt_ip`일 때:
-  - 배포 워크플로우가 Let’s Encrypt IP 인증서를 발급/갱신(`--preferred-profile shortlived`)하고,
+  - 배포 워크플로우가 Let’s Encrypt IP 인증서를 발급/갱신하고,
   - 발급된 인증서를 `./secrets/swagger_tls.crt`, `./secrets/swagger_tls.key`로 동기화함
 - `SWAGGER_TLS_MODE`가 다른 값이면:
   - `SWAGGER_TLS_CERT_FILE`, `SWAGGER_TLS_KEY_FILE` 파일을 직접 준비해야 함
