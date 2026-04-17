@@ -49,7 +49,7 @@ jobs:
                 | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//'
             }
 
-            normalize_bool() {
+            to_lower() {
               local value="$1"
               printf "%s" "$value" | tr '[:upper:]' '[:lower:]'
             }
@@ -63,13 +63,13 @@ jobs:
               exit 1
             fi
 
-            SWAGGER_ENABLED="$(normalize_bool "$(read_env_value SWAGGER_ENABLED)")"
+            SWAGGER_ENABLED="$(to_lower "$(read_env_value SWAGGER_ENABLED)")"
             if [ "$SWAGGER_ENABLED" != "true" ]; then
               echo "SWAGGER_ENABLED is not true. Skip certificate renewal."
               exit 0
             fi
 
-            SWAGGER_TLS_MODE="$(normalize_bool "$(read_env_value SWAGGER_TLS_MODE)")"
+            SWAGGER_TLS_MODE="$(to_lower "$(read_env_value SWAGGER_TLS_MODE)")"
             SWAGGER_TLS_MODE="${SWAGGER_TLS_MODE:-letsencrypt_ip}"
             if [ "$SWAGGER_TLS_MODE" != "letsencrypt_ip" ]; then
               echo "SWAGGER_TLS_MODE is '$SWAGGER_TLS_MODE'. Skip Let's Encrypt IP renewal."
@@ -115,8 +115,11 @@ jobs:
               chmod 644 /workspace/secrets/swagger_tls.crt; \
               chmod 600 /workspace/secrets/swagger_tls.key"
 
-            echo "[renew] Recreate nginx to apply new certificate"
-            docker compose --env-file .env up -d --force-recreate --no-deps nginx
+            echo "[renew] Reload nginx to apply new certificate (zero-downtime)"
+            if ! docker compose --env-file .env exec -T nginx nginx -s reload; then
+              echo "[renew] Reload failed, falling back to recreate"
+              docker compose --env-file .env up -d --force-recreate --no-deps nginx
+            fi
 
             echo "[renew] Print certificate expiration"
             openssl x509 -in ./secrets/swagger_tls.crt -noout -subject -issuer -dates

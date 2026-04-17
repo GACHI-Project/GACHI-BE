@@ -65,18 +65,20 @@ jobs:
                 | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//'
             }
 
-            normalize_bool() {
+            to_lower() {
               local value="$1"
               printf "%s" "$value" | tr '[:upper:]' '[:lower:]'
             }
 
             to_abs_path() {
               local rel_or_abs="$1"
+              local candidate
               if [ "${rel_or_abs#/}" = "$rel_or_abs" ]; then
-                printf "%s/%s" "$DEPLOY_PATH" "${rel_or_abs#./}"
+                candidate="$DEPLOY_PATH/${rel_or_abs#./}"
               else
-                printf "%s" "$rel_or_abs"
+                candidate="$rel_or_abs"
               fi
+              realpath -m "$candidate"
             }
 
             DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
@@ -122,13 +124,13 @@ jobs:
               echo "SMTP secret file not found: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
             fi
 
-            SWAGGER_ENABLED_VALUE="$(normalize_bool "$(read_env_value SWAGGER_ENABLED)")"
+            SWAGGER_ENABLED_VALUE="$(to_lower "$(read_env_value SWAGGER_ENABLED)")"
             echo "[debug] SWAGGER_ENABLED normalized value: ${SWAGGER_ENABLED_VALUE:-<empty>}"
             if [ "$SWAGGER_ENABLED_VALUE" = "true" ]; then
               SWAGGER_AUTH_FILE_REL="$(read_env_value SWAGGER_BASIC_AUTH_FILE)"
               SWAGGER_AUTH_FILE_REL="${SWAGGER_AUTH_FILE_REL:-./secrets/swagger_htpasswd.txt}"
               SWAGGER_AUTH_FILE_PATH="$(to_abs_path "$SWAGGER_AUTH_FILE_REL")"
-              EXPECTED_SWAGGER_AUTH_FILE_PATH="$DEPLOY_PATH/secrets/swagger_htpasswd.txt"
+              EXPECTED_SWAGGER_AUTH_FILE_PATH="$(realpath -m "$DEPLOY_PATH/secrets/swagger_htpasswd.txt")"
               if [ "$SWAGGER_AUTH_FILE_PATH" != "$EXPECTED_SWAGGER_AUTH_FILE_PATH" ]; then
                 echo "SWAGGER_BASIC_AUTH_FILE must point to ./secrets/swagger_htpasswd.txt for nginx auth_basic_user_file compatibility."
                 exit 1
@@ -149,15 +151,16 @@ jobs:
               TLS_KEY_FILE_REL="${TLS_KEY_FILE_REL:-./secrets/swagger_tls.key}"
               TLS_CERT_FILE_PATH="$(to_abs_path "$TLS_CERT_FILE_REL")"
               TLS_KEY_FILE_PATH="$(to_abs_path "$TLS_KEY_FILE_REL")"
-              EXPECTED_TLS_CERT_FILE_PATH="$DEPLOY_PATH/secrets/swagger_tls.crt"
-              EXPECTED_TLS_KEY_FILE_PATH="$DEPLOY_PATH/secrets/swagger_tls.key"
+              EXPECTED_TLS_CERT_FILE_PATH="$(realpath -m "$DEPLOY_PATH/secrets/swagger_tls.crt")"
+              EXPECTED_TLS_KEY_FILE_PATH="$(realpath -m "$DEPLOY_PATH/secrets/swagger_tls.key")"
               if [ "$TLS_CERT_FILE_PATH" != "$EXPECTED_TLS_CERT_FILE_PATH" ] || [ "$TLS_KEY_FILE_PATH" != "$EXPECTED_TLS_KEY_FILE_PATH" ]; then
                 echo "SWAGGER_TLS_CERT_FILE and SWAGGER_TLS_KEY_FILE must point to ./secrets/swagger_tls.crt and ./secrets/swagger_tls.key."
                 exit 1
               fi
 
-              SWAGGER_TLS_MODE="$(normalize_bool "$(read_env_value SWAGGER_TLS_MODE)")"
+              SWAGGER_TLS_MODE="$(to_lower "$(read_env_value SWAGGER_TLS_MODE)")"
               SWAGGER_TLS_MODE="${SWAGGER_TLS_MODE:-letsencrypt_ip}"
+              SWAGGER_TLS_COMMON_NAME="$(read_env_value SWAGGER_TLS_COMMON_NAME)"
               if [ "$SWAGGER_TLS_MODE" = "letsencrypt_ip" ]; then
                 SWAGGER_TLS_IP="$(read_env_value SWAGGER_TLS_IP)"
                 SWAGGER_TLS_IP="${SWAGGER_TLS_IP:-$EC2_HOST}"
@@ -173,6 +176,20 @@ jobs:
                   CERTBOT_EMAIL_ARGS=(--email "$CERTBOT_EMAIL_VALUE")
                 else
                   echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
+                fi
+
+                if [ ! -s "$TLS_CERT_FILE_PATH" ] || [ ! -s "$TLS_KEY_FILE_PATH" ]; then
+                  BOOTSTRAP_CN="${SWAGGER_TLS_COMMON_NAME:-$SWAGGER_TLS_IP}"
+                  BOOTSTRAP_CN="${BOOTSTRAP_CN:-$(hostname)}"
+                  echo "::warning::Bootstrap self-signed TLS cert is generated to make nginx available for ACME challenge."
+                  mkdir -p "$(dirname "$TLS_CERT_FILE_PATH")"
+                  mkdir -p "$(dirname "$TLS_KEY_FILE_PATH")"
+                  openssl req -x509 -nodes -newkey rsa:2048 -days 7 \
+                    -keyout "$TLS_KEY_FILE_PATH" \
+                    -out "$TLS_CERT_FILE_PATH" \
+                    -subj "/CN=$BOOTSTRAP_CN"
+                  chmod 644 "$TLS_CERT_FILE_PATH"
+                  chmod 600 "$TLS_KEY_FILE_PATH"
                 fi
 
                 echo "[debug] issue/renew Let's Encrypt IP cert for $SWAGGER_TLS_IP"

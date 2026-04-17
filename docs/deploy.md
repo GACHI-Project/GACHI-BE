@@ -30,8 +30,9 @@ SWAGGER_BASIC_AUTH_FILE=./secrets/swagger_htpasswd.txt
 SWAGGER_TLS_CERT_FILE=./secrets/swagger_tls.crt
 SWAGGER_TLS_KEY_FILE=./secrets/swagger_tls.key
 SWAGGER_TLS_MODE=letsencrypt_ip
-SWAGGER_TLS_IP=43.202.191.103
-SWAGGER_TLS_COMMON_NAME=43.202.191.103
+SWAGGER_TLS_IP=<your-elastic-ip>
+# letsencrypt_ip 모드에서는 사용되지 않음 (self-signed 폴백 시 CN 용도)
+SWAGGER_TLS_COMMON_NAME=
 CERTBOT_EMAIL=devops@example.com
 ```
 
@@ -140,7 +141,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 2. `SWAGGER_ENABLED=true` + `SWAGGER_TLS_MODE=letsencrypt_ip`일 때만 실행
 3. `SWAGGER_TLS_IP`(없으면 `EC2_HOST`) 기준으로 `certbot certonly --keep-until-expiring` 수행
 4. `./secrets/swagger_tls.crt`, `./secrets/swagger_tls.key`로 인증서 동기화
-5. `nginx` 재기동으로 인증서 반영
+5. `nginx -s reload`로 무중단 반영(실패 시 재기동 fallback)
 6. `openssl x509 -noout -dates`로 만료일 출력
 
 ### 7-2. 점검 포인트
