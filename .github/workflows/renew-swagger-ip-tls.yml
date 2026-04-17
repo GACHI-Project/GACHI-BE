@@ -94,15 +94,17 @@ jobs:
             CERTBOT_EXIT_CODE=0
             if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
               set +e
-              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --email "$CERTBOT_EMAIL_VALUE" -v
+              CERTBOT_OUTPUT="$(docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --email "$CERTBOT_EMAIL_VALUE" -v 2>&1)"
               CERTBOT_EXIT_CODE=$?
               set -e
+              printf '%s\n' "$CERTBOT_OUTPUT"
             else
               echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
               set +e
-              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
+              CERTBOT_OUTPUT="$(docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v 2>&1)"
               CERTBOT_EXIT_CODE=$?
               set -e
+              printf '%s\n' "$CERTBOT_OUTPUT"
             fi
 
             if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
