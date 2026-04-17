@@ -205,21 +205,16 @@ jobs:
                 echo "[debug] certbot rm exit code: $CERTBOT_RM_EXIT_CODE"
 
                 CERTBOT_EXIT_CODE=0
-                echo "[debug] entering certbot certonly branch"
                 if [ -n "${CERTBOT_EMAIL_VALUE:-}" ]; then
-                  set +e
-                  echo "[debug] running certbot certonly with email mode"
-                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --email "$CERTBOT_EMAIL_VALUE" -v
-                  CERTBOT_EXIT_CODE=$?
-                  set -e
+                  echo "::warning::CERTBOT_EMAIL is currently ignored in deploy flow to avoid shell compatibility issues; issuing without email."
                 else
                   echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
-                  set +e
-                  echo "[debug] running certbot certonly without email mode"
-                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
-                  CERTBOT_EXIT_CODE=$?
-                  set -e
                 fi
+                set +e
+                echo "[debug] running certbot certonly without email mode"
+                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
+                CERTBOT_EXIT_CODE=$?
+                set -e
                 echo "[debug] certbot certonly exit code: $CERTBOT_EXIT_CODE"
 
                 if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
