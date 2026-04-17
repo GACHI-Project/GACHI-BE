@@ -171,12 +171,6 @@ jobs:
                 fi
 
                 CERTBOT_EMAIL_VALUE="$(read_env_value CERTBOT_EMAIL)"
-                CERTBOT_EMAIL_ARGS=(--register-unsafely-without-email)
-                if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
-                  CERTBOT_EMAIL_ARGS=(--email "$CERTBOT_EMAIL_VALUE")
-                else
-                  echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
-                fi
 
                 if [ ! -s "$TLS_CERT_FILE_PATH" ] || [ ! -s "$TLS_KEY_FILE_PATH" ]; then
                   BOOTSTRAP_CN="${SWAGGER_TLS_COMMON_NAME:-$SWAGGER_TLS_IP}"
@@ -194,16 +188,30 @@ jobs:
 
                 echo "[debug] issue/renew Let's Encrypt IP cert for $SWAGGER_TLS_IP"
                 docker compose --env-file .env up -d --no-deps nginx
-                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
-                  certonly \
-                  --non-interactive \
-                  --agree-tos \
-                  --preferred-profile shortlived \
-                  --keep-until-expiring \
-                  --webroot -w /var/www/certbot \
-                  --cert-name swagger-ip \
-                  --ip-address "$SWAGGER_TLS_IP" \
-                  "${CERTBOT_EMAIL_ARGS[@]}"
+                if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
+                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
+                    certonly \
+                    --non-interactive \
+                    --agree-tos \
+                    --preferred-profile shortlived \
+                    --keep-until-expiring \
+                    --webroot -w /var/www/certbot \
+                    --cert-name swagger-ip \
+                    --ip-address "$SWAGGER_TLS_IP" \
+                    --email "$CERTBOT_EMAIL_VALUE"
+                else
+                  echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
+                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
+                    certonly \
+                    --non-interactive \
+                    --agree-tos \
+                    --preferred-profile shortlived \
+                    --keep-until-expiring \
+                    --webroot -w /var/www/certbot \
+                    --cert-name swagger-ip \
+                    --ip-address "$SWAGGER_TLS_IP" \
+                    --register-unsafely-without-email
+                fi
 
                 docker compose --env-file .env --profile tls run --rm --entrypoint /bin/sh certbot -c \
                   "set -eu; \
