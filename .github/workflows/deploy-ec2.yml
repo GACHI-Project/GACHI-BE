@@ -189,7 +189,7 @@ jobs:
                 echo "[debug] issue/renew Let's Encrypt IP cert for $SWAGGER_TLS_IP"
                 docker compose --env-file .env up -d --no-deps nginx
                 docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1 || true
-                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot --version
+                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot --version || true
 
                 CERTBOT_EXIT_CODE=0
                 if [ -n "$CERTBOT_EMAIL_VALUE" ]; then

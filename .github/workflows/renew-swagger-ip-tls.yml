@@ -89,7 +89,7 @@ jobs:
             echo "[renew] Ensure nginx is serving ACME challenge endpoint"
             docker compose --env-file .env up -d --no-deps nginx
             docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1 || true
-            docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot --version
+            docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot --version || true
 
             echo "[renew] Request/renew Let's Encrypt IP certificate"
             CERTBOT_EXIT_CODE=0
