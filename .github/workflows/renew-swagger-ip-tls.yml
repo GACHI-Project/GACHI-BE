@@ -89,15 +89,20 @@ jobs:
             echo "[renew] Ensure nginx is serving ACME challenge endpoint"
             docker compose --env-file .env up -d --no-deps nginx
             docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1 || true
-            docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot --version || true
 
             echo "[renew] Request/renew Let's Encrypt IP certificate"
             CERTBOT_EXIT_CODE=0
             if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
-              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --email "$CERTBOT_EMAIL_VALUE" -v || CERTBOT_EXIT_CODE=$?
+              set +e
+              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --email "$CERTBOT_EMAIL_VALUE" -v
+              CERTBOT_EXIT_CODE=$?
+              set -e
             else
               echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
-              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v || CERTBOT_EXIT_CODE=$?
+              set +e
+              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
+              CERTBOT_EXIT_CODE=$?
+              set -e
             fi
 
             if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
