@@ -213,7 +213,7 @@ jobs:
                 fi
                 set +e
                 echo "[debug] running certbot certonly without email mode"
-                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
+                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
                 CERTBOT_EXIT_CODE=$?
                 set -e
                 echo "[debug] certbot certonly exit code: $CERTBOT_EXIT_CODE"
