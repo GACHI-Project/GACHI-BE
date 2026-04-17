@@ -189,35 +189,20 @@ jobs:
                 echo "[debug] issue/renew Let's Encrypt IP cert for $SWAGGER_TLS_IP"
                 docker compose --env-file .env up -d --no-deps nginx
                 docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1 || true
+                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot --version
+
+                CERTBOT_EXIT_CODE=0
                 if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
-                  if ! docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
-                    certonly \
-                    --non-interactive \
-                    --agree-tos \
-                    --keep-until-expiring \
-                    --webroot -w /var/www/certbot \
-                    --cert-name swagger-ip \
-                    --ip-address "$SWAGGER_TLS_IP" \
-                    --email "$CERTBOT_EMAIL_VALUE"; then
-                    echo "[error] certbot certonly failed with email mode."
-                    docker compose --env-file .env logs --tail=120 nginx || true
-                    exit 1
-                  fi
+                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --email "$CERTBOT_EMAIL_VALUE" || CERTBOT_EXIT_CODE=$?
                 else
                   echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
-                  if ! docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
-                    certonly \
-                    --non-interactive \
-                    --agree-tos \
-                    --keep-until-expiring \
-                    --webroot -w /var/www/certbot \
-                    --cert-name swagger-ip \
-                    --ip-address "$SWAGGER_TLS_IP" \
-                    --register-unsafely-without-email; then
-                    echo "[error] certbot certonly failed without email mode."
-                    docker compose --env-file .env logs --tail=120 nginx || true
-                    exit 1
-                  fi
+                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email || CERTBOT_EXIT_CODE=$?
+                fi
+
+                if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
+                  echo "[error] certbot certonly failed (exit=$CERTBOT_EXIT_CODE)."
+                  docker compose --env-file .env logs --tail=120 nginx || true
+                  exit "$CERTBOT_EXIT_CODE"
                 fi
 
                 docker compose --env-file .env --profile tls run --rm --entrypoint /bin/sh certbot -c \
