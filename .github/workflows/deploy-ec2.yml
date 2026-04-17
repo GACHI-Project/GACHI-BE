@@ -245,8 +245,9 @@ jobs:
                 chmod 600 "$TLS_KEY_FILE_PATH"
               fi
 
-              if [ ! -r "$TLS_CERT_FILE_PATH" ] || [ ! -r "$TLS_KEY_FILE_PATH" ]; then
-                echo "TLS cert/key files are not readable. cert=$TLS_CERT_FILE_PATH, key=$TLS_KEY_FILE_PATH"
+              if ! docker compose --env-file .env exec -T nginx sh -c "test -r /etc/nginx/secrets/swagger_tls.crt && test -r /etc/nginx/secrets/swagger_tls.key"; then
+                echo "TLS cert/key are not readable from nginx container path."
+                ls -l "$TLS_CERT_FILE_PATH" "$TLS_KEY_FILE_PATH" || true
                 exit 1
               fi
             else
