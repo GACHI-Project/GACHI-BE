@@ -187,8 +187,22 @@ jobs:
                 fi
 
                 echo "[debug] issue/renew Let's Encrypt IP cert for $SWAGGER_TLS_IP"
+                set +e
                 docker compose --env-file .env up -d --no-deps nginx
-                docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1 || true
+                NGINX_UP_EXIT_CODE=$?
+                set -e
+                echo "[debug] nginx up exit code: $NGINX_UP_EXIT_CODE"
+                if [ "$NGINX_UP_EXIT_CODE" -ne 0 ]; then
+                  echo "[error] failed to ensure nginx is running for ACME challenge."
+                  docker compose --env-file .env logs --tail=120 nginx || true
+                  exit "$NGINX_UP_EXIT_CODE"
+                fi
+
+                set +e
+                docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1
+                CERTBOT_RM_EXIT_CODE=$?
+                set -e
+                echo "[debug] certbot rm exit code: $CERTBOT_RM_EXIT_CODE"
 
                 CERTBOT_EXIT_CODE=0
                 if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
