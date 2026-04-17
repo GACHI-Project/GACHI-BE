@@ -46,14 +46,38 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,EC2_DEPLOY_PATH
+          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,EC2_DEPLOY_PATH,EC2_HOST
           script_stop: true
           script: |
             set -Eeuo pipefail
+
+            read_env_value() {
+              local key="$1"
+              local raw
+              raw="$(sed -n "s/^${key}=//p" .env | tail -n1 || true)"
+              printf "%s" "$raw" \
+                | tr -d '\r' \
+                | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//'
+            }
+
+            normalize_bool() {
+              local value="$1"
+              printf "%s" "$value" | tr '[:upper:]' '[:lower:]'
+            }
+
+            to_abs_path() {
+              local rel_or_abs="$1"
+              if [ "${rel_or_abs#/}" = "$rel_or_abs" ]; then
+                printf "%s/%s" "$DEPLOY_PATH" "${rel_or_abs#./}"
+              else
+                printf "%s" "$rel_or_abs"
+              fi
+            }
 
             DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
             DEPLOY_PATH="$(echo "$DEPLOY_PATH" | xargs)"
@@ -81,16 +105,10 @@ jobs:
             fi
 
             echo "[4/7] Validate SMTP/Swagger secrets and TLS files"
-            SECRET_FILE_REL="$(sed -n "s/^SPRING_MAIL_PASSWORD_SECRET_FILE=//p" .env | tail -n1)"
-            if [ -z "${SECRET_FILE_REL:-}" ]; then
-              SECRET_FILE_REL="./secrets/spring_mail_password.example.txt"
-            fi
+            SECRET_FILE_REL="$(read_env_value SPRING_MAIL_PASSWORD_SECRET_FILE)"
+            SECRET_FILE_REL="${SECRET_FILE_REL:-./secrets/spring_mail_password.example.txt}"
+            SECRET_FILE_PATH="$(to_abs_path "$SECRET_FILE_REL")"
             echo "[debug] secret file rel path: $SECRET_FILE_REL"
-            SECRET_FILE_PATH="$SECRET_FILE_REL"
-            if [ "${SECRET_FILE_REL#/}" = "$SECRET_FILE_REL" ]; then
-              SECRET_FILE_PATH="$DEPLOY_PATH/${SECRET_FILE_REL#./}"
-            fi
-
             echo "[debug] secret file absolute path: $SECRET_FILE_PATH"
             if [ -e "$SECRET_FILE_PATH" ]; then
               if [ ! -r "$SECRET_FILE_PATH" ]; then
@@ -104,56 +122,78 @@ jobs:
               echo "SMTP secret file not found: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
             fi
 
-            SWAGGER_ENABLED_VALUE="$(sed -n "s/^SWAGGER_ENABLED=//p" .env | tail -n1 || true)"
-            SWAGGER_ENABLED_VALUE="$(printf "%s" "$SWAGGER_ENABLED_VALUE" \
-              | tr -d '\r' \
-              | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//' \
-              | tr '[:upper:]' '[:lower:]')"
+            SWAGGER_ENABLED_VALUE="$(normalize_bool "$(read_env_value SWAGGER_ENABLED)")"
             echo "[debug] SWAGGER_ENABLED normalized value: ${SWAGGER_ENABLED_VALUE:-<empty>}"
             if [ "$SWAGGER_ENABLED_VALUE" = "true" ]; then
-              SWAGGER_AUTH_FILE_REL="$(sed -n "s/^SWAGGER_BASIC_AUTH_FILE=//p" .env | tail -n1 || true)"
-              if [ -z "${SWAGGER_AUTH_FILE_REL:-}" ]; then
-                SWAGGER_AUTH_FILE_REL="./secrets/swagger_htpasswd.txt"
-              fi
-              SWAGGER_AUTH_FILE_REL="$(printf "%s" "$SWAGGER_AUTH_FILE_REL" | tr -d '\r' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//')"
-              echo "[debug] swagger auth file rel path: $SWAGGER_AUTH_FILE_REL"
-              SWAGGER_AUTH_FILE_PATH="$SWAGGER_AUTH_FILE_REL"
-              if [ "${SWAGGER_AUTH_FILE_REL#/}" = "$SWAGGER_AUTH_FILE_REL" ]; then
-                SWAGGER_AUTH_FILE_PATH="$DEPLOY_PATH/${SWAGGER_AUTH_FILE_REL#./}"
-              fi
+              SWAGGER_AUTH_FILE_REL="$(read_env_value SWAGGER_BASIC_AUTH_FILE)"
+              SWAGGER_AUTH_FILE_REL="${SWAGGER_AUTH_FILE_REL:-./secrets/swagger_htpasswd.txt}"
+              SWAGGER_AUTH_FILE_PATH="$(to_abs_path "$SWAGGER_AUTH_FILE_REL")"
               EXPECTED_SWAGGER_AUTH_FILE_PATH="$DEPLOY_PATH/secrets/swagger_htpasswd.txt"
               if [ "$SWAGGER_AUTH_FILE_PATH" != "$EXPECTED_SWAGGER_AUTH_FILE_PATH" ]; then
                 echo "SWAGGER_BASIC_AUTH_FILE must point to ./secrets/swagger_htpasswd.txt for nginx auth_basic_user_file compatibility."
                 exit 1
               fi
               echo "[debug] swagger auth file absolute path: $SWAGGER_AUTH_FILE_PATH"
-              if [ ! -e "$SWAGGER_AUTH_FILE_PATH" ]; then
-                echo "Swagger auth file not found: $SWAGGER_AUTH_FILE_PATH"
+              if [ ! -s "$SWAGGER_AUTH_FILE_PATH" ]; then
+                echo "Swagger auth file missing or empty: $SWAGGER_AUTH_FILE_PATH"
                 exit 1
               fi
               if [ ! -r "$SWAGGER_AUTH_FILE_PATH" ]; then
                 echo "Swagger auth file is not readable: $SWAGGER_AUTH_FILE_PATH"
                 exit 1
               fi
-              if [ ! -s "$SWAGGER_AUTH_FILE_PATH" ]; then
-                echo "Swagger auth file is empty: $SWAGGER_AUTH_FILE_PATH"
+
+              TLS_CERT_FILE_REL="$(read_env_value SWAGGER_TLS_CERT_FILE)"
+              TLS_KEY_FILE_REL="$(read_env_value SWAGGER_TLS_KEY_FILE)"
+              TLS_CERT_FILE_REL="${TLS_CERT_FILE_REL:-./secrets/swagger_tls.crt}"
+              TLS_KEY_FILE_REL="${TLS_KEY_FILE_REL:-./secrets/swagger_tls.key}"
+              TLS_CERT_FILE_PATH="$(to_abs_path "$TLS_CERT_FILE_REL")"
+              TLS_KEY_FILE_PATH="$(to_abs_path "$TLS_KEY_FILE_REL")"
+              EXPECTED_TLS_CERT_FILE_PATH="$DEPLOY_PATH/secrets/swagger_tls.crt"
+              EXPECTED_TLS_KEY_FILE_PATH="$DEPLOY_PATH/secrets/swagger_tls.key"
+              if [ "$TLS_CERT_FILE_PATH" != "$EXPECTED_TLS_CERT_FILE_PATH" ] || [ "$TLS_KEY_FILE_PATH" != "$EXPECTED_TLS_KEY_FILE_PATH" ]; then
+                echo "SWAGGER_TLS_CERT_FILE and SWAGGER_TLS_KEY_FILE must point to ./secrets/swagger_tls.crt and ./secrets/swagger_tls.key."
                 exit 1
               fi
 
-              TLS_CERT_FILE_REL="$(sed -n "s/^SWAGGER_TLS_CERT_FILE=//p" .env | tail -n1)"
-              TLS_KEY_FILE_REL="$(sed -n "s/^SWAGGER_TLS_KEY_FILE=//p" .env | tail -n1)"
-              TLS_COMMON_NAME="$(sed -n "s/^SWAGGER_TLS_COMMON_NAME=//p" .env | tail -n1)"
-              TLS_CERT_FILE_REL="${TLS_CERT_FILE_REL:-./secrets/swagger_tls.crt}"
-              TLS_KEY_FILE_REL="${TLS_KEY_FILE_REL:-./secrets/swagger_tls.key}"
-              TLS_COMMON_NAME="${TLS_COMMON_NAME:-$(hostname)}"
+              SWAGGER_TLS_MODE="$(normalize_bool "$(read_env_value SWAGGER_TLS_MODE)")"
+              SWAGGER_TLS_MODE="${SWAGGER_TLS_MODE:-letsencrypt_ip}"
+              if [ "$SWAGGER_TLS_MODE" = "letsencrypt_ip" ]; then
+                SWAGGER_TLS_IP="$(read_env_value SWAGGER_TLS_IP)"
+                SWAGGER_TLS_IP="${SWAGGER_TLS_IP:-$EC2_HOST}"
+                SWAGGER_TLS_IP="$(echo "$SWAGGER_TLS_IP" | xargs)"
+                if [ -z "$SWAGGER_TLS_IP" ]; then
+                  echo "SWAGGER_TLS_IP is empty. Set SWAGGER_TLS_IP in .env or EC2_HOST secret."
+                  exit 1
+                fi
 
-              TLS_CERT_FILE_PATH="$TLS_CERT_FILE_REL"
-              TLS_KEY_FILE_PATH="$TLS_KEY_FILE_REL"
-              if [ "${TLS_CERT_FILE_REL#/}" = "$TLS_CERT_FILE_REL" ]; then
-                TLS_CERT_FILE_PATH="$DEPLOY_PATH/${TLS_CERT_FILE_REL#./}"
-              fi
-              if [ "${TLS_KEY_FILE_REL#/}" = "$TLS_KEY_FILE_REL" ]; then
-                TLS_KEY_FILE_PATH="$DEPLOY_PATH/${TLS_KEY_FILE_REL#./}"
+                CERTBOT_EMAIL_VALUE="$(read_env_value CERTBOT_EMAIL)"
+                CERTBOT_EMAIL_ARGS=(--register-unsafely-without-email)
+                if [ -n "$CERTBOT_EMAIL_VALUE" ]; then
+                  CERTBOT_EMAIL_ARGS=(--email "$CERTBOT_EMAIL_VALUE")
+                else
+                  echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
+                fi
+
+                echo "[debug] issue/renew Let's Encrypt IP cert for $SWAGGER_TLS_IP"
+                docker compose --env-file .env up -d --no-deps nginx
+                docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot \
+                  certonly \
+                  --non-interactive \
+                  --agree-tos \
+                  --preferred-profile shortlived \
+                  --keep-until-expiring \
+                  --webroot -w /var/www/certbot \
+                  --cert-name swagger-ip \
+                  --ip-address "$SWAGGER_TLS_IP" \
+                  "${CERTBOT_EMAIL_ARGS[@]}"
+
+                docker compose --env-file .env --profile tls run --rm --entrypoint /bin/sh certbot -c \
+                  "set -eu; \
+                  cp /etc/letsencrypt/live/swagger-ip/fullchain.pem /workspace/secrets/swagger_tls.crt; \
+                  cp /etc/letsencrypt/live/swagger-ip/privkey.pem /workspace/secrets/swagger_tls.key; \
+                  chmod 644 /workspace/secrets/swagger_tls.crt; \
+                  chmod 600 /workspace/secrets/swagger_tls.key"
               fi
 
               if [ ! -s "$TLS_CERT_FILE_PATH" ] || [ ! -s "$TLS_KEY_FILE_PATH" ]; then
@@ -163,14 +203,17 @@ jobs:
                 openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
                   -keyout "$TLS_KEY_FILE_PATH" \
                   -out "$TLS_CERT_FILE_PATH" \
-                  -subj "/CN=$TLS_COMMON_NAME"
+                  -subj "/CN=${SWAGGER_TLS_IP:-$(hostname)}"
+                chmod 644 "$TLS_CERT_FILE_PATH"
+                chmod 600 "$TLS_KEY_FILE_PATH"
               fi
+
               if [ ! -r "$TLS_CERT_FILE_PATH" ] || [ ! -r "$TLS_KEY_FILE_PATH" ]; then
                 echo "TLS cert/key files are not readable. cert=$TLS_CERT_FILE_PATH, key=$TLS_KEY_FILE_PATH"
                 exit 1
               fi
             else
-              echo "[debug] SWAGGER_ENABLED is not true. Swagger auth file validation skipped."
+              echo "[debug] SWAGGER_ENABLED is not true. Swagger auth/tls validation skipped."
             fi
 
             echo "[5/7] Pull latest backend image"
