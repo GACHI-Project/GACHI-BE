@@ -22,11 +22,10 @@ services:
     volumes:
       - letsencrypt:/etc/letsencrypt
       - certbot-www:/var/www/certbot
-    entrypoint: /bin/sh
-    command: -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done"
-    depends_on:
-      - nginx
-    restart: unless-stopped
+      - ./secrets:/workspace/secrets
+    entrypoint: certbot
+    command: --version
+    restart: "no"
     profiles:
       - tls
 

@@ -29,7 +29,11 @@ SWAGGER_ENABLED=false
 SWAGGER_BASIC_AUTH_FILE=./secrets/swagger_htpasswd.txt
 SWAGGER_TLS_CERT_FILE=./secrets/swagger_tls.crt
 SWAGGER_TLS_KEY_FILE=./secrets/swagger_tls.key
-SWAGGER_TLS_COMMON_NAME=example.com
+SWAGGER_TLS_MODE=letsencrypt_ip
+SWAGGER_TLS_IP=<your-elastic-ip>
+# letsencrypt_ip 모드에서는 사용되지 않음 (self-signed 폴백 시 CN 용도)
+SWAGGER_TLS_COMMON_NAME=
+CERTBOT_EMAIL=devops@example.com
 ```
 
 ### 2-3. Swagger Basic Auth 파일 준비 예시
@@ -41,11 +45,15 @@ printf "swagger:$(openssl passwd -apr1 'change-me')\n" > secrets/swagger_htpassw
 chmod 600 secrets/swagger_htpasswd.txt
 ```
 
-### 2-4. Swagger HTTPS 인증서 파일 준비
+### 2-4. Swagger HTTPS 인증서 전략
 
-- `SWAGGER_ENABLED=true`일 때, 배포 워크플로우는 `SWAGGER_TLS_CERT_FILE`, `SWAGGER_TLS_KEY_FILE` 경로를 확인함
-- 파일이 없거나 비어 있으면 워크플로우가 self-signed 인증서를 자동 생성함
-- 운영용 인증서를 쓰는 경우 해당 경로에 실제 인증서/키를 미리 배치하면 자동 생성을 건너뜀
+- `SWAGGER_TLS_MODE=letsencrypt_ip`일 때:
+  - 배포 워크플로우가 Let’s Encrypt IP 인증서를 발급/갱신(`--preferred-profile shortlived`)하고,
+  - 발급된 인증서를 `./secrets/swagger_tls.crt`, `./secrets/swagger_tls.key`로 동기화함
+- `SWAGGER_TLS_MODE`가 다른 값이면:
+  - `SWAGGER_TLS_CERT_FILE`, `SWAGGER_TLS_KEY_FILE` 파일을 직접 준비해야 함
+  - 파일이 없으면 self-signed 인증서를 생성함(운영 비권장)
+- IP 인증서 운영에서는 `SWAGGER_TLS_IP`를 탄력 IP로 고정하고, `CERTBOT_EMAIL`을 실제 운영 메일로 설정하는 것을 권장함
 
 ### 2-5. Swagger 열기/닫기 운영 절차
 
@@ -109,6 +117,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 3. (`[2/7]`) EC2에서 `.env` 존재 여부 확인(없으면 즉시 실패)
 4. (`[3/7]`) `.env` 내 `BACKEND_IMAGE`를 최신 태그로 갱신
 5. (`[4/7]`) SMTP 시크릿 파일 검증 + `SWAGGER_ENABLED=true`인 경우 Swagger Basic Auth 파일/HTTPS 인증서 파일 검증(없으면 self-signed 생성)
+   - `SWAGGER_TLS_MODE=letsencrypt_ip`이면 Let’s Encrypt IP 인증서 발급/갱신 및 `./secrets/swagger_tls.*` 동기화 수행
 6. (`[5/7]`) `docker compose pull backend`
 7. (`[6/7]`) `docker compose up -d --remove-orphans backend` 실행 후 backend health 확인, 통과 시 `nginx`를 `--no-deps --force-recreate`로 재기동
 8. (`[7/7]`) `docker compose ps`로 최종 상태 출력
@@ -117,3 +126,31 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 
 - 배포 스크립트는 실패 시 `docker compose ps`와 `docker compose logs --tail=80 backend nginx`를 출력함
 - Actions 로그만으로 실패 지점과 컨테이너 상태를 바로 확인할 수 있음
+
+## 7. Swagger IP 인증서 자동 갱신
+
+- 워크플로우 파일: `.github/workflows/renew-swagger-ip-tls.yml`
+- 트리거:
+  - 스케줄 실행(12시간 주기)
+  - 수동 실행(`workflow_dispatch`)
+- 목적: 배포가 없어도 6일 만료 IP 인증서를 주기적으로 갱신하고 nginx에 반영
+
+### 7-1. 실행 순서
+
+1. EC2 배포 경로/`.env` 존재 확인
+2. `SWAGGER_ENABLED=true` + `SWAGGER_TLS_MODE=letsencrypt_ip`일 때만 실행
+3. `SWAGGER_TLS_IP`(없으면 `EC2_HOST`) 기준으로 `certbot certonly --keep-until-expiring` 수행
+4. `./secrets/swagger_tls.crt`, `./secrets/swagger_tls.key`로 인증서 동기화
+5. `nginx -s reload`로 무중단 반영(실패 시 재기동 fallback)
+6. `openssl x509 -noout -dates`로 만료일 출력
+
+### 7-2. 점검 포인트
+
+- EC2 보안그룹에서 80/443 포트가 열려 있어야 함
+- `CERTBOT_EMAIL`을 실제 운영 메일로 입력해야 인증서 만료/이슈 알림 수신이 가능함
+- 수동 점검 명령:
+
+```bash
+docker compose --env-file .env logs --tail=120 nginx
+openssl x509 -in ./secrets/swagger_tls.crt -noout -issuer -dates
+```
