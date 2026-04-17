@@ -204,6 +204,7 @@ jobs:
                 set -e
                 echo "[debug] certbot rm exit code: $CERTBOT_RM_EXIT_CODE"
 
+                set -x
                 CERTBOT_EXIT_CODE=0
                 if [ -n "${CERTBOT_EMAIL_VALUE:-}" ]; then
                   echo "::warning::CERTBOT_EMAIL is currently ignored in deploy flow to avoid shell compatibility issues; issuing without email."
@@ -216,6 +217,7 @@ jobs:
                 CERTBOT_EXIT_CODE=$?
                 set -e
                 echo "[debug] certbot certonly exit code: $CERTBOT_EXIT_CODE"
+                set +x
 
                 if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
                   echo "[error] certbot certonly failed (exit=$CERTBOT_EXIT_CODE)."
