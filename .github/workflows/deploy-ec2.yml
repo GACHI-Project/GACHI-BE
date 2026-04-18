@@ -66,15 +66,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -Eeuo pipefail
           if [ -z "${EC2_INSTANCE_ID:-}" ]; then
             echo "::error::EC2_INSTANCE_ID secret is required."
             exit 1
           fi
-          if [ -z "${DOCKERHUB_USERNAME:-}" ] || [ -z "${DOCKERHUB_TOKEN:-}" ]; then
-            echo "::error::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN is required."
+          if [ -z "${DOCKERHUB_USERNAME:-}" ]; then
+            echo "::error::DOCKERHUB_USERNAME is required."
             exit 1
           fi
           if [ -n "${AWS_OIDC_ROLE_ARN:-}" ]; then
@@ -124,7 +123,6 @@ jobs:
           EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
           EC2_HOST: ${{ steps.ec2-host.outputs.value }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -Eeuo pipefail
           SCRIPT_PATH="scripts/deploy-ec2.sh"
@@ -163,7 +161,6 @@ jobs:
             --arg deployPath "$EC2_DEPLOY_PATH" \
             --arg ec2Host "$EC2_HOST" \
             --arg dockerhubUsername "$DOCKERHUB_USERNAME" \
-            --arg dockerhubToken "$DOCKERHUB_TOKEN" \
             '. + [
               (
                 "base64 -d /tmp/deploy-ec2.sh.b64 > /tmp/deploy-ec2.sh" +
@@ -171,7 +168,7 @@ jobs:
                 " && base64 -d /tmp/deploy-sync.tgz.b64 > /tmp/deploy-sync.tgz" +
                 " && mkdir -p " + ($deployPath | @sh) +
                 " && tar -xzf /tmp/deploy-sync.tgz -C " + ($deployPath | @sh) + " --strip-components=1" +
-                " && bash /tmp/deploy-ec2.sh " + ($deployPath | @sh) + " " + ($ec2Host | @sh) + " " + ($dockerhubUsername | @sh) + " " + ($dockerhubToken | @sh) +
+                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " bash /tmp/deploy-ec2.sh " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
                 "; status=$?; rm -f /tmp/deploy-ec2.sh.b64 /tmp/deploy-sync.tgz.b64 /tmp/deploy-ec2.sh /tmp/deploy-sync.tgz; exit $status"
               )
             ]')"
@@ -180,6 +177,13 @@ jobs:
             --argjson commands "$COMMANDS_JSON" \
             --arg executionTimeout "$SSM_EXECUTION_TIMEOUT_SECONDS" \
             '{commands: $commands, executionTimeout: [$executionTimeout]}')"
+
+          PARAM_BYTES="$(printf '%s' "$SSM_PARAMETERS" | wc -c | tr -d ' ')"
+          COMMAND_COUNT="$(printf '%s' "$COMMANDS_JSON" | jq -r 'length')"
+          if [ "$PARAM_BYTES" -gt 900000 ]; then
+            echo "::error::SSM parameters payload too large (${PARAM_BYTES} bytes, commands=${COMMAND_COUNT}). Use smaller deploy bundle or switch to S3 artifact delivery."
+            exit 1
+          fi
 
           {
             echo "parameters<<EOF"
@@ -224,6 +228,7 @@ jobs:
 
           MAX_ATTEMPTS=$(( (SSM_EXECUTION_TIMEOUT_SECONDS + SSM_POLL_INTERVAL_SECONDS - 1) / SSM_POLL_INTERVAL_SECONDS ))
           STATUS=""
+          TERMINAL_REACHED="false"
           for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
             STATUS="$(aws ssm get-command-invocation \
               --region "$AWS_REGION" \
@@ -239,6 +244,7 @@ jobs:
 
             case "$STATUS" in
               Success|Failed|TimedOut|Cancelled|Cancelling)
+                TERMINAL_REACHED="true"
                 break
                 ;;
               *)
@@ -266,6 +272,11 @@ jobs:
             echo "::group::SSM stderr"
             printf '%s\n' "$STDERR_CONTENT"
             echo "::endgroup::"
+          fi
+
+          if [ "$TERMINAL_REACHED" != "true" ] && [ "$FINAL_STATUS" != "Success" ] && [ "$FINAL_STATUS" != "Failed" ] && [ "$FINAL_STATUS" != "TimedOut" ] && [ "$FINAL_STATUS" != "Cancelled" ] && [ "$FINAL_STATUS" != "Cancelling" ]; then
+            echo "::error::Polling timed out before terminal SSM status. finalStatus=$FINAL_STATUS"
+            exit 1
           fi
 
           if [ "$FINAL_STATUS" != "Success" ]; then

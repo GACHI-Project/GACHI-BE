@@ -28,16 +28,16 @@ to_abs_path() {
 
 DEPLOY_PATH_INPUT="${1:-${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}}"
 EC2_HOST_INPUT="${2:-${EC2_HOST:-}}"
-DOCKERHUB_USERNAME_INPUT="${3:-${DOCKERHUB_USERNAME:-}}"
-DOCKERHUB_TOKEN_INPUT="${4:-${DOCKERHUB_TOKEN:-}}"
+DOCKERHUB_USERNAME_INPUT="${DOCKERHUB_USERNAME:-${3:-}}"
+DOCKERHUB_TOKEN_INPUT="${DOCKERHUB_TOKEN:-}"
 
 DEPLOY_PATH="$(echo "$DEPLOY_PATH_INPUT" | xargs)"
 EC2_HOST_INPUT="$(echo "$EC2_HOST_INPUT" | xargs)"
 DOCKERHUB_USERNAME_INPUT="${DOCKERHUB_USERNAME_INPUT%$'\r'}"
 DOCKERHUB_TOKEN_INPUT="${DOCKERHUB_TOKEN_INPUT%$'\r'}"
 
-if [ -z "$DOCKERHUB_USERNAME_INPUT" ] || [ -z "$DOCKERHUB_TOKEN_INPUT" ]; then
-  echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN is required."
+if [ -z "$DOCKERHUB_USERNAME_INPUT" ]; then
+  echo "DOCKERHUB_USERNAME is required."
   exit 1
 fi
 
@@ -131,7 +131,6 @@ if [ "$SWAGGER_ENABLED_VALUE" = "true" ]; then
 
     if [ ! -s "$TLS_CERT_FILE_PATH" ] || [ ! -s "$TLS_KEY_FILE_PATH" ]; then
       BOOTSTRAP_CN="${SWAGGER_TLS_COMMON_NAME:-$SWAGGER_TLS_IP}"
-      BOOTSTRAP_CN="${BOOTSTRAP_CN:-$(hostname)}"
       echo "::warning::Bootstrap self-signed TLS cert is generated to make nginx available for ACME challenge."
       mkdir -p "$(dirname "$TLS_CERT_FILE_PATH")"
       mkdir -p "$(dirname "$TLS_KEY_FILE_PATH")"
@@ -214,14 +213,24 @@ else
 fi
 
 echo "[5/7] Pull latest backend image"
-echo "${DOCKERHUB_TOKEN_INPUT}" | docker login -u "${DOCKERHUB_USERNAME_INPUT}" --password-stdin
+if [ -n "${DOCKERHUB_TOKEN_INPUT:-}" ]; then
+  echo "${DOCKERHUB_TOKEN_INPUT}" | docker login -u "${DOCKERHUB_USERNAME_INPUT}" --password-stdin
+else
+  echo "::warning::DOCKERHUB_TOKEN is empty on instance. Skip docker login and try pull with current daemon credentials."
+fi
 docker compose --env-file .env pull backend
 
 echo "[6/7] Recreate services with synced compose/nginx settings"
 docker compose --env-file .env up -d --remove-orphans backend
 BACKEND_HEALTH="starting"
 for _ in $(seq 1 36); do
-  BACKEND_HEALTH="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' gachi-backend 2>/dev/null || echo "missing")"
+  BACKEND_CID="$(docker compose --env-file .env ps -q backend)"
+  if [ -z "$BACKEND_CID" ]; then
+    echo "backend container not found via compose ps."
+    docker compose --env-file .env ps
+    exit 1
+  fi
+  BACKEND_HEALTH="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$BACKEND_CID" 2>/dev/null || echo "missing")"
   echo "[debug] backend health: $BACKEND_HEALTH"
   if [ "$BACKEND_HEALTH" = "healthy" ]; then
     break

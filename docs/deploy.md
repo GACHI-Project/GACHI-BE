@@ -122,7 +122,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
    - `SWAGGER_TLS_MODE=letsencrypt_ip`이면 Let’s Encrypt IP 인증서 발급/갱신 및 `./secrets/swagger_tls.*` 동기화 수행
 8. (`[5/7]`) `docker compose pull backend`
 9. (`[6/7]`) `docker compose up -d --remove-orphans backend` 실행 후 backend health 확인, 통과 시 `nginx`를 `--no-deps --force-recreate`로 재기동
-10. (`[7/7]`) `docker compose ps`로 최종 상태 출력
+10. (`[7/7]`) 미사용 이미지 정리(`docker image prune -f`) → `docker compose ps`로 최종 상태 출력 → `docker compose logs --tail=80 backend nginx`로 로그 요약 출력
 
 ### 6-4. 실패 시 로그 확인
 
@@ -134,12 +134,13 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - GitHub Secrets 권장 구성:
   - `EC2_INSTANCE_ID`(필수)
   - `DOCKERHUB_USERNAME`(필수)
-  - `DOCKERHUB_TOKEN`(필수)
   - `EC2_DEPLOY_PATH`(선택, 기본 `/home/ubuntu/GACHI-BE/deploy`)
-  - `EC2_HOST`(선택, `.env`의 `SWAGGER_TLS_IP` fallback 용도)
+  - `EC2_HOST`(조건부 필수: `SWAGGER_ENABLED=true` + `SWAGGER_TLS_MODE=letsencrypt_ip` + `.env`에 `SWAGGER_TLS_IP` 미설정 시)
   - `AWS_REGION`(선택, 기본 `ap-northeast-2`)
   - `AWS_OIDC_ROLE_ARN`(권장) 또는 `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`
 - SSH 비밀키(`EC2_SSH_KEY`)와 SSH 사용자(`EC2_USER`) 없이 deploy 워크플로우가 동작해야 함
+- backend 이미지가 private이면 EC2에 Docker 인증이 사전 구성되어 있어야 함(예: 인스턴스에서 `docker login` 수행 또는 `DOCKERHUB_TOKEN` 환경변수 제공)
+- 워크플로우 권한 `id-token: write`는 OIDC 우선 경로를 위한 설정이며, Access Key fallback 사용 시에는 토큰이 발급되더라도 사용되지 않음
 - OIDC Role(IAM) 최소 권한:
   - `ssm:SendCommand`
     - 리소스: `arn:aws:ec2:<region>:<account-id>:instance/<instance-id>`
