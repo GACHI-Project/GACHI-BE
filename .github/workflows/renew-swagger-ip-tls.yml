@@ -55,6 +55,7 @@ jobs:
           echo "value=$RESOLVED_HOST" >> "$GITHUB_OUTPUT"
 
       - name: Validate SSM inputs
+        id: auth-check
         env:
           EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
           AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -66,13 +67,18 @@ jobs:
             echo "::error::EC2_INSTANCE_ID secret is required."
             exit 1
           fi
-          if [ -z "${AWS_OIDC_ROLE_ARN:-}" ] && { [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; }; then
-            echo "::error::Set AWS_OIDC_ROLE_ARN or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY."
-            exit 1
+          if [ -n "${AWS_OIDC_ROLE_ARN:-}" ]; then
+            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
+          else
+            if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+              echo "::error::Set AWS_OIDC_ROLE_ARN or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY."
+              exit 1
+            fi
+            echo "auth_mode=access_key" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Configure AWS credentials (OIDC)
-        if: ${{ secrets.AWS_OIDC_ROLE_ARN != '' }}
+        if: ${{ steps.auth-check.outputs.auth_mode == 'oidc' }}
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-region: ${{ steps.aws-region.outputs.value }}
@@ -80,7 +86,7 @@ jobs:
           role-session-name: gachi-be-renew-ssm
 
       - name: Configure AWS credentials (Access key fallback)
-        if: ${{ secrets.AWS_OIDC_ROLE_ARN == '' }}
+        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' }}
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-region: ${{ steps.aws-region.outputs.value }}
