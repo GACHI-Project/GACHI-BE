@@ -79,7 +79,7 @@ jobs:
 
       - name: Configure AWS credentials (OIDC)
         if: ${{ steps.auth-check.outputs.auth_mode == 'oidc' }}
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ steps.aws-region.outputs.value }}
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
@@ -87,7 +87,7 @@ jobs:
 
       - name: Configure AWS credentials (Access key fallback)
         if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' }}
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ steps.aws-region.outputs.value }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
