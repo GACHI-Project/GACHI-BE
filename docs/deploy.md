@@ -137,17 +137,34 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 
 ### 7-1. 실행 순서
 
-1. EC2 배포 경로/`.env` 존재 확인
-2. `SWAGGER_ENABLED=true` + `SWAGGER_TLS_MODE=letsencrypt_ip`일 때만 실행
-3. `SWAGGER_TLS_IP`(없으면 `EC2_HOST`) 기준으로 `certbot certonly --keep-until-expiring` 수행
-4. `./secrets/swagger_tls.crt`, `./secrets/swagger_tls.key`로 인증서 동기화
-5. `nginx -s reload`로 무중단 반영(실패 시 재기동 fallback)
-6. `openssl x509 -noout -dates`로 만료일 출력
+1. GitHub Actions에서 AWS 자격증명 설정(OIDC 우선, Access Key fallback)
+2. `scripts/renew-swagger-ip-tls.sh`를 SSM `AWS-RunShellScript`로 EC2에 전달/실행
+3. EC2 배포 경로/`.env` 존재 확인
+4. `SWAGGER_ENABLED=true` + `SWAGGER_TLS_MODE=letsencrypt_ip`일 때만 실행
+5. `SWAGGER_TLS_IP`(없으면 `EC2_HOST`) 기준으로 `certbot certonly --keep-until-expiring` 수행
+6. `./secrets/swagger_tls.crt`, `./secrets/swagger_tls.key`로 인증서 동기화
+7. `nginx -s reload`로 무중단 반영(실패 시 재기동 fallback)
+8. `openssl x509 -noout -dates`로 만료일 출력
 
 ### 7-2. 점검 포인트
 
 - EC2 보안그룹에서 80/443 포트가 열려 있어야 함
 - `CERTBOT_EMAIL`을 실제 운영 메일로 입력해야 인증서 만료/이슈 알림 수신이 가능함
+- SSH 비밀키(`EC2_SSH_KEY`) 없이도 renew 워크플로우가 동작해야 함
+- GitHub Secrets 권장 구성:
+  - `EC2_INSTANCE_ID`(필수)
+  - `AWS_REGION`(선택, 기본 `ap-northeast-2`)
+  - `AWS_OIDC_ROLE_ARN`(권장) 또는 `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`
+  - `EC2_HOST`(선택, `.env`에 `SWAGGER_TLS_IP`가 비어 있을 때 fallback)
+- OIDC Role(IAM) 최소 권한:
+  - `ssm:SendCommand`
+    - 리소스: `arn:aws:ec2:<region>:<account-id>:instance/<instance-id>`
+    - 리소스: `arn:aws:ssm:<region>::document/AWS-RunShellScript`
+  - `ssm:GetCommandInvocation`
+- 운영 점검/확장 시 선택 권한:
+  - `ssm:ListCommandInvocations`
+  - `ec2:DescribeInstances`
+- 대상 EC2 인스턴스에는 SSM Agent와 `AmazonSSMManagedInstanceCore` 권한이 필요함
 - 수동 점검 명령:
 
 ```bash

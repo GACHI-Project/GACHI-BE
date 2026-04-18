@@ -7,11 +7,15 @@ name: Renew Swagger IP TLS
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   renew:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Resolve deploy path
         id: deploy-path
         env:
@@ -26,107 +30,195 @@ jobs:
             echo "value=/home/ubuntu/GACHI-BE/deploy" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Renew certificate via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Resolve AWS region
+        id: aws-region
+        env:
+          AWS_REGION_SECRET: ${{ secrets.AWS_REGION }}
+        run: |
+          RESOLVED_REGION="${AWS_REGION_SECRET:-}"
+          RESOLVED_REGION="${RESOLVED_REGION%$'\r'}"
+          RESOLVED_REGION="$(printf '%s' "$RESOLVED_REGION" | sed 's/[[:space:]]*$//')"
+          if [ -n "$RESOLVED_REGION" ]; then
+            echo "value=$RESOLVED_REGION" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=ap-northeast-2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve EC2 host fallback
+        id: ec2-host
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          RESOLVED_HOST="${EC2_HOST:-}"
+          RESOLVED_HOST="${RESOLVED_HOST%$'\r'}"
+          RESOLVED_HOST="$(printf '%s' "$RESOLVED_HOST" | sed 's/[[:space:]]*$//')"
+          echo "value=$RESOLVED_HOST" >> "$GITHUB_OUTPUT"
+
+      - name: Validate SSM inputs
+        id: auth-check
+        env:
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${EC2_INSTANCE_ID:-}" ]; then
+            echo "::error::EC2_INSTANCE_ID secret is required."
+            exit 1
+          fi
+          if [ -n "${AWS_OIDC_ROLE_ARN:-}" ]; then
+            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
+          else
+            if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+              echo "::error::Set AWS_OIDC_ROLE_ARN or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY."
+              exit 1
+            fi
+            echo "auth_mode=access_key" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'oidc' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-session-name: gachi-be-renew-ssm
+
+      - name: Configure AWS credentials (Access key fallback)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+
+      - name: Build SSM command payload
+        id: ssm-payload
         env:
           EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          envs: EC2_DEPLOY_PATH,EC2_HOST
-          script_stop: false
-          script: |
-            set -Eeuo pipefail
+          EC2_HOST: ${{ steps.ec2-host.outputs.value }}
+        run: |
+          set -Eeuo pipefail
+          SCRIPT_PATH="scripts/renew-swagger-ip-tls.sh"
+          if [ ! -f "$SCRIPT_PATH" ]; then
+            echo "::error::$SCRIPT_PATH not found."
+            exit 1
+          fi
 
-            read_env_value() {
-              local key="$1"
-              local raw
-              raw="$(sed -n "s/^${key}=//p" .env | tail -n1 || true)"
-              printf "%s" "$raw" \
-                | tr -d '\r' \
-                | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//'
-            }
+          SCRIPT_BASE64="$(base64 -w 0 "$SCRIPT_PATH")"
+          CHUNK_SIZE=3000
+          COMMANDS_JSON="$(jq -cn '[
+            "rm -f /tmp/renew-swagger-ip-tls.sh.b64 /tmp/renew-swagger-ip-tls.sh"
+          ]')"
 
-            to_lower() {
-              local value="$1"
-              printf "%s" "$value" | tr '[:upper:]' '[:lower:]'
-            }
+          for ((i=0; i<${#SCRIPT_BASE64}; i+=CHUNK_SIZE)); do
+            CHUNK="${SCRIPT_BASE64:i:CHUNK_SIZE}"
+            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c --arg chunk "$CHUNK" '. + [("printf %s " + ($chunk | @sh) + " >> /tmp/renew-swagger-ip-tls.sh.b64")]')"
+          done
 
-            DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
-            DEPLOY_PATH="$(echo "$DEPLOY_PATH" | xargs)"
-            cd "$DEPLOY_PATH"
+          COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+            --arg deployPath "$EC2_DEPLOY_PATH" \
+            --arg ec2Host "$EC2_HOST" \
+            '. + [
+              (
+                "base64 -d /tmp/renew-swagger-ip-tls.sh.b64 > /tmp/renew-swagger-ip-tls.sh" +
+                " && chmod 700 /tmp/renew-swagger-ip-tls.sh" +
+                " && bash /tmp/renew-swagger-ip-tls.sh " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                "; status=$?; rm -f /tmp/renew-swagger-ip-tls.sh.b64 /tmp/renew-swagger-ip-tls.sh; exit $status"
+              )
+            ]')"
 
-            if [ ! -f .env ]; then
-              echo ".env not found in $DEPLOY_PATH"
-              exit 1
-            fi
+          SSM_PARAMETERS="$(jq -cn --argjson commands "$COMMANDS_JSON" '{commands: $commands, executionTimeout: ["3600"]}')"
 
-            SWAGGER_ENABLED="$(to_lower "$(read_env_value SWAGGER_ENABLED)")"
-            if [ "$SWAGGER_ENABLED" != "true" ]; then
-              echo "SWAGGER_ENABLED is not true. Skip certificate renewal."
-              exit 0
-            fi
+          {
+            echo "parameters<<EOF"
+            echo "$SSM_PARAMETERS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-            SWAGGER_TLS_MODE="$(to_lower "$(read_env_value SWAGGER_TLS_MODE)")"
-            SWAGGER_TLS_MODE="${SWAGGER_TLS_MODE:-letsencrypt_ip}"
-            if [ "$SWAGGER_TLS_MODE" != "letsencrypt_ip" ]; then
-              echo "SWAGGER_TLS_MODE is '$SWAGGER_TLS_MODE'. Skip Let's Encrypt IP renewal."
-              exit 0
-            fi
+      - name: Send renew command via SSM
+        id: ssm-send
+        env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          SSM_PARAMETERS: ${{ steps.ssm-payload.outputs.parameters }}
+        run: |
+          set -Eeuo pipefail
+          COMMAND_ID="$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --comment "renew-swagger-ip-tls (run=${GITHUB_RUN_ID})" \
+            --max-concurrency "1" \
+            --max-errors "0" \
+            --parameters "$SSM_PARAMETERS" \
+            --query "Command.CommandId" \
+            --output text)"
 
-            SWAGGER_TLS_IP="$(read_env_value SWAGGER_TLS_IP)"
-            SWAGGER_TLS_IP="${SWAGGER_TLS_IP:-$EC2_HOST}"
-            SWAGGER_TLS_IP="$(echo "$SWAGGER_TLS_IP" | xargs)"
-            if [ -z "$SWAGGER_TLS_IP" ]; then
-              echo "SWAGGER_TLS_IP is empty. Set SWAGGER_TLS_IP in .env or EC2_HOST secret."
-              exit 1
-            fi
+          if [ -z "$COMMAND_ID" ] || [ "$COMMAND_ID" = "None" ]; then
+            echo "::error::Failed to create SSM command."
+            exit 1
+          fi
 
-            CERTBOT_EMAIL_VALUE="$(read_env_value CERTBOT_EMAIL)"
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+          echo "SSM command created: $COMMAND_ID"
 
-            echo "[renew] Ensure nginx is serving ACME challenge endpoint"
-            docker compose --env-file .env up -d --no-deps nginx
-            docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1 || true
+      - name: Wait for SSM command completion
+        env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          COMMAND_ID: ${{ steps.ssm-send.outputs.command_id }}
+        run: |
+          set -Eeuo pipefail
 
-            echo "[renew] Request/renew Let's Encrypt IP certificate"
-            CERTBOT_EXIT_CODE=0
-            if [ -n "${CERTBOT_EMAIL_VALUE:-}" ]; then
-              set +e
-              echo "[renew][debug] running certbot certonly with email mode"
-              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --email "$CERTBOT_EMAIL_VALUE" -v
-              CERTBOT_EXIT_CODE=$?
-              set -e
+          STATUS=""
+          for attempt in $(seq 1 90); do
+            STATUS="$(aws ssm get-command-invocation \
+              --region "$AWS_REGION" \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query "Status" \
+              --output text 2>/dev/null || true)"
+            if [ -z "$STATUS" ]; then
+              echo "[$attempt/90] status: not-ready"
             else
-              echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
-              set +e
-              echo "[renew][debug] running certbot certonly without email mode"
-              docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
-              CERTBOT_EXIT_CODE=$?
-              set -e
-            fi
-            echo "[renew][debug] certbot certonly exit code: $CERTBOT_EXIT_CODE"
-
-            if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
-              echo "[renew][error] certbot certonly failed (exit=$CERTBOT_EXIT_CODE)."
-              docker compose --env-file .env logs --tail=120 nginx || true
-              exit "$CERTBOT_EXIT_CODE"
+              echo "[$attempt/90] status: $STATUS"
             fi
 
-            echo "[renew] Sync renewed certificate to nginx secret path"
-            docker compose --env-file .env --profile tls run --rm --entrypoint /bin/sh certbot -c \
-              "set -eu; \
-              cp /etc/letsencrypt/live/swagger-ip/fullchain.pem /workspace/secrets/swagger_tls.crt; \
-              cp /etc/letsencrypt/live/swagger-ip/privkey.pem /workspace/secrets/swagger_tls.key; \
-              chmod 644 /workspace/secrets/swagger_tls.crt; \
-              chmod 600 /workspace/secrets/swagger_tls.key"
+            case "$STATUS" in
+              Success|Failed|TimedOut|Cancelled|Cancelling)
+                break
+                ;;
+              *)
+                sleep 10
+                ;;
+            esac
+          done
 
-            echo "[renew] Reload nginx to apply new certificate (zero-downtime)"
-            if ! docker compose --env-file .env exec -T nginx nginx -s reload; then
-              echo "[renew] Reload failed, falling back to recreate"
-              docker compose --env-file .env up -d --force-recreate --no-deps nginx
-            fi
+          INVOCATION_JSON="$(aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --output json)"
 
-            echo "[renew] Print certificate expiration"
-            openssl x509 -in ./secrets/swagger_tls.crt -noout -subject -issuer -dates
+          FINAL_STATUS="$(printf '%s' "$INVOCATION_JSON" | jq -r '.Status // "Unknown"')"
+          RESPONSE_CODE="$(printf '%s' "$INVOCATION_JSON" | jq -r '.ResponseCode // -1')"
+          STDERR_CONTENT="$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardErrorContent // ""')"
+          STDOUT_CONTENT="$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardOutputContent // ""')"
+
+          echo "::group::SSM stdout"
+          printf '%s\n' "$STDOUT_CONTENT"
+          echo "::endgroup::"
+
+          if [ -n "$STDERR_CONTENT" ]; then
+            echo "::group::SSM stderr"
+            printf '%s\n' "$STDERR_CONTENT"
+            echo "::endgroup::"
+          fi
+
+          if [ "$FINAL_STATUS" != "Success" ]; then
+            echo "::error::SSM command failed. status=$FINAL_STATUS responseCode=$RESPONSE_CODE"
+            exit 1
+          fi
