@@ -164,6 +164,9 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - 운영 점검/확장 시 선택 권한:
   - `ssm:ListCommandInvocations`
   - `ec2:DescribeInstances`
+- SSM 실행/폴링 시간 정렬 확인:
+  - `SSM executionTimeout`: `SSM_EXECUTION_TIMEOUT_SECONDS` (현재 `3600`)
+  - `Actions polling`: `SSM_POLL_INTERVAL_SECONDS` 간격으로 최대 `executionTimeout`까지 조회(현재 `10초 * 360회 ≈ 60분`)
 - 대상 EC2 인스턴스에는 SSM Agent와 `AmazonSSMManagedInstanceCore` 권한이 필요함
 - 수동 점검 명령:
 

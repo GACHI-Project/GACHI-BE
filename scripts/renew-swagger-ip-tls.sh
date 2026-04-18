@@ -49,10 +49,27 @@ fi
 
 CERTBOT_EMAIL_VALUE="$(read_env_value CERTBOT_EMAIL)"
 
+NEEDS_BOOTSTRAP_CERT="false"
 mkdir -p ./secrets
 if [ ! -s ./secrets/swagger_tls.crt ] || [ ! -s ./secrets/swagger_tls.key ]; then
+  NEEDS_BOOTSTRAP_CERT="true"
+else
+  CERT_SUBJECT="$(openssl x509 -in ./secrets/swagger_tls.crt -noout -subject -nameopt RFC2253 2>/dev/null | sed 's/^subject=//' || true)"
+  CERT_ISSUER="$(openssl x509 -in ./secrets/swagger_tls.crt -noout -issuer -nameopt RFC2253 2>/dev/null | sed 's/^issuer=//' || true)"
+  CERT_NOT_AFTER_RAW="$(openssl x509 -in ./secrets/swagger_tls.crt -noout -enddate 2>/dev/null | sed 's/^notAfter=//' || true)"
+  CERT_NOT_AFTER_EPOCH="$(date -d "$CERT_NOT_AFTER_RAW" +%s 2>/dev/null || true)"
+  THRESHOLD_EPOCH="$(( $(date +%s) + 7 * 24 * 60 * 60 ))"
+
+  if [ -z "$CERT_SUBJECT" ] || [ -z "$CERT_ISSUER" ] || [ -z "$CERT_NOT_AFTER_EPOCH" ]; then
+    NEEDS_BOOTSTRAP_CERT="true"
+  elif [ "$CERT_SUBJECT" = "$CERT_ISSUER" ] && [ "$CERT_NOT_AFTER_EPOCH" -le "$THRESHOLD_EPOCH" ]; then
+    NEEDS_BOOTSTRAP_CERT="true"
+  fi
+fi
+
+if [ "$NEEDS_BOOTSTRAP_CERT" = "true" ]; then
   echo "[renew] Bootstrap temporary self-signed certificate for nginx startup"
-  openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+  openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
     -keyout ./secrets/swagger_tls.key \
     -out ./secrets/swagger_tls.crt \
     -subj "/CN=${SWAGGER_TLS_IP}"

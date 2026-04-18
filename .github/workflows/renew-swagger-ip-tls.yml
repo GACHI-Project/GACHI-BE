@@ -12,6 +12,9 @@ permissions:
 jobs:
   renew:
     runs-on: ubuntu-latest
+    env:
+      SSM_EXECUTION_TIMEOUT_SECONDS: "3600"
+      SSM_POLL_INTERVAL_SECONDS: "10"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -61,6 +64,7 @@ jobs:
           AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
         run: |
           set -Eeuo pipefail
           if [ -z "${EC2_INSTANCE_ID:-}" ]; then
@@ -69,12 +73,18 @@ jobs:
           fi
           if [ -n "${AWS_OIDC_ROLE_ARN:-}" ]; then
             echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "has_session_token=false" >> "$GITHUB_OUTPUT"
           else
             if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
               echo "::error::Set AWS_OIDC_ROLE_ARN or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY."
               exit 1
             fi
             echo "auth_mode=access_key" >> "$GITHUB_OUTPUT"
+            if [ -n "${AWS_SESSION_TOKEN:-}" ]; then
+              echo "has_session_token=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_session_token=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Configure AWS credentials (OIDC)
@@ -86,13 +96,21 @@ jobs:
           role-session-name: gachi-be-renew-ssm
 
       - name: Configure AWS credentials (Access key fallback)
-        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' }}
+        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' && steps.auth-check.outputs.has_session_token == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ steps.aws-region.outputs.value }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+
+      - name: Configure AWS credentials (Access key fallback without session token)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' && steps.auth-check.outputs.has_session_token != 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Build SSM command payload
         id: ssm-payload
@@ -130,7 +148,10 @@ jobs:
               )
             ]')"
 
-          SSM_PARAMETERS="$(jq -cn --argjson commands "$COMMANDS_JSON" '{commands: $commands, executionTimeout: ["3600"]}')"
+          SSM_PARAMETERS="$(jq -cn \
+            --argjson commands "$COMMANDS_JSON" \
+            --arg executionTimeout "$SSM_EXECUTION_TIMEOUT_SECONDS" \
+            '{commands: $commands, executionTimeout: [$executionTimeout]}')"
 
           {
             echo "parameters<<EOF"
@@ -173,8 +194,9 @@ jobs:
         run: |
           set -Eeuo pipefail
 
+          MAX_ATTEMPTS=$(( (SSM_EXECUTION_TIMEOUT_SECONDS + SSM_POLL_INTERVAL_SECONDS - 1) / SSM_POLL_INTERVAL_SECONDS ))
           STATUS=""
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
             STATUS="$(aws ssm get-command-invocation \
               --region "$AWS_REGION" \
               --command-id "$COMMAND_ID" \
@@ -182,9 +204,9 @@ jobs:
               --query "Status" \
               --output text 2>/dev/null || true)"
             if [ -z "$STATUS" ]; then
-              echo "[$attempt/90] status: not-ready"
+              echo "[$attempt/$MAX_ATTEMPTS] status: not-ready"
             else
-              echo "[$attempt/90] status: $STATUS"
+              echo "[$attempt/$MAX_ATTEMPTS] status: $STATUS"
             fi
 
             case "$STATUS" in
@@ -192,7 +214,7 @@ jobs:
                 break
                 ;;
               *)
-                sleep 10
+                sleep "$SSM_POLL_INTERVAL_SECONDS"
                 ;;
             esac
           done
