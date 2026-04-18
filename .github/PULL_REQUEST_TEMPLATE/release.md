@@ -20,11 +20,11 @@
 
 - GitHub Actions `deploy-ec2` 실행 확인 (`workflow_dispatch`, ref: `main`)
   - 결과:
-  - 스크린샷: ![scp-step]()
+  - 스크린샷: ![ssm-send-step]()
 
 - 원격 배포 순서/재기동 확인
   - 결과:
-  - 스크린샷: ![ssh-order]()
+  - 스크린샷: ![ssm-order]()
 
 - 배포 후 컨테이너 상태 확인
   - 결과:

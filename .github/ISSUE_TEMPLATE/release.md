@@ -29,4 +29,4 @@ develop 브랜치에 누적된 변경사항을 main으로 릴리즈 배포합니
 - [ ] 리뷰/체크 통과
 - [ ] main 머지
 - [ ] deploy-ec2 수동 실행 (workflow_dispatch, ref: main)
-- [ ] 배포 검증 완료 (scp-step, ssh-order, compose-ps)
+- [ ] 배포 검증 완료 (ssm-send-step, ssm-order, compose-ps)
