@@ -158,9 +158,12 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
   - `EC2_HOST`(선택, `.env`에 `SWAGGER_TLS_IP`가 비어 있을 때 fallback)
 - OIDC Role(IAM) 최소 권한:
   - `ssm:SendCommand`
+    - 리소스: `arn:aws:ec2:<region>:<account-id>:instance/<instance-id>`
+    - 리소스: `arn:aws:ssm:<region>::document/AWS-RunShellScript`
   - `ssm:GetCommandInvocation`
+- 운영 점검/확장 시 선택 권한:
   - `ssm:ListCommandInvocations`
-  - `ec2:DescribeInstances`(운영 점검/확장 대비 권장)
+  - `ec2:DescribeInstances`
 - 대상 EC2 인스턴스에는 SSM Agent와 `AmazonSSMManagedInstanceCore` 권한이 필요함
 - 수동 점검 명령:
 

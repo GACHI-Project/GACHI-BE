@@ -122,10 +122,12 @@ jobs:
             --arg deployPath "$EC2_DEPLOY_PATH" \
             --arg ec2Host "$EC2_HOST" \
             '. + [
-              "base64 -d /tmp/renew-swagger-ip-tls.sh.b64 > /tmp/renew-swagger-ip-tls.sh",
-              "chmod 700 /tmp/renew-swagger-ip-tls.sh",
-              ("bash /tmp/renew-swagger-ip-tls.sh " + ($deployPath | @sh) + " " + ($ec2Host | @sh)),
-              "rm -f /tmp/renew-swagger-ip-tls.sh.b64 /tmp/renew-swagger-ip-tls.sh"
+              (
+                "base64 -d /tmp/renew-swagger-ip-tls.sh.b64 > /tmp/renew-swagger-ip-tls.sh" +
+                " && chmod 700 /tmp/renew-swagger-ip-tls.sh" +
+                " && bash /tmp/renew-swagger-ip-tls.sh " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                "; status=$?; rm -f /tmp/renew-swagger-ip-tls.sh.b64 /tmp/renew-swagger-ip-tls.sh; exit $status"
+              )
             ]')"
 
           SSM_PARAMETERS="$(jq -cn --argjson commands "$COMMANDS_JSON" '{commands: $commands, executionTimeout: ["3600"]}')"

@@ -49,6 +49,17 @@ fi
 
 CERTBOT_EMAIL_VALUE="$(read_env_value CERTBOT_EMAIL)"
 
+mkdir -p ./secrets
+if [ ! -s ./secrets/swagger_tls.crt ] || [ ! -s ./secrets/swagger_tls.key ]; then
+  echo "[renew] Bootstrap temporary self-signed certificate for nginx startup"
+  openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+    -keyout ./secrets/swagger_tls.key \
+    -out ./secrets/swagger_tls.crt \
+    -subj "/CN=${SWAGGER_TLS_IP}"
+  chmod 644 ./secrets/swagger_tls.crt
+  chmod 600 ./secrets/swagger_tls.key
+fi
+
 echo "[renew] Ensure nginx is serving ACME challenge endpoint"
 docker compose --env-file .env up -d --no-deps nginx
 docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1 || true
