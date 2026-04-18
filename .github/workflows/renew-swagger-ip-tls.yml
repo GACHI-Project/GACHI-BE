@@ -110,7 +110,6 @@ jobs:
           SCRIPT_BASE64="$(base64 -w 0 "$SCRIPT_PATH")"
           CHUNK_SIZE=3000
           COMMANDS_JSON="$(jq -cn '[
-            "set -Eeuo pipefail",
             "rm -f /tmp/renew-swagger-ip-tls.sh.b64 /tmp/renew-swagger-ip-tls.sh"
           ]')"
 
@@ -125,7 +124,7 @@ jobs:
             '. + [
               "base64 -d /tmp/renew-swagger-ip-tls.sh.b64 > /tmp/renew-swagger-ip-tls.sh",
               "chmod 700 /tmp/renew-swagger-ip-tls.sh",
-              ("/tmp/renew-swagger-ip-tls.sh " + ($deployPath | @sh) + " " + ($ec2Host | @sh)),
+              ("bash /tmp/renew-swagger-ip-tls.sh " + ($deployPath | @sh) + " " + ($ec2Host | @sh)),
               "rm -f /tmp/renew-swagger-ip-tls.sh.b64 /tmp/renew-swagger-ip-tls.sh"
             ]')"
 
