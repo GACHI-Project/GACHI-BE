@@ -126,7 +126,8 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 
 ### 6-4. 실패 시 로그 확인
 
-- 배포 스크립트는 실패 시 `docker compose ps`와 `docker compose logs --tail=80 backend nginx`를 출력함
+- 초기 검증 실패는 해당 에러 메시지만 출력될 수 있으며, Docker 단계 이후 실패 시 관련 서비스 로그가 일부 출력됨
+- 성공 시 `[7/7]`에서 `docker compose ps`와 `docker compose logs --tail=80 backend nginx`를 출력함
 - Actions 로그에서 SSM stdout/stderr를 함께 출력해 실패 지점 추적이 가능함
 
 ### 6-5. 필수 시크릿/권한
@@ -139,7 +140,10 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
   - `AWS_REGION`(선택, 기본 `ap-northeast-2`)
   - `AWS_OIDC_ROLE_ARN`(권장) 또는 `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`
 - SSH 비밀키(`EC2_SSH_KEY`)와 SSH 사용자(`EC2_USER`) 없이 deploy 워크플로우가 동작해야 함
-- backend 이미지가 private이면 EC2에 Docker 인증이 사전 구성되어 있어야 함(예: 인스턴스에서 `docker login` 수행 또는 `DOCKERHUB_TOKEN` 환경변수 제공)
+- backend 이미지가 private이면 EC2 Docker 인증이 사전 구성되어 있어야 함
+  - 권장: 인스턴스에서 `docker login`을 미리 수행
+  - 대안: EC2 인스턴스 역할로 SSM Parameter Store SecureString/Secrets Manager에서 토큰을 조회해 `scripts/deploy-ec2.sh` 실행 환경의 `DOCKERHUB_TOKEN`으로 주입
+  - GitHub Secret `DOCKERHUB_TOKEN`은 deploy-ec2 워크플로우가 SSM 명령 본문으로 전달하지 않음
 - 워크플로우 권한 `id-token: write`는 OIDC 우선 경로를 위한 설정이며, Access Key fallback 사용 시에는 토큰이 발급되더라도 사용되지 않음
 - OIDC Role(IAM) 최소 권한:
   - `ssm:SendCommand`

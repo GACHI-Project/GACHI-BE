@@ -203,7 +203,7 @@ if [ "$SWAGGER_ENABLED_VALUE" = "true" ]; then
     chmod 600 "$TLS_KEY_FILE_PATH"
   fi
 
-  if ! docker compose --env-file .env exec -T nginx sh -c "test -r /etc/nginx/secrets/swagger_tls.crt && test -r /etc/nginx/secrets/swagger_tls.key"; then
+  if ! docker compose --env-file .env run --rm --no-deps --entrypoint /bin/sh nginx -c "test -r /etc/nginx/secrets/swagger_tls.crt && test -r /etc/nginx/secrets/swagger_tls.key"; then
     echo "TLS cert/key are not readable from nginx container path."
     ls -l "$TLS_CERT_FILE_PATH" "$TLS_KEY_FILE_PATH" || true
     exit 1
