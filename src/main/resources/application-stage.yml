@@ -18,3 +18,6 @@ springdoc:
     path: /swagger-ui.html
   packages-to-scan: com.gachi.be
   paths-to-match: /api/**
+
+server:
+  forward-headers-strategy: framework

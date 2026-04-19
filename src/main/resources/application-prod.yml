@@ -16,6 +16,9 @@ springdoc:
   swagger-ui:
     enabled: ${SWAGGER_ENABLED:false}
 
+server:
+  forward-headers-strategy: framework
+
 management:
   endpoints:
     web:
