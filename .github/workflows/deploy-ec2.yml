@@ -145,6 +145,8 @@ jobs:
 
           SCRIPT_BASE64="$(base64 -w 0 "$SCRIPT_PATH")"
           BUNDLE_BASE64="$(base64 -w 0 "$DEPLOY_BUNDLE_PATH")"
+          # CHUNK_SIZE and payload guard must be tuned together.
+          # Keep each command item reasonably small to avoid SSM request size limits.
           CHUNK_SIZE=3000
           TMP_PREFIX="/tmp/deploy-ec2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
           REMOTE_SCRIPT_B64_PATH="${TMP_PREFIX}.sh.b64"
@@ -204,6 +206,8 @@ jobs:
 
           PARAM_BYTES="$(printf '%s' "$SSM_PARAMETERS" | wc -c | tr -d ' ')"
           COMMAND_COUNT="$(printf '%s' "$COMMANDS_JSON" | jq -r 'length')"
+          # SSM SendCommand request body limit is around 1MB.
+          # 900000B leaves safety margin for JSON escaping/overhead.
           if [ "$PARAM_BYTES" -gt 900000 ]; then
             echo "::error::SSM parameters payload too large (${PARAM_BYTES} bytes, commands=${COMMAND_COUNT}). Use smaller deploy bundle or switch to S3 artifact delivery."
             exit 1
@@ -287,6 +291,8 @@ jobs:
           RESPONSE_CODE="$(printf '%s' "$INVOCATION_JSON" | jq -r '.ResponseCode // -1')"
           STDERR_CONTENT="$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardErrorContent // ""')"
           STDOUT_CONTENT="$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardOutputContent // ""')"
+          STDOUT_LENGTH="${#STDOUT_CONTENT}"
+          STDERR_LENGTH="${#STDERR_CONTENT}"
 
           echo "::group::SSM stdout"
           printf '%s\n' "$STDOUT_CONTENT"
@@ -296,6 +302,10 @@ jobs:
             echo "::group::SSM stderr"
             printf '%s\n' "$STDERR_CONTENT"
             echo "::endgroup::"
+          fi
+
+          if [ "$STDOUT_LENGTH" -ge 24000 ] || [ "$STDERR_LENGTH" -ge 24000 ]; then
+            echo "::warning::SSM stdout/stderr may be truncated at 24000 characters. For full logs, check EC2 directly or enable S3/CloudWatch output for Run Command."
           fi
 
           if [ "$TERMINAL_REACHED" != "true" ] && [ "$FINAL_STATUS" != "Success" ] && [ "$FINAL_STATUS" != "Failed" ] && [ "$FINAL_STATUS" != "TimedOut" ] && [ "$FINAL_STATUS" != "Cancelled" ] && [ "$FINAL_STATUS" != "Cancelling" ]; then
