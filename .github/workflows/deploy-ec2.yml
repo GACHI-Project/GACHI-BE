@@ -212,9 +212,8 @@ jobs:
                 " && base64 -d " + ($remoteBundleB64Path | @sh) + " > " + ($remoteBundlePath | @sh) +
                 " && mkdir -p " + ($deployPath | @sh) +
                 " && tar -xzf " + ($remoteBundlePath | @sh) + " -C " + ($deployPath | @sh) + " --strip-components=1" +
-                " && command -v aws >/dev/null 2>&1" +
-                " && DOCKERHUB_TOKEN=\"$(aws ssm get-parameter --region " + ($awsRegion | @sh) + " --name " + ($dockerhubTokenParameterName | @sh) + " --with-decryption --query Parameter.Value --output text)\"" +
-                " && test -n \"$DOCKERHUB_TOKEN\"" +
+                " && if command -v aws >/dev/null 2>&1; then DOCKERHUB_TOKEN=\"$(aws ssm get-parameter --region " + ($awsRegion | @sh) + " --name " + ($dockerhubTokenParameterName | @sh) + " --with-decryption --query Parameter.Value --output text 2>/dev/null || true)\"; else DOCKERHUB_TOKEN=\"\"; fi" +
+                " && if [ -z \"$DOCKERHUB_TOKEN\" ]; then echo \"[warn] DOCKERHUB_TOKEN parameter load skipped or failed. deploy script will try current daemon credentials.\"; fi" +
                 " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
                 "; status=$?; rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh) + "; exit $status"
               )
