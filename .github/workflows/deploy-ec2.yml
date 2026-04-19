@@ -12,6 +12,9 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-ec2-ssm
+      cancel-in-progress: false
     env:
       SSM_EXECUTION_TIMEOUT_SECONDS: "3600"
       SSM_POLL_INTERVAL_SECONDS: "10"
@@ -143,33 +146,54 @@ jobs:
           SCRIPT_BASE64="$(base64 -w 0 "$SCRIPT_PATH")"
           BUNDLE_BASE64="$(base64 -w 0 "$DEPLOY_BUNDLE_PATH")"
           CHUNK_SIZE=3000
-          COMMANDS_JSON="$(jq -cn '[
-            "rm -f /tmp/deploy-ec2.sh.b64 /tmp/deploy-sync.tgz.b64 /tmp/deploy-ec2.sh /tmp/deploy-sync.tgz"
-          ]')"
+          TMP_PREFIX="/tmp/deploy-ec2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          REMOTE_SCRIPT_B64_PATH="${TMP_PREFIX}.sh.b64"
+          REMOTE_BUNDLE_B64_PATH="${TMP_PREFIX}.tgz.b64"
+          REMOTE_SCRIPT_PATH="${TMP_PREFIX}.sh"
+          REMOTE_BUNDLE_PATH="${TMP_PREFIX}.tgz"
+
+          COMMANDS_JSON="$(jq -cn \
+            --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+            --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+            --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
+            --arg remoteBundlePath "$REMOTE_BUNDLE_PATH" \
+            '[
+              "rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh)
+            ]')"
 
           for ((i=0; i<${#SCRIPT_BASE64}; i+=CHUNK_SIZE)); do
             CHUNK="${SCRIPT_BASE64:i:CHUNK_SIZE}"
-            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c --arg chunk "$CHUNK" '. + [("printf %s " + ($chunk | @sh) + " >> /tmp/deploy-ec2.sh.b64")]')"
+            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+              --arg chunk "$CHUNK" \
+              --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+              '. + [("printf %s " + ($chunk | @sh) + " >> " + ($remoteScriptB64Path | @sh))]')"
           done
 
           for ((i=0; i<${#BUNDLE_BASE64}; i+=CHUNK_SIZE)); do
             CHUNK="${BUNDLE_BASE64:i:CHUNK_SIZE}"
-            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c --arg chunk "$CHUNK" '. + [("printf %s " + ($chunk | @sh) + " >> /tmp/deploy-sync.tgz.b64")]')"
+            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+              --arg chunk "$CHUNK" \
+              --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+              '. + [("printf %s " + ($chunk | @sh) + " >> " + ($remoteBundleB64Path | @sh))]')"
           done
 
           COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
             --arg deployPath "$EC2_DEPLOY_PATH" \
             --arg ec2Host "$EC2_HOST" \
             --arg dockerhubUsername "$DOCKERHUB_USERNAME" \
+            --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+            --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+            --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
+            --arg remoteBundlePath "$REMOTE_BUNDLE_PATH" \
             '. + [
               (
-                "base64 -d /tmp/deploy-ec2.sh.b64 > /tmp/deploy-ec2.sh" +
-                " && chmod 700 /tmp/deploy-ec2.sh" +
-                " && base64 -d /tmp/deploy-sync.tgz.b64 > /tmp/deploy-sync.tgz" +
+                "base64 -d " + ($remoteScriptB64Path | @sh) + " > " + ($remoteScriptPath | @sh) +
+                " && chmod 700 " + ($remoteScriptPath | @sh) +
+                " && base64 -d " + ($remoteBundleB64Path | @sh) + " > " + ($remoteBundlePath | @sh) +
                 " && mkdir -p " + ($deployPath | @sh) +
-                " && tar -xzf /tmp/deploy-sync.tgz -C " + ($deployPath | @sh) + " --strip-components=1" +
-                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " bash /tmp/deploy-ec2.sh " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
-                "; status=$?; rm -f /tmp/deploy-ec2.sh.b64 /tmp/deploy-sync.tgz.b64 /tmp/deploy-ec2.sh /tmp/deploy-sync.tgz; exit $status"
+                " && tar -xzf " + ($remoteBundlePath | @sh) + " -C " + ($deployPath | @sh) + " --strip-components=1" +
+                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                "; status=$?; rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh) + "; exit $status"
               )
             ]')"
 
