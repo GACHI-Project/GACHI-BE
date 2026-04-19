@@ -60,6 +60,20 @@ jobs:
           RESOLVED_HOST="$(printf '%s' "$RESOLVED_HOST" | sed 's/[[:space:]]*$//')"
           echo "value=$RESOLVED_HOST" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve DockerHub token parameter
+        id: dockerhub-token-parameter
+        env:
+          DOCKERHUB_TOKEN_PARAMETER_NAME_SECRET: ${{ secrets.DOCKERHUB_TOKEN_PARAMETER_NAME }}
+        run: |
+          VALUE="${DOCKERHUB_TOKEN_PARAMETER_NAME_SECRET:-}"
+          VALUE="${VALUE%$'\r'}"
+          VALUE="$(printf '%s' "$VALUE" | sed 's/[[:space:]]*$//')"
+          if [ -n "$VALUE" ]; then
+            echo "value=$VALUE" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=/gachi/prod/dockerhub/token" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Validate SSM inputs
         id: auth-check
         env:
@@ -123,9 +137,11 @@ jobs:
       - name: Build SSM command payload
         id: ssm-payload
         env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
           EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
           EC2_HOST: ${{ steps.ec2-host.outputs.value }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN_PARAMETER_NAME: ${{ steps.dockerhub-token-parameter.outputs.value }}
         run: |
           set -Eeuo pipefail
           SCRIPT_PATH="scripts/deploy-ec2.sh"
@@ -180,9 +196,11 @@ jobs:
           done
 
           COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+            --arg awsRegion "$AWS_REGION" \
             --arg deployPath "$EC2_DEPLOY_PATH" \
             --arg ec2Host "$EC2_HOST" \
             --arg dockerhubUsername "$DOCKERHUB_USERNAME" \
+            --arg dockerhubTokenParameterName "$DOCKERHUB_TOKEN_PARAMETER_NAME" \
             --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
             --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
             --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
@@ -194,7 +212,10 @@ jobs:
                 " && base64 -d " + ($remoteBundleB64Path | @sh) + " > " + ($remoteBundlePath | @sh) +
                 " && mkdir -p " + ($deployPath | @sh) +
                 " && tar -xzf " + ($remoteBundlePath | @sh) + " -C " + ($deployPath | @sh) + " --strip-components=1" +
-                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                " && command -v aws >/dev/null 2>&1" +
+                " && DOCKERHUB_TOKEN=\"$(aws ssm get-parameter --region " + ($awsRegion | @sh) + " --name " + ($dockerhubTokenParameterName | @sh) + " --with-decryption --query Parameter.Value --output text)\"" +
+                " && test -n \"$DOCKERHUB_TOKEN\"" +
+                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
                 "; status=$?; rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh) + "; exit $status"
               )
             ]')"

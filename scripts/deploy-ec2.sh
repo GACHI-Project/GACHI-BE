@@ -56,6 +56,13 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+JWT_SECRET_VALUE="$(read_env_value JWT_SECRET)"
+JWT_SECRET_LENGTH=${#JWT_SECRET_VALUE}
+if [ "$JWT_SECRET_LENGTH" -lt 32 ]; then
+  echo "JWT_SECRET must be configured with at least 32 characters. current length=$JWT_SECRET_LENGTH"
+  exit 1
+fi
+
 echo "[3/7] Pin latest backend image tag in .env"
 if grep -q "^BACKEND_IMAGE=" .env; then
   sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${DOCKERHUB_USERNAME_INPUT}/gachi-be:latest|" .env
