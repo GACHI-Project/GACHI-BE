@@ -7,10 +7,17 @@ name: Deploy to EC2
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-ec2-ssm
+      cancel-in-progress: false
+    env:
+      SSM_EXECUTION_TIMEOUT_SECONDS: "3600"
+      SSM_POLL_INTERVAL_SECONDS: "10"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -29,256 +36,284 @@ jobs:
             echo "value=/home/ubuntu/GACHI-BE/deploy" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Sync deploy folder via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "deploy/docker-compose.yml,deploy/.env.example,deploy/HTTPS-SETUP.md,deploy/nginx,deploy/secrets/spring_mail_password.example.txt,deploy/secrets/swagger_htpasswd.example.txt"
-          target: ${{ steps.deploy-path.outputs.value }}
-          strip_components: 1
-          overwrite: true
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Resolve AWS region
+        id: aws-region
         env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
+          AWS_REGION_SECRET: ${{ secrets.AWS_REGION }}
+        run: |
+          RESOLVED_REGION="${AWS_REGION_SECRET:-}"
+          RESOLVED_REGION="${RESOLVED_REGION%$'\r'}"
+          RESOLVED_REGION="$(printf '%s' "$RESOLVED_REGION" | sed 's/[[:space:]]*$//')"
+          if [ -n "$RESOLVED_REGION" ]; then
+            echo "value=$RESOLVED_REGION" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=ap-northeast-2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve EC2 host fallback
+        id: ec2-host
+        env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          RESOLVED_HOST="${EC2_HOST:-}"
+          RESOLVED_HOST="${RESOLVED_HOST%$'\r'}"
+          RESOLVED_HOST="$(printf '%s' "$RESOLVED_HOST" | sed 's/[[:space:]]*$//')"
+          echo "value=$RESOLVED_HOST" >> "$GITHUB_OUTPUT"
+
+      - name: Validate SSM inputs
+        id: auth-check
+        env:
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${EC2_INSTANCE_ID:-}" ]; then
+            echo "::error::EC2_INSTANCE_ID secret is required."
+            exit 1
+          fi
+          if [ -z "${DOCKERHUB_USERNAME:-}" ]; then
+            echo "::error::DOCKERHUB_USERNAME is required."
+            exit 1
+          fi
+          if [ -n "${AWS_OIDC_ROLE_ARN:-}" ]; then
+            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "has_session_token=false" >> "$GITHUB_OUTPUT"
+          else
+            if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+              echo "::error::Set AWS_OIDC_ROLE_ARN or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY."
+              exit 1
+            fi
+            echo "auth_mode=access_key" >> "$GITHUB_OUTPUT"
+            if [ -n "${AWS_SESSION_TOKEN:-}" ]; then
+              echo "has_session_token=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_session_token=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'oidc' }}
+        uses: aws-actions/configure-aws-credentials@v6
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,EC2_DEPLOY_PATH,EC2_HOST
-          script_stop: false
-          script: |
-            set -Eeuo pipefail
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-session-name: gachi-be-deploy-ssm
 
-            read_env_value() {
-              local key="$1"
-              local raw
-              raw="$(sed -n "s/^${key}=//p" .env | tail -n1 || true)"
-              printf "%s" "$raw" \
-                | tr -d '\r' \
-                | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//'
-            }
+      - name: Configure AWS credentials (Access key fallback)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' && steps.auth-check.outputs.has_session_token == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
 
-            to_lower() {
-              local value="$1"
-              printf "%s" "$value" | tr '[:upper:]' '[:lower:]'
-            }
+      - name: Configure AWS credentials (Access key fallback without session token)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' && steps.auth-check.outputs.has_session_token != 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-            to_abs_path() {
-              local rel_or_abs="$1"
-              local candidate
-              if [ "${rel_or_abs#/}" = "$rel_or_abs" ]; then
-                candidate="$DEPLOY_PATH/${rel_or_abs#./}"
-              else
-                candidate="$rel_or_abs"
-              fi
-              realpath -m "$candidate"
-            }
+      - name: Build SSM command payload
+        id: ssm-payload
+        env:
+          EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
+          EC2_HOST: ${{ steps.ec2-host.outputs.value }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          set -Eeuo pipefail
+          SCRIPT_PATH="scripts/deploy-ec2.sh"
+          if [ ! -f "$SCRIPT_PATH" ]; then
+            echo "::error::$SCRIPT_PATH not found."
+            exit 1
+          fi
 
-            DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
-            DEPLOY_PATH="$(echo "$DEPLOY_PATH" | xargs)"
+          DEPLOY_BUNDLE_PATH="$RUNNER_TEMP/deploy-sync.tgz"
+          tar -czf "$DEPLOY_BUNDLE_PATH" \
+            deploy/docker-compose.yml \
+            deploy/.env.example \
+            deploy/HTTPS-SETUP.md \
+            deploy/nginx \
+            deploy/secrets/spring_mail_password.example.txt \
+            deploy/secrets/swagger_htpasswd.example.txt
 
-            echo "[1/7] Move to deploy path: $DEPLOY_PATH"
-            if [ ! -d "$DEPLOY_PATH" ]; then
-              echo "Deploy path not found: $DEPLOY_PATH"
-              exit 1
-            fi
-            cd "$DEPLOY_PATH"
-            echo "[debug] host=$(hostname) user=$(whoami) pwd=$(pwd)"
-            ls -al
+          SCRIPT_BASE64="$(base64 -w 0 "$SCRIPT_PATH")"
+          BUNDLE_BASE64="$(base64 -w 0 "$DEPLOY_BUNDLE_PATH")"
+          # CHUNK_SIZE and payload guard must be tuned together.
+          # Keep each command item reasonably small to avoid SSM request size limits.
+          CHUNK_SIZE=3000
+          TMP_PREFIX="/tmp/deploy-ec2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          REMOTE_SCRIPT_B64_PATH="${TMP_PREFIX}.sh.b64"
+          REMOTE_BUNDLE_B64_PATH="${TMP_PREFIX}.tgz.b64"
+          REMOTE_SCRIPT_PATH="${TMP_PREFIX}.sh"
+          REMOTE_BUNDLE_PATH="${TMP_PREFIX}.tgz"
 
-            echo "[2/7] Validate server-side .env preservation"
-            if [ ! -f .env ]; then
-              echo ".env not found in $DEPLOY_PATH. Create .env on EC2 before deploy."
-              exit 1
-            fi
+          COMMANDS_JSON="$(jq -cn \
+            --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+            --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+            --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
+            --arg remoteBundlePath "$REMOTE_BUNDLE_PATH" \
+            '[
+              "rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh)
+            ]')"
 
-            echo "[3/7] Pin latest backend image tag in .env"
-            if grep -q "^BACKEND_IMAGE=" .env; then
-              sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest|" .env
+          for ((i=0; i<${#SCRIPT_BASE64}; i+=CHUNK_SIZE)); do
+            CHUNK="${SCRIPT_BASE64:i:CHUNK_SIZE}"
+            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+              --arg chunk "$CHUNK" \
+              --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+              '. + [("printf %s " + ($chunk | @sh) + " >> " + ($remoteScriptB64Path | @sh))]')"
+          done
+
+          for ((i=0; i<${#BUNDLE_BASE64}; i+=CHUNK_SIZE)); do
+            CHUNK="${BUNDLE_BASE64:i:CHUNK_SIZE}"
+            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+              --arg chunk "$CHUNK" \
+              --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+              '. + [("printf %s " + ($chunk | @sh) + " >> " + ($remoteBundleB64Path | @sh))]')"
+          done
+
+          COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+            --arg deployPath "$EC2_DEPLOY_PATH" \
+            --arg ec2Host "$EC2_HOST" \
+            --arg dockerhubUsername "$DOCKERHUB_USERNAME" \
+            --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+            --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+            --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
+            --arg remoteBundlePath "$REMOTE_BUNDLE_PATH" \
+            '. + [
+              (
+                "base64 -d " + ($remoteScriptB64Path | @sh) + " > " + ($remoteScriptPath | @sh) +
+                " && chmod 700 " + ($remoteScriptPath | @sh) +
+                " && base64 -d " + ($remoteBundleB64Path | @sh) + " > " + ($remoteBundlePath | @sh) +
+                " && mkdir -p " + ($deployPath | @sh) +
+                " && tar -xzf " + ($remoteBundlePath | @sh) + " -C " + ($deployPath | @sh) + " --strip-components=1" +
+                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                "; status=$?; rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh) + "; exit $status"
+              )
+            ]')"
+
+          SSM_PARAMETERS="$(jq -cn \
+            --argjson commands "$COMMANDS_JSON" \
+            --arg executionTimeout "$SSM_EXECUTION_TIMEOUT_SECONDS" \
+            '{commands: $commands, executionTimeout: [$executionTimeout]}')"
+
+          PARAM_BYTES="$(printf '%s' "$SSM_PARAMETERS" | wc -c | tr -d ' ')"
+          COMMAND_COUNT="$(printf '%s' "$COMMANDS_JSON" | jq -r 'length')"
+          # SSM SendCommand request body limit is around 1MB.
+          # 900000B leaves safety margin for JSON escaping/overhead.
+          if [ "$PARAM_BYTES" -gt 900000 ]; then
+            echo "::error::SSM parameters payload too large (${PARAM_BYTES} bytes, commands=${COMMAND_COUNT}). Use smaller deploy bundle or switch to S3 artifact delivery."
+            exit 1
+          fi
+
+          {
+            echo "parameters<<EOF"
+            echo "$SSM_PARAMETERS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send deploy command via SSM
+        id: ssm-send
+        env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          SSM_PARAMETERS: ${{ steps.ssm-payload.outputs.parameters }}
+        run: |
+          set -Eeuo pipefail
+          COMMAND_ID="$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --comment "deploy-ec2 (run=${GITHUB_RUN_ID})" \
+            --max-concurrency "1" \
+            --max-errors "0" \
+            --parameters "$SSM_PARAMETERS" \
+            --query "Command.CommandId" \
+            --output text)"
+
+          if [ -z "$COMMAND_ID" ] || [ "$COMMAND_ID" = "None" ]; then
+            echo "::error::Failed to create SSM command."
+            exit 1
+          fi
+
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+          echo "SSM command created: $COMMAND_ID"
+
+      - name: Wait for SSM command completion
+        env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          COMMAND_ID: ${{ steps.ssm-send.outputs.command_id }}
+        run: |
+          set -Eeuo pipefail
+
+          MAX_ATTEMPTS=$(( (SSM_EXECUTION_TIMEOUT_SECONDS + SSM_POLL_INTERVAL_SECONDS - 1) / SSM_POLL_INTERVAL_SECONDS ))
+          STATUS=""
+          TERMINAL_REACHED="false"
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            STATUS="$(aws ssm get-command-invocation \
+              --region "$AWS_REGION" \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query "Status" \
+              --output text 2>/dev/null || true)"
+            if [ -z "$STATUS" ]; then
+              echo "[$attempt/$MAX_ATTEMPTS] status: not-ready"
             else
-              echo "BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest" >> .env
+              echo "[$attempt/$MAX_ATTEMPTS] status: $STATUS"
             fi
 
-            echo "[4/7] Validate SMTP/Swagger secrets and TLS files"
-            SECRET_FILE_REL="$(read_env_value SPRING_MAIL_PASSWORD_SECRET_FILE)"
-            SECRET_FILE_REL="${SECRET_FILE_REL:-./secrets/spring_mail_password.example.txt}"
-            SECRET_FILE_PATH="$(to_abs_path "$SECRET_FILE_REL")"
-            echo "[debug] secret file rel path: $SECRET_FILE_REL"
-            echo "[debug] secret file absolute path: $SECRET_FILE_PATH"
-            if [ -e "$SECRET_FILE_PATH" ]; then
-              if [ ! -r "$SECRET_FILE_PATH" ]; then
-                echo "SMTP secret file exists but is not readable: $SECRET_FILE_PATH"
-                exit 1
-              fi
-              if [ ! -s "$SECRET_FILE_PATH" ]; then
-                echo "SMTP secret file is empty: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
-              fi
-            else
-              echo "SMTP secret file not found: $SECRET_FILE_PATH (fallback env SPRING_MAIL_PASSWORD will be used if set)"
-            fi
-
-            SWAGGER_ENABLED_VALUE="$(to_lower "$(read_env_value SWAGGER_ENABLED)")"
-            echo "[debug] SWAGGER_ENABLED normalized value: ${SWAGGER_ENABLED_VALUE:-<empty>}"
-            if [ "$SWAGGER_ENABLED_VALUE" = "true" ]; then
-              SWAGGER_AUTH_FILE_REL="$(read_env_value SWAGGER_BASIC_AUTH_FILE)"
-              SWAGGER_AUTH_FILE_REL="${SWAGGER_AUTH_FILE_REL:-./secrets/swagger_htpasswd.txt}"
-              SWAGGER_AUTH_FILE_PATH="$(to_abs_path "$SWAGGER_AUTH_FILE_REL")"
-              EXPECTED_SWAGGER_AUTH_FILE_PATH="$(realpath -m "$DEPLOY_PATH/secrets/swagger_htpasswd.txt")"
-              if [ "$SWAGGER_AUTH_FILE_PATH" != "$EXPECTED_SWAGGER_AUTH_FILE_PATH" ]; then
-                echo "SWAGGER_BASIC_AUTH_FILE must point to ./secrets/swagger_htpasswd.txt for nginx auth_basic_user_file compatibility."
-                exit 1
-              fi
-              echo "[debug] swagger auth file absolute path: $SWAGGER_AUTH_FILE_PATH"
-              if [ ! -s "$SWAGGER_AUTH_FILE_PATH" ]; then
-                echo "Swagger auth file missing or empty: $SWAGGER_AUTH_FILE_PATH"
-                exit 1
-              fi
-              if [ ! -r "$SWAGGER_AUTH_FILE_PATH" ]; then
-                echo "Swagger auth file is not readable: $SWAGGER_AUTH_FILE_PATH"
-                exit 1
-              fi
-
-              TLS_CERT_FILE_REL="$(read_env_value SWAGGER_TLS_CERT_FILE)"
-              TLS_KEY_FILE_REL="$(read_env_value SWAGGER_TLS_KEY_FILE)"
-              TLS_CERT_FILE_REL="${TLS_CERT_FILE_REL:-./secrets/swagger_tls.crt}"
-              TLS_KEY_FILE_REL="${TLS_KEY_FILE_REL:-./secrets/swagger_tls.key}"
-              TLS_CERT_FILE_PATH="$(to_abs_path "$TLS_CERT_FILE_REL")"
-              TLS_KEY_FILE_PATH="$(to_abs_path "$TLS_KEY_FILE_REL")"
-              EXPECTED_TLS_CERT_FILE_PATH="$(realpath -m "$DEPLOY_PATH/secrets/swagger_tls.crt")"
-              EXPECTED_TLS_KEY_FILE_PATH="$(realpath -m "$DEPLOY_PATH/secrets/swagger_tls.key")"
-              if [ "$TLS_CERT_FILE_PATH" != "$EXPECTED_TLS_CERT_FILE_PATH" ] || [ "$TLS_KEY_FILE_PATH" != "$EXPECTED_TLS_KEY_FILE_PATH" ]; then
-                echo "SWAGGER_TLS_CERT_FILE and SWAGGER_TLS_KEY_FILE must point to ./secrets/swagger_tls.crt and ./secrets/swagger_tls.key."
-                exit 1
-              fi
-
-              SWAGGER_TLS_MODE="$(to_lower "$(read_env_value SWAGGER_TLS_MODE)")"
-              SWAGGER_TLS_MODE="${SWAGGER_TLS_MODE:-letsencrypt_ip}"
-              SWAGGER_TLS_COMMON_NAME="$(read_env_value SWAGGER_TLS_COMMON_NAME)"
-              if [ "$SWAGGER_TLS_MODE" = "letsencrypt_ip" ]; then
-                SWAGGER_TLS_IP="$(read_env_value SWAGGER_TLS_IP)"
-                SWAGGER_TLS_IP="${SWAGGER_TLS_IP:-$EC2_HOST}"
-                SWAGGER_TLS_IP="$(echo "$SWAGGER_TLS_IP" | xargs)"
-                if [ -z "$SWAGGER_TLS_IP" ]; then
-                  echo "SWAGGER_TLS_IP is empty. Set SWAGGER_TLS_IP in .env or EC2_HOST secret."
-                  exit 1
-                fi
-
-                CERTBOT_EMAIL_VALUE="$(read_env_value CERTBOT_EMAIL)"
-
-                if [ ! -s "$TLS_CERT_FILE_PATH" ] || [ ! -s "$TLS_KEY_FILE_PATH" ]; then
-                  BOOTSTRAP_CN="${SWAGGER_TLS_COMMON_NAME:-$SWAGGER_TLS_IP}"
-                  BOOTSTRAP_CN="${BOOTSTRAP_CN:-$(hostname)}"
-                  echo "::warning::Bootstrap self-signed TLS cert is generated to make nginx available for ACME challenge."
-                  mkdir -p "$(dirname "$TLS_CERT_FILE_PATH")"
-                  mkdir -p "$(dirname "$TLS_KEY_FILE_PATH")"
-                  openssl req -x509 -nodes -newkey rsa:2048 -days 7 \
-                    -keyout "$TLS_KEY_FILE_PATH" \
-                    -out "$TLS_CERT_FILE_PATH" \
-                    -subj "/CN=$BOOTSTRAP_CN"
-                  chmod 644 "$TLS_CERT_FILE_PATH"
-                  chmod 600 "$TLS_KEY_FILE_PATH"
-                fi
-
-                echo "[debug] issue/renew Let's Encrypt IP cert for $SWAGGER_TLS_IP"
-                set +e
-                docker compose --env-file .env up -d --no-deps nginx
-                NGINX_UP_EXIT_CODE=$?
-                set -e
-                echo "[debug] nginx up exit code: $NGINX_UP_EXIT_CODE"
-                if [ "$NGINX_UP_EXIT_CODE" -ne 0 ]; then
-                  echo "[error] failed to ensure nginx is running for ACME challenge."
-                  docker compose --env-file .env logs --tail=120 nginx || true
-                  exit "$NGINX_UP_EXIT_CODE"
-                fi
-
-                set +e
-                docker compose --env-file .env --profile tls rm -f certbot >/dev/null 2>&1
-                CERTBOT_RM_EXIT_CODE=$?
-                set -e
-                echo "[debug] certbot rm exit code: $CERTBOT_RM_EXIT_CODE"
-
-                CERTBOT_EXIT_CODE=0
-                if [ -n "${CERTBOT_EMAIL_VALUE:-}" ]; then
-                  set +e
-                  echo "[debug] running certbot certonly with email mode"
-                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --email "$CERTBOT_EMAIL_VALUE" -v
-                  CERTBOT_EXIT_CODE=$?
-                  set -e
-                else
-                  echo "::warning::CERTBOT_EMAIL is empty. Certificate account will be registered without email."
-                  set +e
-                  echo "[debug] running certbot certonly without email mode"
-                  docker compose --env-file .env --profile tls run --rm --entrypoint certbot certbot certonly --non-interactive --agree-tos --keep-until-expiring --preferred-profile shortlived --webroot -w /var/www/certbot --cert-name swagger-ip --ip-address "$SWAGGER_TLS_IP" --register-unsafely-without-email -v
-                  CERTBOT_EXIT_CODE=$?
-                  set -e
-                fi
-                echo "[debug] certbot certonly exit code: $CERTBOT_EXIT_CODE"
-
-                if [ "$CERTBOT_EXIT_CODE" -ne 0 ]; then
-                  echo "[error] certbot certonly failed (exit=$CERTBOT_EXIT_CODE)."
-                  docker compose --env-file .env logs --tail=120 nginx || true
-                  exit "$CERTBOT_EXIT_CODE"
-                fi
-
-                docker compose --env-file .env --profile tls run --rm --entrypoint /bin/sh certbot -c \
-                  "set -eu; \
-                  cp /etc/letsencrypt/live/swagger-ip/fullchain.pem /workspace/secrets/swagger_tls.crt; \
-                  cp /etc/letsencrypt/live/swagger-ip/privkey.pem /workspace/secrets/swagger_tls.key; \
-                  chmod 644 /workspace/secrets/swagger_tls.crt; \
-                  chmod 600 /workspace/secrets/swagger_tls.key"
-              fi
-
-              if [ ! -s "$TLS_CERT_FILE_PATH" ] || [ ! -s "$TLS_KEY_FILE_PATH" ]; then
-                echo "::warning::TLS cert/key missing for Swagger HTTPS. Generating self-signed cert. This is NOT recommended for production!"
-                mkdir -p "$(dirname "$TLS_CERT_FILE_PATH")"
-                mkdir -p "$(dirname "$TLS_KEY_FILE_PATH")"
-                openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
-                  -keyout "$TLS_KEY_FILE_PATH" \
-                  -out "$TLS_CERT_FILE_PATH" \
-                  -subj "/CN=${SWAGGER_TLS_IP:-$(hostname)}"
-                chmod 644 "$TLS_CERT_FILE_PATH"
-                chmod 600 "$TLS_KEY_FILE_PATH"
-              fi
-
-              if ! docker compose --env-file .env exec -T nginx sh -c "test -r /etc/nginx/secrets/swagger_tls.crt && test -r /etc/nginx/secrets/swagger_tls.key"; then
-                echo "TLS cert/key are not readable from nginx container path."
-                ls -l "$TLS_CERT_FILE_PATH" "$TLS_KEY_FILE_PATH" || true
-                exit 1
-              fi
-            else
-              echo "[debug] SWAGGER_ENABLED is not true. Swagger auth/tls validation skipped."
-            fi
-
-            echo "[5/7] Pull latest backend image"
-            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-            docker compose --env-file .env pull backend
-
-            echo "[6/7] Recreate services with synced compose/nginx settings"
-            docker compose --env-file .env up -d --remove-orphans backend
-            BACKEND_HEALTH="starting"
-            for _ in $(seq 1 36); do
-              BACKEND_HEALTH="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' gachi-backend 2>/dev/null || echo "missing")"
-              echo "[debug] backend health: $BACKEND_HEALTH"
-              if [ "$BACKEND_HEALTH" = "healthy" ]; then
+            case "$STATUS" in
+              Success|Failed|TimedOut|Cancelled|Cancelling)
+                TERMINAL_REACHED="true"
                 break
-              fi
-              sleep 5
-            done
-            if [ "$BACKEND_HEALTH" != "healthy" ]; then
-              echo "backend health check timed out. Check backend logs."
-              docker compose --env-file .env logs --tail=120 backend || true
-              exit 1
-            fi
-            docker compose --env-file .env up -d --remove-orphans --force-recreate --no-deps nginx
+                ;;
+              *)
+                sleep "$SSM_POLL_INTERVAL_SECONDS"
+                ;;
+            esac
+          done
 
-            echo "[7/7] Print deploy status"
-            docker image prune -f
-            docker compose --env-file .env ps
-            docker compose --env-file .env logs --tail=80 backend nginx || true
+          INVOCATION_JSON="$(aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --output json)"
+
+          FINAL_STATUS="$(printf '%s' "$INVOCATION_JSON" | jq -r '.Status // "Unknown"')"
+          RESPONSE_CODE="$(printf '%s' "$INVOCATION_JSON" | jq -r '.ResponseCode // -1')"
+          STDERR_CONTENT="$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardErrorContent // ""')"
+          STDOUT_CONTENT="$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardOutputContent // ""')"
+          STDOUT_LENGTH="${#STDOUT_CONTENT}"
+          STDERR_LENGTH="${#STDERR_CONTENT}"
+
+          echo "::group::SSM stdout"
+          printf '%s\n' "$STDOUT_CONTENT"
+          echo "::endgroup::"
+
+          if [ -n "$STDERR_CONTENT" ]; then
+            echo "::group::SSM stderr"
+            printf '%s\n' "$STDERR_CONTENT"
+            echo "::endgroup::"
+          fi
+
+          if [ "$STDOUT_LENGTH" -ge 24000 ] || [ "$STDERR_LENGTH" -ge 24000 ]; then
+            echo "::warning::SSM stdout/stderr may be truncated at 24000 characters. For full logs, check EC2 directly or enable S3/CloudWatch output for Run Command."
+          fi
+
+          if [ "$TERMINAL_REACHED" != "true" ] && [ "$FINAL_STATUS" != "Success" ] && [ "$FINAL_STATUS" != "Failed" ] && [ "$FINAL_STATUS" != "TimedOut" ] && [ "$FINAL_STATUS" != "Cancelled" ] && [ "$FINAL_STATUS" != "Cancelling" ]; then
+            echo "::error::Polling timed out before terminal SSM status. finalStatus=$FINAL_STATUS"
+            exit 1
+          fi
+
+          if [ "$FINAL_STATUS" != "Success" ]; then
+            echo "::error::SSM command failed. status=$FINAL_STATUS responseCode=$RESPONSE_CODE"
+            exit 1
+          fi
