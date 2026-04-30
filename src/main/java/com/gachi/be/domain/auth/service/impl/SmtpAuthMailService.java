@@ -26,6 +26,9 @@ public class SmtpAuthMailService implements AuthMailService {
     if (StringUtils.hasText(authProperties.getEmail().getFromAddress())) {
       message.setFrom(authProperties.getEmail().getFromAddress());
     }
+    if (StringUtils.hasText(authProperties.getEmail().getReplyTo())) {
+      message.setReplyTo(authProperties.getEmail().getReplyTo());
+    }
 
     message.setSubject(authProperties.getEmail().getSubject());
     message.setText(

@@ -142,6 +142,7 @@ public class AuthServiceImpl implements AuthService {
             .consentAgreedAt(now)
             .consentVersion(authProperties.getConsentVersion())
             .passwordUpdatedAt(now)
+            .passwordChangeRequired(false)
             .build();
 
     User savedUser;
@@ -175,6 +176,7 @@ public class AuthServiceImpl implements AuthService {
     if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
       throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
     }
+    ensurePasswordChangeNotRequired(user);
 
     boolean rememberMe = Boolean.TRUE.equals(request.rememberMe());
     return issueTokens(
@@ -204,6 +206,7 @@ public class AuthServiceImpl implements AuthService {
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
     }
+    ensurePasswordChangeNotRequired(user);
 
     existingToken.revoke();
     String nextDeviceInfo = mergeNullable(deviceInfo, existingToken.getDeviceInfo());
@@ -331,6 +334,12 @@ public class AuthServiceImpl implements AuthService {
   private void enforcePasswordStrength(String password) {
     if (!PasswordStrengthEvaluator.evaluate(password).canSignup()) {
       throw new BusinessException(ErrorCode.AUTH_PASSWORD_STRENGTH_DANGEROUS);
+    }
+  }
+
+  private void ensurePasswordChangeNotRequired(User user) {
+    if (user.isPasswordChangeRequired()) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_CHANGE_REQUIRED);
     }
   }
 

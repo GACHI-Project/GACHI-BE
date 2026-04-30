@@ -65,6 +65,28 @@ public class JwtTokenProvider {
     return new JwtToken(token, expiresAt);
   }
 
+  public AccessTokenClaims parseAccessToken(String token) {
+    try {
+      Claims claims =
+          Jwts.parser().verifyWith(signingKey()).build().parseSignedClaims(token).getPayload();
+
+      Object type = claims.get(CLAIM_TYPE);
+      if (!"access".equals(type)) {
+        throw new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_INVALID);
+      }
+      if (!authProperties.getJwt().getIssuer().equals(claims.getIssuer())) {
+        throw new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_INVALID);
+      }
+
+      return new AccessTokenClaims(
+          Long.parseLong(claims.getSubject()), claims.get(CLAIM_LOGIN_ID, String.class));
+    } catch (ExpiredJwtException e) {
+      throw new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_EXPIRED);
+    } catch (JwtException | IllegalArgumentException e) {
+      throw new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_INVALID);
+    }
+  }
+
   public RefreshTokenClaims parseRefreshToken(String token) {
     try {
       Claims claims =
@@ -103,6 +125,17 @@ public class JwtTokenProvider {
     public JwtToken(String token, OffsetDateTime expiresAt) {
       this.token = token;
       this.expiresAt = expiresAt;
+    }
+  }
+
+  @Getter
+  public static class AccessTokenClaims {
+    private final Long userId;
+    private final String loginId;
+
+    public AccessTokenClaims(Long userId, String loginId) {
+      this.userId = userId;
+      this.loginId = loginId;
     }
   }
 

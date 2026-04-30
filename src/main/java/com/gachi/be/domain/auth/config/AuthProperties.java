@@ -80,6 +80,7 @@ public record AuthProperties(
       @DefaultValue("5") @Min(1) int maxAttempts,
       @DefaultValue("1800") @Min(1) long verifiedTtlSeconds,
       @DefaultValue("") String fromAddress,
+      @DefaultValue("") String replyTo,
       @DefaultValue("[GACHI] Email verification code") String subject,
       @DefaultValue("false") boolean noopAllowed) {
 
@@ -105,6 +106,10 @@ public record AuthProperties(
 
     public String getFromAddress() {
       return fromAddress;
+    }
+
+    public String getReplyTo() {
+      return replyTo;
     }
 
     public String getSubject() {

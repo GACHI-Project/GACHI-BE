@@ -1,49 +1,339 @@
 name: Deploy to EC2
 
-on:
+"on":
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-ec2-ssm
+      cancel-in-progress: false
+    env:
+      SSM_EXECUTION_TIMEOUT_SECONDS: "3600"
+      SSM_POLL_INTERVAL_SECONDS: "10"
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve deploy path
+        id: deploy-path
         env:
+          EC2_DEPLOY_PATH_SECRET: ${{ secrets.EC2_DEPLOY_PATH }}
+        run: |
+          RESOLVED_PATH="${EC2_DEPLOY_PATH_SECRET:-}"
+          RESOLVED_PATH="${RESOLVED_PATH%$'\r'}"
+          RESOLVED_PATH="$(printf '%s' "$RESOLVED_PATH" | sed 's/[[:space:]]*$//')"
+          if [ -n "$RESOLVED_PATH" ]; then
+            echo "value=$RESOLVED_PATH" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=/home/ubuntu/GACHI-BE/deploy" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve AWS region
+        id: aws-region
+        env:
+          AWS_REGION_SECRET: ${{ secrets.AWS_REGION }}
+        run: |
+          RESOLVED_REGION="${AWS_REGION_SECRET:-}"
+          RESOLVED_REGION="${RESOLVED_REGION%$'\r'}"
+          RESOLVED_REGION="$(printf '%s' "$RESOLVED_REGION" | sed 's/[[:space:]]*$//')"
+          if [ -n "$RESOLVED_REGION" ]; then
+            echo "value=$RESOLVED_REGION" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=ap-northeast-2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve EC2 host fallback
+        id: ec2-host
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          RESOLVED_HOST="${EC2_HOST:-}"
+          RESOLVED_HOST="${RESOLVED_HOST%$'\r'}"
+          RESOLVED_HOST="$(printf '%s' "$RESOLVED_HOST" | sed 's/[[:space:]]*$//')"
+          echo "value=$RESOLVED_HOST" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve DockerHub token parameter
+        id: dockerhub-token-parameter
+        env:
+          DOCKERHUB_TOKEN_PARAMETER_NAME_SECRET: ${{ secrets.DOCKERHUB_TOKEN_PARAMETER_NAME }}
+        run: |
+          VALUE="${DOCKERHUB_TOKEN_PARAMETER_NAME_SECRET:-}"
+          VALUE="${VALUE%$'\r'}"
+          VALUE="$(printf '%s' "$VALUE" | sed 's/[[:space:]]*$//')"
+          if [ -n "$VALUE" ]; then
+            echo "value=$VALUE" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=/gachi/prod/dockerhub/token" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate SSM inputs
+        id: auth-check
+        env:
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${EC2_INSTANCE_ID:-}" ]; then
+            echo "::error::EC2_INSTANCE_ID secret is required."
+            exit 1
+          fi
+          if [ -z "${DOCKERHUB_USERNAME:-}" ]; then
+            echo "::error::DOCKERHUB_USERNAME is required."
+            exit 1
+          fi
+          if [ -n "${AWS_OIDC_ROLE_ARN:-}" ]; then
+            echo "auth_mode=oidc" >> "$GITHUB_OUTPUT"
+            echo "has_session_token=false" >> "$GITHUB_OUTPUT"
+          else
+            if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+              echo "::error::Set AWS_OIDC_ROLE_ARN or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY."
+              exit 1
+            fi
+            echo "auth_mode=access_key" >> "$GITHUB_OUTPUT"
+            if [ -n "${AWS_SESSION_TOKEN:-}" ]; then
+              echo "has_session_token=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_session_token=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'oidc' }}
+        uses: aws-actions/configure-aws-credentials@v6
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DOCKERHUB_USERNAME,DOCKERHUB_TOKEN,EC2_DEPLOY_PATH
-          script: |
-            set -e
-            DEPLOY_PATH="${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}"
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-session-name: gachi-be-deploy-ssm
 
-            cd "$DEPLOY_PATH"
-            test -f .env || { echo ".env not found in $DEPLOY_PATH"; exit 1; }
+      - name: Configure AWS credentials (Access key fallback)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' && steps.auth-check.outputs.has_session_token == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
 
-            if grep -q '^BACKEND_IMAGE=' .env; then
-              sed -i "s|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest|" .env
+      - name: Configure AWS credentials (Access key fallback without session token)
+        if: ${{ steps.auth-check.outputs.auth_mode == 'access_key' && steps.auth-check.outputs.has_session_token != 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ steps.aws-region.outputs.value }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Build SSM command payload
+        id: ssm-payload
+        env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
+          EC2_HOST: ${{ steps.ec2-host.outputs.value }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN_PARAMETER_NAME: ${{ steps.dockerhub-token-parameter.outputs.value }}
+        run: |
+          set -Eeuo pipefail
+          SCRIPT_PATH="scripts/deploy-ec2.sh"
+          if [ ! -f "$SCRIPT_PATH" ]; then
+            echo "::error::$SCRIPT_PATH not found."
+            exit 1
+          fi
+
+          DEPLOY_BUNDLE_PATH="$RUNNER_TEMP/deploy-sync.tgz"
+          tar -czf "$DEPLOY_BUNDLE_PATH" \
+            deploy/docker-compose.yml \
+            deploy/.env.example \
+            deploy/HTTPS-SETUP.md \
+            deploy/nginx \
+            deploy/secrets/spring_mail_password.example.txt \
+            deploy/secrets/swagger_htpasswd.example.txt
+
+          SCRIPT_BASE64="$(base64 -w 0 "$SCRIPT_PATH")"
+          BUNDLE_BASE64="$(base64 -w 0 "$DEPLOY_BUNDLE_PATH")"
+          # CHUNK_SIZE and payload guard must be tuned together.
+          # Keep each command item reasonably small to avoid SSM request size limits.
+          CHUNK_SIZE=3000
+          TMP_PREFIX="/tmp/deploy-ec2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          REMOTE_SCRIPT_B64_PATH="${TMP_PREFIX}.sh.b64"
+          REMOTE_BUNDLE_B64_PATH="${TMP_PREFIX}.tgz.b64"
+          REMOTE_SCRIPT_PATH="${TMP_PREFIX}.sh"
+          REMOTE_BUNDLE_PATH="${TMP_PREFIX}.tgz"
+
+          COMMANDS_JSON="$(jq -cn \
+            --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+            --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+            --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
+            --arg remoteBundlePath "$REMOTE_BUNDLE_PATH" \
+            '[
+              "rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh)
+            ]')"
+
+          for ((i=0; i<${#SCRIPT_BASE64}; i+=CHUNK_SIZE)); do
+            CHUNK="${SCRIPT_BASE64:i:CHUNK_SIZE}"
+            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+              --arg chunk "$CHUNK" \
+              --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+              '. + [("printf %s " + ($chunk | @sh) + " >> " + ($remoteScriptB64Path | @sh))]')"
+          done
+
+          for ((i=0; i<${#BUNDLE_BASE64}; i+=CHUNK_SIZE)); do
+            CHUNK="${BUNDLE_BASE64:i:CHUNK_SIZE}"
+            COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+              --arg chunk "$CHUNK" \
+              --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+              '. + [("printf %s " + ($chunk | @sh) + " >> " + ($remoteBundleB64Path | @sh))]')"
+          done
+
+          COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
+            --arg awsRegion "$AWS_REGION" \
+            --arg deployPath "$EC2_DEPLOY_PATH" \
+            --arg ec2Host "$EC2_HOST" \
+            --arg dockerhubUsername "$DOCKERHUB_USERNAME" \
+            --arg dockerhubTokenParameterName "$DOCKERHUB_TOKEN_PARAMETER_NAME" \
+            --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
+            --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
+            --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
+            --arg remoteBundlePath "$REMOTE_BUNDLE_PATH" \
+            '. + [
+              (
+                "base64 -d " + ($remoteScriptB64Path | @sh) + " > " + ($remoteScriptPath | @sh) +
+                " && chmod 700 " + ($remoteScriptPath | @sh) +
+                " && base64 -d " + ($remoteBundleB64Path | @sh) + " > " + ($remoteBundlePath | @sh) +
+                " && mkdir -p " + ($deployPath | @sh) +
+                " && tar -xzf " + ($remoteBundlePath | @sh) + " -C " + ($deployPath | @sh) + " --strip-components=1" +
+                " && if command -v aws >/dev/null 2>&1; then DOCKERHUB_TOKEN=\"$(aws ssm get-parameter --region " + ($awsRegion | @sh) + " --name " + ($dockerhubTokenParameterName | @sh) + " --with-decryption --query Parameter.Value --output text 2>/dev/null || true)\"; else DOCKERHUB_TOKEN=\"\"; fi" +
+                " && if [ -z \"$DOCKERHUB_TOKEN\" ]; then echo \"[warn] DOCKERHUB_TOKEN parameter load skipped or failed. deploy script will try current daemon credentials.\"; fi" +
+                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                "; status=$?; rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh) + "; exit $status"
+              )
+            ]')"
+
+          SSM_PARAMETERS="$(jq -cn \
+            --argjson commands "$COMMANDS_JSON" \
+            --arg executionTimeout "$SSM_EXECUTION_TIMEOUT_SECONDS" \
+            '{commands: $commands, executionTimeout: [$executionTimeout]}')"
+
+          PARAM_BYTES="$(printf '%s' "$SSM_PARAMETERS" | wc -c | tr -d ' ')"
+          COMMAND_COUNT="$(printf '%s' "$COMMANDS_JSON" | jq -r 'length')"
+          # SSM SendCommand request body limit is around 1MB.
+          # 900000B leaves safety margin for JSON escaping/overhead.
+          if [ "$PARAM_BYTES" -gt 900000 ]; then
+            echo "::error::SSM parameters payload too large (${PARAM_BYTES} bytes, commands=${COMMAND_COUNT}). Use smaller deploy bundle or switch to S3 artifact delivery."
+            exit 1
+          fi
+
+          {
+            echo "parameters<<EOF"
+            echo "$SSM_PARAMETERS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send deploy command via SSM
+        id: ssm-send
+        env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          SSM_PARAMETERS: ${{ steps.ssm-payload.outputs.parameters }}
+        run: |
+          set -Eeuo pipefail
+          COMMAND_ID="$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --document-name "AWS-RunShellScript" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --comment "deploy-ec2 (run=${GITHUB_RUN_ID})" \
+            --max-concurrency "1" \
+            --max-errors "0" \
+            --parameters "$SSM_PARAMETERS" \
+            --query "Command.CommandId" \
+            --output text)"
+
+          if [ -z "$COMMAND_ID" ] || [ "$COMMAND_ID" = "None" ]; then
+            echo "::error::Failed to create SSM command."
+            exit 1
+          fi
+
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+          echo "SSM command created: $COMMAND_ID"
+
+      - name: Wait for SSM command completion
+        env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          COMMAND_ID: ${{ steps.ssm-send.outputs.command_id }}
+        run: |
+          set -Eeuo pipefail
+
+          MAX_ATTEMPTS=$(( (SSM_EXECUTION_TIMEOUT_SECONDS + SSM_POLL_INTERVAL_SECONDS - 1) / SSM_POLL_INTERVAL_SECONDS ))
+          STATUS=""
+          TERMINAL_REACHED="false"
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            STATUS="$(aws ssm get-command-invocation \
+              --region "$AWS_REGION" \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$EC2_INSTANCE_ID" \
+              --query "Status" \
+              --output text 2>/dev/null || true)"
+            if [ -z "$STATUS" ]; then
+              echo "[$attempt/$MAX_ATTEMPTS] status: not-ready"
             else
-              echo "BACKEND_IMAGE=${DOCKERHUB_USERNAME}/gachi-be:latest" >> .env
+              echo "[$attempt/$MAX_ATTEMPTS] status: $STATUS"
             fi
 
-            if grep -q '^AI_IMAGE=' .env; then
-              sed -i "s|^AI_IMAGE=.*|AI_IMAGE=${DOCKERHUB_USERNAME}/gachi-ai:latest|" .env
-            else
-              echo "AI_IMAGE=${DOCKERHUB_USERNAME}/gachi-ai:latest" >> .env
-            fi
+            case "$STATUS" in
+              Success|Failed|TimedOut|Cancelled|Cancelling)
+                TERMINAL_REACHED="true"
+                break
+                ;;
+              *)
+                sleep "$SSM_POLL_INTERVAL_SECONDS"
+                ;;
+            esac
+          done
 
-            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-            docker compose --env-file .env pull backend ai
-            docker compose --env-file .env up -d --remove-orphans
-            docker image prune -f
-            docker compose --env-file .env ps
+          INVOCATION_JSON="$(aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --output json)"
+
+          FINAL_STATUS="$(printf '%s' "$INVOCATION_JSON" | jq -r '.Status // "Unknown"')"
+          RESPONSE_CODE="$(printf '%s' "$INVOCATION_JSON" | jq -r '.ResponseCode // -1')"
+          STDERR_CONTENT="$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardErrorContent // ""')"
+          STDOUT_CONTENT="$(printf '%s' "$INVOCATION_JSON" | jq -r '.StandardOutputContent // ""')"
+          STDOUT_LENGTH="${#STDOUT_CONTENT}"
+          STDERR_LENGTH="${#STDERR_CONTENT}"
+
+          echo "::group::SSM stdout"
+          printf '%s\n' "$STDOUT_CONTENT"
+          echo "::endgroup::"
+
+          if [ -n "$STDERR_CONTENT" ]; then
+            echo "::group::SSM stderr"
+            printf '%s\n' "$STDERR_CONTENT"
+            echo "::endgroup::"
+          fi
+
+          if [ "$STDOUT_LENGTH" -ge 24000 ] || [ "$STDERR_LENGTH" -ge 24000 ]; then
+            echo "::warning::SSM stdout/stderr may be truncated at 24000 characters. For full logs, check EC2 directly or enable S3/CloudWatch output for Run Command."
+          fi
+
+          if [ "$TERMINAL_REACHED" != "true" ] && [ "$FINAL_STATUS" != "Success" ] && [ "$FINAL_STATUS" != "Failed" ] && [ "$FINAL_STATUS" != "TimedOut" ] && [ "$FINAL_STATUS" != "Cancelled" ] && [ "$FINAL_STATUS" != "Cancelling" ]; then
+            echo "::error::Polling timed out before terminal SSM status. finalStatus=$FINAL_STATUS"
+            exit 1
+          fi
+
+          if [ "$FINAL_STATUS" != "Success" ]; then
+            echo "::error::SSM command failed. status=$FINAL_STATUS responseCode=$RESPONSE_CODE"
+            exit 1
+          fi
