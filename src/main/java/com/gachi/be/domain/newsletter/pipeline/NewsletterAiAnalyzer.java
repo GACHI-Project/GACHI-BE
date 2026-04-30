@@ -3,7 +3,7 @@ package com.gachi.be.domain.newsletter.pipeline;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gachi.be.domain.checklist.entity.ChecklistItem;
+import com.gachi.be.domain.checklist.entity.Checklist;
 import com.gachi.be.domain.checklist.repository.ChecklistItemRepository;
 import com.gachi.be.domain.todo.entity.TodoItem;
 import com.gachi.be.domain.todo.repository.TodoItemRepository;
@@ -170,12 +170,12 @@ public class NewsletterAiAnalyzer {
       return;
     }
 
-    List<ChecklistItem> entities =
+    List<Checklist> entities =
         items.stream()
             .filter(dto -> dto.content() != null && !dto.content().isBlank())
             .map(
                 dto ->
-                    ChecklistItem.builder()
+                    Checklist.builder()
                         .newsletterId(newsletterId)
                         .content(dto.content().trim())
                         .detail(dto.detail() != null ? dto.detail().trim() : null)

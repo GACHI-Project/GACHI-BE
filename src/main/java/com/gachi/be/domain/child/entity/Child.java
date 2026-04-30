@@ -54,6 +54,9 @@ public class Child {
   @Column(name = "updated_at", nullable = false)
   private LocalDateTime updatedAt;
 
+  @Column(name = "deleted_at")
+  private LocalDateTime deletedAt;
+
   @Builder
   public Child(
       User user,
@@ -83,4 +86,13 @@ public class Child {
   protected void onUpdate() {
     updatedAt = LocalDateTime.now();
   }
+
+  public void softDelete() {
+      this.deletedAt = LocalDateTime.now();
+  }
+
+  public void updateColorCode(String newColorCode) {
+      this.colorCode = newColorCode;
+  }
+
 }
