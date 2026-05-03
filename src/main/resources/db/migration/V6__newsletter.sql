@@ -1,4 +1,3 @@
-
 -- deleted_at 컬럼 추가 (ALTER) + newsletter 테이블 생성
 
 -- null = 활성 자녀, not null = 삭제된 자녀 (Soft Delete)
