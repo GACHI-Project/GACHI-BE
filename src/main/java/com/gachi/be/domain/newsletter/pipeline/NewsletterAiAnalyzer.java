@@ -4,9 +4,10 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.checklist.entity.Checklist;
+import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
-import com.gachi.be.domain.todo.entity.TodoItem;
-import com.gachi.be.domain.todo.repository.TodoItemRepository;
+import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.config.external.OpenAiProperties;
 import com.gachi.be.global.exception.ExternalApiException;
@@ -37,19 +38,24 @@ public class NewsletterAiAnalyzer {
 
   private final OpenAiProperties openAiProperties;
   private final ObjectMapper objectMapper;
-  private final ChecklistRepository checklistItemRepository;
-  private final TodoItemRepository todoItemRepository;
+  private final ChecklistRepository checklistRepository;
+  private final NewsletterRepository newsletterRepository;
 
   /**
    * 가정통신문 전체 AI 분석을 수행하고 결과를 DB에 저장.
    *
-   * <p>분석 기준 텍스트: - 제목/체크리스트/해야할일: originalText (한국어 원문 기준) → 번역 텍스트보다 원문이 날짜, 고유명사 등을 더 정확하게 포함하기
+   * 분석 기준 텍스트: - 제목/체크리스트/해야할일: originalText (한국어 원문 기준) → 번역 텍스트보다 원문이 날짜, 고유명사 등을 더 정확하게 포함하기
    * 때문 - 요약: language=KO면 originalText, 그 외 translatedText 기준 → 사용자 언어로 읽기 편한 요약을 제공하기 위해
    */
   public AiAnalysisResult analyze(
       Long newsletterId, String originalText, String translatedText, String language) {
 
     log.info("[AiAnalyzer] 분석 시작. newsletterId={}, language={}", newsletterId, language);
+
+    Long userId=newsletterRepository.findById(newsletterId)
+        .map(Newsletter::getUserId)
+        .orElseThrow(()-> new IllegalStateException(
+            "[AiAnalyzer] newsletter를 찾을 수 없습니다. newsletterId=" + newsletterId));
 
     // 요약 기준 텍스트 결정
     String summarySourceText =
@@ -64,25 +70,18 @@ public class NewsletterAiAnalyzer {
     log.debug("[AiAnalyzer] 요약 완료. length={}chars", summary.length());
 
     // 체크리스트 추출 + DB 저장
-    extractAndSaveChecklist(newsletterId, originalText);
+    extractAndSaveChecklist(newsletterId, userId, originalText);
     log.debug("[AiAnalyzer] 체크리스트 저장 완료.");
 
     // 해야 할 일 추출 + DB 저장
-    extractAndSaveTodos(newsletterId, originalText);
+    extractAndSaveTodos(newsletterId, userId, originalText);
     log.debug("[AiAnalyzer] 해야 할 일 저장 완료.");
 
     log.info("[AiAnalyzer] 분석 완료. newsletterId={}", newsletterId);
     return new AiAnalysisResult(title, summary);
   }
 
-  /**
-   * 가정통신문 원문에서 제목을 추출.
-   *
-   * <p>프롬프트 설명: 시스템: AI에게 "제목만 반환하라"고 명확히 지시. 설명이나 부가 텍스트 없이 제목 텍스트만 반환하도록 함. 30자 제한은 목록 화면에서 잘리지
-   * 않기 위한 UI 제약.
-   *
-   * <p>사용자: 원문 텍스트를 전달.
-   */
+  /** 가정통신문 원문에서 제목을 추출.*/
   private String extractTitle(String originalText) {
     // 시스템 프롬프트 (AI 역할 + 출력 형식 지정)
     String systemPrompt =
@@ -141,7 +140,7 @@ public class NewsletterAiAnalyzer {
    * (UI에서 굵게 표시) - detail: 한 줄 상세 설명 (UI에서 작게 표시) - 최대 10개로 제한 (너무 많으면 사용자가 압도됨) TODO: 이거 더 얘기해보기 -
    * JSON 외 다른 텍스트 절대 금지 (파싱 실패 방지)
    */
-  private void extractAndSaveChecklist(Long newsletterId, String originalText) {
+  private void extractAndSaveChecklist(Long newsletterId, Long userId, String originalText) {
     // 시스템 프롬프트
     String systemPrompt =
         """
@@ -162,37 +161,39 @@ public class NewsletterAiAnalyzer {
         형식: [{"content": "항목명", "detail": null}]
         """;
 
-    String response = callOpenAi(systemPrompt, originalText, 800);
+      String response = callOpenAi(systemPrompt, originalText, 800);
+      List<ChecklistItemDto> items = parseJsonList(response, new TypeReference<>() {});
 
-    List<ChecklistItemDto> items = parseJsonList(response, new TypeReference<>() {});
-    if (items == null || items.isEmpty()) {
-      log.warn("[AiAnalyzer] 체크리스트 추출 결과 없음. newsletterId={}", newsletterId);
-      return;
-    }
+      if (items == null || items.isEmpty()) {
+          log.warn("[AiAnalyzer] 체크리스트 추출 결과 없음. newsletterId={}", newsletterId);
+          return;
+      }
 
-    List<Checklist> entities =
-        items.stream()
-            .filter(dto -> dto.content() != null && !dto.content().isBlank())
-            .map(
-                dto ->
-                    Checklist.builder()
-                        .newsletterId(newsletterId)
-                        .content(dto.content().trim())
-                        .detail(dto.detail() != null ? dto.detail().trim() : null)
-                        .build())
-            .toList();
+      List<Checklist> entities =
+          items.stream()
+              .filter(dto -> dto.content() != null && !dto.content().isBlank())
+              .map(dto ->
+                  Checklist.builder()
+                      .newsletterId(newsletterId)
+                      .userId(userId)
+                      .type(ChecklistType.CHECKLIST)
+                      .content(dto.content().trim())
+                      .detail(dto.detail() != null ? dto.detail().trim() : null)
+                      .targetDate(null)
+                      .targetDateLabel(null)
+                      .build())
+              .toList();
 
-    checklistItemRepository.saveAll(entities);
-    log.debug("[AiAnalyzer] 체크리스트 {}개 저장 완료.", entities.size());
+      checklistRepository.saveAll(entities);
+      log.debug("[AiAnalyzer] 체크리스트 {}개 저장 완료.", entities.size());
   }
 
   /**
    * 가정통신문에서 날짜 기반 해야 할 일을 추출하고 DB에 저장. 프롬프트 설명: 시스템: 날짜 맥락이 중요한 행동 계획 추출. - targetDate: 명확한 날짜가 있으면
    * YYYY-MM-DD, 없으면 null - targetDateLabel: 사용자에게 보여줄 문구 → 날짜 있으면 "5월 15일", 없으면 "지금 바로" / "행사 전날" 등
-   * 맥락에 맞게 - 오늘 날짜를 프롬프트에 주입하여 "내일", "이번 주" 등 상대적 표현을 절대 날짜로 변환 - 최대 5개로 제한 (너무 많으면 핵심이 희석됨) TODO:
-   * 이거 더 얘기해보기
+   * 맥락에 맞게 - 오늘 날짜를 프롬프트에 주입하여 "내일", "이번 주" 등 상대적 표현을 절대 날짜로 변환 - 최대 5개로 제한 (너무 많으면 핵심이 희석됨) TODO: 이거 더 얘기해보기
    */
-  private void extractAndSaveTodos(Long newsletterId, String originalText) {
+  private void extractAndSaveTodos(Long newsletterId, Long userId, String originalText) {
     // 오늘 날짜를 프롬프트에 주입 (상대적 날짜 표현 변환을 위해)
     String today = LocalDate.now().toString(); // 예: "2026-04-13"
 
@@ -227,35 +228,39 @@ public class NewsletterAiAnalyzer {
       return;
     }
 
-    List<TodoItem> entities =
-        items.stream()
-            .filter(dto -> dto.content() != null && !dto.content().isBlank())
-            .map(
-                dto -> {
+      List<Checklist> entities =
+          items.stream()
+              .filter(dto -> dto.content() != null && !dto.content().isBlank())
+              .map(dto -> {
+                  // targetDate 문자열 파싱 (null 또는 "null" 문자열 모두 처리)
                   LocalDate targetDate = null;
                   if (dto.targetDate() != null
                       && !dto.targetDate().isBlank()
                       && !"null".equals(dto.targetDate())) {
-                    try {
-                      targetDate = LocalDate.parse(dto.targetDate());
-                    } catch (Exception e) {
-                      log.warn("[AiAnalyzer] targetDate 파싱 실패. value={}", dto.targetDate());
-                    }
+                      try {
+                          targetDate = LocalDate.parse(dto.targetDate());
+                      } catch (Exception e) {
+                          log.warn("[AiAnalyzer] targetDate 파싱 실패. value={}", dto.targetDate());
+                      }
                   }
-                  return TodoItem.builder()
+                  return Checklist.builder()
                       .newsletterId(newsletterId)
+                      .userId(userId)
+                      .type(ChecklistType.TODO)
                       .content(dto.content().trim())
+                      .detail(null)
                       .targetDate(targetDate)
                       .targetDateLabel(dto.targetDateLabel())
                       .build();
-                })
-            .toList();
+              })
+              .toList();
 
-    todoItemRepository.saveAll(entities);
-    log.debug("[AiAnalyzer] 해야 할 일 {}개 저장 완료.", entities.size());
+      checklistRepository.saveAll(entities);
+      log.debug("[AiAnalyzer] 해야 할 일 {}개 저장 완료.", entities.size());
   }
 
-  /**
+
+    /**
    * OpenAI Chat Completions API 호출.
    *
    * @param systemPrompt AI 역할과 출력 형식을 지정하는 시스템 메시지

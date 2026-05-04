@@ -9,10 +9,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,11 +25,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-/**
- * TODO: JWT 필터 연결 후 userId를 SecurityContext에서 추출하도록 변경. Long userId = ((UserPrincipal)
- * SecurityContextHolder .getContext().getAuthentication().getPrincipal()).getId();
- */
 @Tag(name = "Newsletter", description = "가정통신문 API")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/newsletters")
@@ -51,6 +50,7 @@ public class NewsletterController {
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   public ApiResponse<NewsletterUploadResponse> upload(
+      @AuthenticationPrincipal Long userId,
       @Parameter(
               description = "가정통신문 파일 (jpg/png/pdf, 최대 10MB)",
               required = true,
@@ -64,19 +64,11 @@ public class NewsletterController {
       @Parameter(description = "언어 코드 (KO/US/ZH/VI). 기본값 KO") @RequestParam(defaultValue = "KO")
           String language) {
 
-    // TODO: JWT 연결 후 SecurityContext에서 추출
-    Long userId = 1L; // 임시 하드코딩
-
     NewsletterUploadResponse response = newsletterService.upload(userId, file, childId, language);
     return ApiResponse.success(SuccessCode.NEWSLETTER_UPLOAD_SUCCESS, response);
   }
 
-  /**
-   * 가정통신문 분석 상태 조회 (폴링) API.
-   *
-   * <p>스캔 중 화면에서 2초마다 호출하여 진행률을 표시한다. PENDING(0%) → 업로드 직후 대기 상태 PROCESSING(60%) → OCR/번역/요약 진행 중
-   * COMPLETED(100%) → 분석 완료, 결과 화면으로 이동 FAILED(0%) → 실패, errorMessage 확인
-   */
+  /** 가정통신문 분석 상태 조회 (폴링) API */
   @Operation(
       summary = "분석 상태 조회 (폴링)",
       description =
@@ -86,10 +78,8 @@ public class NewsletterController {
       """)
   @GetMapping("/{newsletterId}/status")
   public ApiResponse<NewsletterStatusResponse> getStatus(
+      @AuthenticationPrincipal Long userId,
       @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
-
-    // TODO: JWT 연결 후 SecurityContext에서 추출
-    Long userId = 1L; // 임시 하드코딩
 
     NewsletterStatusResponse response = newsletterService.getStatus(userId, newsletterId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_STATUS_SUCCESS, response);

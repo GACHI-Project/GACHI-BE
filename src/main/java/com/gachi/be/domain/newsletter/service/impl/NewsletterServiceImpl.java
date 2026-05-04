@@ -79,7 +79,7 @@ public class NewsletterServiceImpl implements NewsletterService {
       // 업로드 시점의 값을 복사 (이후 child 정보가 변경되어도 여기는 유지)
       childName = child.getName();
       childGrade = child.getGrade();
-      childColor = child.getCalendarColor(); // 색상만 예외적으로 나중에 동기화 대상
+      childColor = child.getColorCode(); // 색상만 예외적으로 나중에 동기화 대상
     }
 
     // 중복 파일 확인
