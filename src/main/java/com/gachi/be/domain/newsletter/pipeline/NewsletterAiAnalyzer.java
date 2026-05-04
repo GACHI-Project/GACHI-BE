@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.checklist.entity.Checklist;
-import com.gachi.be.domain.checklist.repository.ChecklistItemRepository;
+import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.todo.entity.TodoItem;
 import com.gachi.be.domain.todo.repository.TodoItemRepository;
 import com.gachi.be.global.code.ErrorCode;
@@ -37,7 +37,7 @@ public class NewsletterAiAnalyzer {
 
   private final OpenAiProperties openAiProperties;
   private final ObjectMapper objectMapper;
-  private final ChecklistItemRepository checklistItemRepository;
+  private final ChecklistRepository checklistItemRepository;
   private final TodoItemRepository todoItemRepository;
 
   /**
