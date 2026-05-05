@@ -1,6 +1,7 @@
 package com.gachi.be.domain.newsletter.api.controller;
 
 import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
 import com.gachi.be.domain.newsletter.service.NewsletterService;
 import com.gachi.be.global.api.ApiResponse;
@@ -84,4 +85,22 @@ public class NewsletterController {
     NewsletterStatusResponse response = newsletterService.getStatus(userId, newsletterId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_STATUS_SUCCESS, response);
   }
+
+    /**번역 결과 조회 API.*/
+    @Operation(
+        summary = "번역 결과 조회",
+        description =
+            """
+        분석이 완료된(COMPLETED) 가정통신문만 조회 가능합니다.
+        언어가 KO인 경우 translatedText 필드는 응답에 포함되지 않습니다.
+        """)
+    @GetMapping("/{newsletterId}/translation")
+    public ApiResponse<NewsletterTranslationResponse> getTranslation(
+        @AuthenticationPrincipal Long userId,
+        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+
+        NewsletterTranslationResponse response = newsletterService.getTranslation(userId, newsletterId);
+        return ApiResponse.success(SuccessCode.NEWSLETTER_TRANSLATION_SUCCESS, response);
+    }
+
 }
