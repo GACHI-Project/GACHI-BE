@@ -194,7 +194,7 @@ public class OcrTextRefiner {
     }
 
     double minY = Double.MAX_VALUE;
-    double maxY = Double.MIN_VALUE;
+    double maxY = Double.NEGATIVE_INFINITY;
 
     for (OcrField.BoundingPoly.Vertex vertex : field.getBoundingPoly().getVertices()) {
       if (vertex.getY() != null) {

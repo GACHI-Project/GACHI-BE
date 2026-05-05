@@ -438,7 +438,7 @@ public class NewsletterAiAnalyzer {
 
       return objectMapper.readValue(cleaned, typeRef);
     } catch (Exception e) {
-      log.error("[AiAnalyzer] JSON 파싱 실패. text={}, error={}", jsonText, e.getMessage());
+      log.error("[AiAnalyzer] JSON 파싱 실패. error={}", e.getMessage());
       return List.of();
     }
   }

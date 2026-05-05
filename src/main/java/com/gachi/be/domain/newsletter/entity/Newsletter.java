@@ -167,4 +167,9 @@ public class Newsletter {
   public void updateChildColor(String newColor) {
     this.childColor = newColor;
   }
+
+  /** is_saved 값 반환*/
+  public boolean isSaved() {
+      return saved;
+  }
 }

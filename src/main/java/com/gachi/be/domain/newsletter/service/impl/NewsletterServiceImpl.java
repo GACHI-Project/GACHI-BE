@@ -173,7 +173,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   public NewsletterStatusResponse getStatus(Long userId, Long newsletterId) {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
-    return NewsletterStatusResponse.of(newsletter.getStatus(), null);
+    return NewsletterStatusResponse.of(newsletter.getStatus());
   }
 
   /** 번역 결과 조회 */

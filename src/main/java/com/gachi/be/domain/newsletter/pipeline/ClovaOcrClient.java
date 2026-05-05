@@ -42,6 +42,8 @@ public class ClovaOcrClient {
   // Spring Boot AutoConfiguration이 Jackson ObjectMapper를 자동으로 빈 등록함
   // IDE에서 인식 못할 수 있으나 실행 시 정상 주입됨
   private final ObjectMapper objectMapper;
+    private final HttpClient httpClient =
+              HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
   /**
    * S3에 저장된 가정통신문 파일에 대해 클로바 OCR을 호출. 파일 형식에 따라 클로바 format 값을 자동으로 결정. - PDF: "pdf" → 클로바가 내부적으로
@@ -106,9 +108,6 @@ public class ClovaOcrClient {
 
   private String executeHttpRequest(String requestBody) {
     try {
-      HttpClient httpClient =
-          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-
       HttpRequest request =
           HttpRequest.newBuilder()
               .uri(URI.create(ocrProperties.getInvokeUrl()))

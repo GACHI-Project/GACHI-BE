@@ -13,9 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.core.ResponseBytes;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
  * 가정통신문 AI 분석 파이프라인 오케스트레이터. 업로드 완료 직후 @Async로 비동기 실행. S3에서 파일 다운로드 이미지 전처리 (EXIF 회전 보정, PDF는 클로바가
@@ -53,6 +55,8 @@ public class NewsletterPipelineService {
     markProcessing(newsletterId);
     log.debug("[Pipeline] PROCESSING 전이 완료. newsletterId={}", newsletterId);
 
+    String tempFileKey = null;
+
     try {
       // S3에서 파일 다운로드
       log.debug("[Pipeline][STEP1] S3 다운로드 시작. fileKey={}", newsletter.getFileKey());
@@ -62,25 +66,35 @@ public class NewsletterPipelineService {
       // 이미지 전처리 (이미지만 해당, PDF는 스킵-> clova가 처리함)
       // 이미지(jpg/png)만 EXIF 회전 보정을 수행한다.
       boolean isPdf = newsletter.getFileKey().toLowerCase().endsWith(".pdf");
+      String ocrTargetKey;
+
       if (!isPdf) {
         log.debug("[Pipeline][STEP2] 이미지 EXIF 회전 보정 시작.");
-        fileBytes = imagePreprocessor.preprocessImage(fileBytes);
-        log.debug("[Pipeline][STEP2] 전처리 완료. processedSize={}bytes", fileBytes.length);
+        byte[] processedBytes = imagePreprocessor.preprocessImage(fileBytes);
+        log.debug("[Pipeline][STEP2] 전처리 완료. processedSize={}bytes", processedBytes.length);
+
+        // 전처리된 바이트를 임시 S3 키로 업로드
+        // 원본 키 + "_processed" 접미사로 임시 키 생성
+        tempFileKey = newsletter.getFileKey() + "_processed";
+        uploadBytesToS3(processedBytes, tempFileKey, "image/png");
+        ocrTargetKey = tempFileKey;
+        log.debug("[Pipeline][STEP2] 전처리 파일 임시 업로드 완료. tempFileKey={}", tempFileKey);
       } else {
         log.debug("[Pipeline][STEP2] PDF 파일. 전처리 스킵 (클로바가 직접 처리).");
+        ocrTargetKey = newsletter.getFileKey();
       }
 
       // 클로바 OCR 호출
       // PDF: format="pdf" → 클로바가 전 페이지 처리 → 모든 pages fields 합쳐서 반환
       // 이미지: format="jpeg"/"png" → 단일 이미지 처리
-      log.debug("[Pipeline][STEP3] 클로바 OCR 호출 시작.");
-      List<List<OcrField>> ocrFields =
-          clovaOcrClient.callOcr(s3Properties.getBucket(), newsletter.getFileKey());
-      log.debug("[Pipeline][STEP3] OCR 완료. totalFieldsCount={}", ocrFields.size());
+      log.debug("[Pipeline][STEP3] 클로바 OCR 호출 시작. ocrTargetKey={}", ocrTargetKey);
+      List<List<OcrField>> ocrPageFields =
+          clovaOcrClient.callOcr(s3Properties.getBucket(), ocrTargetKey);
+      log.debug("[Pipeline][STEP3] OCR 완료. totalFieldsCount={}", ocrPageFields.size());
 
       // OCR 결과 파싱
       log.debug("[Pipeline][STEP4] 텍스트 파싱 시작.");
-      String ocrText = ocrTextRefiner.parseFields(ocrFields);
+      String ocrText = ocrTextRefiner.parseFields(ocrPageFields);
       log.debug("[Pipeline][STEP4] 파싱 완료. length={}chars", ocrText.length());
 
       // 텍스트 정제
@@ -117,6 +131,17 @@ public class NewsletterPipelineService {
     } catch (Exception e) {
       log.error("[Pipeline] 파이프라인 실패. newsletterId={}, error={}", newsletterId, e.getMessage(), e);
       markFailed(newsletterId);
+    } finally {
+        if (tempFileKey != null) {
+            try {
+                deleteFromS3(tempFileKey);
+                log.debug("[Pipeline] 임시 파일 삭제 완료. tempFileKey={}", tempFileKey);
+            } catch (Exception ex) {
+                // 임시 파일 삭제 실패는 파이프라인 결과에 영향 없음 — 로그만 남김
+                log.warn("[Pipeline] 임시 파일 삭제 실패. tempFileKey={}, error={}",
+                    tempFileKey, ex.getMessage());
+            }
+        }
     }
   }
 
@@ -167,4 +192,19 @@ public class NewsletterPipelineService {
     ResponseBytes<GetObjectResponse> responseBytes = s3Client.getObjectAsBytes(request);
     return responseBytes.asByteArray();
   }
+
+    /** 전처리된 이미지를 임시 키로 저장할 때 사용.*/
+    private void uploadBytesToS3(byte[] bytes, String key, String contentType) {
+        PutObjectRequest request = PutObjectRequest.builder()
+            .bucket(s3Properties.getBucket())
+            .key(key)
+            .contentType(contentType)
+            .build();
+        s3Client.putObject(request, RequestBody.fromBytes(bytes));
+    }
+
+    /**전처리 임시 파일 정리에 사용*/
+    private void deleteFromS3(String fileKey) {
+        s3Client.deleteObject(b -> b.bucket(s3Properties.getBucket()).key(fileKey));
+    }
 }
