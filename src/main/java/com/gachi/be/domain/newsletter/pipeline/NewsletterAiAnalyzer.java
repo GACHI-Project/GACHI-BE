@@ -8,6 +8,7 @@ import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
+import com.gachi.be.file.config.S3Properties;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.config.external.OpenAiProperties;
 import com.gachi.be.global.exception.ExternalApiException;
@@ -18,11 +19,15 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 /**
  * OpenAI를 이용한 가정통신문 AI 분석 컴포넌트. 모든 분석은 OpenAI Chat Completions API를 호출하여 수행. 모델은 application.yml의
@@ -40,6 +45,10 @@ public class NewsletterAiAnalyzer {
   private final ObjectMapper objectMapper;
   private final ChecklistRepository checklistRepository;
   private final NewsletterRepository newsletterRepository;
+  private final S3Presigner s3Presigner;
+  private final S3Properties s3Properties;
+  // vision 용 presigned URL 유효시간 -> DB에는 S3 key 만
+  private static final int VISION_PRESIGNED_URL_MINUTES = 15;
 
   /**
    * 가정통신문 전체 AI 분석을 수행하고 결과를 DB에 저장.
@@ -52,37 +61,77 @@ public class NewsletterAiAnalyzer {
 
     log.info("[AiAnalyzer] 분석 시작. newsletterId={}, language={}", newsletterId, language);
 
-    Long userId=newsletterRepository.findById(newsletterId)
-        .map(Newsletter::getUserId)
-        .orElseThrow(()-> new IllegalStateException(
+    Newsletter newsletter = newsletterRepository.findById(newsletterId)
+        .orElseThrow(() -> new IllegalStateException(
             "[AiAnalyzer] newsletter를 찾을 수 없습니다. newsletterId=" + newsletterId));
+
+    Long userId = newsletter.getUserId();
+    String fileKey = newsletter.getFileKey();
+
+    boolean isImage = isImageFile(fileKey);
+    log.debug("[AiAnalyzer] 파일 타입 판단. fileKey={}, isImage={}", fileKey, isImage);
+
+    // 이미지일 때만 presigned URL 생성이고 pdf는 null처리로 들어감
+    String imagePresignedUrl = null;
+    if (isImage) {
+        imagePresignedUrl = generatePresignedUrl(fileKey);
+        log.debug("[AiAnalyzer] Vision용 Presigned URL 생성 완료.");
+    } else {
+        log.debug("[AiAnalyzer] PDF 파일. Vision 스킵, 텍스트만 전달.");
+    }
 
     // 요약 기준 텍스트 결정
     String summarySourceText =
         (translatedText != null && !translatedText.isBlank()) ? translatedText : originalText;
 
     // 제목 추출
-    String title = extractTitle(originalText);
+    String title = extractTitle(originalText, imagePresignedUrl);
     log.debug("[AiAnalyzer] 제목 추출 완료. title={}", title);
 
     // AI 요약
-    String summary = generateSummary(summarySourceText, language);
+    String summary = generateSummary(summarySourceText, language, imagePresignedUrl);
     log.debug("[AiAnalyzer] 요약 완료. length={}chars", summary.length());
 
     // 체크리스트 추출 + DB 저장
-    extractAndSaveChecklist(newsletterId, userId, originalText);
+    extractAndSaveChecklist(newsletterId, userId, originalText, imagePresignedUrl);
     log.debug("[AiAnalyzer] 체크리스트 저장 완료.");
 
     // 해야 할 일 추출 + DB 저장
-    extractAndSaveTodos(newsletterId, userId, originalText);
+    extractAndSaveTodos(newsletterId, userId, originalText, imagePresignedUrl);
     log.debug("[AiAnalyzer] 해야 할 일 저장 완료.");
 
     log.info("[AiAnalyzer] 분석 완료. newsletterId={}", newsletterId);
     return new AiAnalysisResult(title, summary);
   }
 
+  private boolean isImageFile(String fileKey) {
+      if (fileKey == null) return false;
+      String lower = fileKey.toLowerCase();
+      return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png");
+  }
+
+  private String generatePresignedUrl(String fileKey) {
+      try {
+          GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+              .bucket(s3Properties.getBucket())
+              .key(fileKey)
+              .build();
+
+          GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+              .signatureDuration(Duration.ofMinutes(VISION_PRESIGNED_URL_MINUTES))
+              .getObjectRequest(getObjectRequest)
+              .build();
+
+          return s3Presigner.presignGetObject(presignRequest).url().toString();
+      } catch (Exception e) {
+          // Presigned URL 생성 실패 시 Vision 없이 텍스트만으로 분석 진행 (서비스 중단 방지)
+          log.warn("[AiAnalyzer] Presigned URL 생성 실패. 텍스트만으로 분석 진행. error={}", e.getMessage());
+          return null;
+      }
+  }
+
   /** 가정통신문 원문에서 제목을 추출.*/
-  private String extractTitle(String originalText) {
+  private String extractTitle(String originalText, String imagePresignedUrl) {
     // 시스템 프롬프트 (AI 역할 + 출력 형식 지정)
     String systemPrompt =
         """
@@ -96,7 +145,7 @@ public class NewsletterAiAnalyzer {
         - 앞뒤에 마크다운 코드블록(```), 따옴표, 설명을 붙이지 마세요.
         - 제목을 찾을 수 없으면 "가정통신문 안내"를 반환하세요.
         """;
-    String response = callOpenAi(systemPrompt, originalText, 100);
+    String response = callOpenAi(systemPrompt, originalText, imagePresignedUrl, 100);
     return response.trim();
   }
 
@@ -105,7 +154,7 @@ public class NewsletterAiAnalyzer {
    * 장소, 준비물, 제출 마감 등 핵심 정보 우선 포함 - 쉬운 표현 사용 (전문 용어 지양) - 3~5문장 제한으로 핵심만 전달 사용자: KO이면 원문, 그 외이면 번역문을
    * 전달 (사용자 모국어 텍스트 기준으로 요약해야 더 자연스러움)
    */
-  private String generateSummary(String sourceText, String language) {
+  private String generateSummary(String sourceText, String language, String imagePresignedUrl) {
     String responseLanguage =
         switch (language) {
           case "US" -> "영어(English)";
@@ -131,7 +180,7 @@ public class NewsletterAiAnalyzer {
         """,
             responseLanguage);
 
-    String response = callOpenAi(systemPrompt, sourceText, 500);
+    String response = callOpenAi(systemPrompt, sourceText, imagePresignedUrl, 500);
     return response.trim();
   }
 
@@ -140,7 +189,7 @@ public class NewsletterAiAnalyzer {
    * (UI에서 굵게 표시) - detail: 한 줄 상세 설명 (UI에서 작게 표시) - 최대 10개로 제한 (너무 많으면 사용자가 압도됨) TODO: 이거 더 얘기해보기 -
    * JSON 외 다른 텍스트 절대 금지 (파싱 실패 방지)
    */
-  private void extractAndSaveChecklist(Long newsletterId, Long userId, String originalText) {
+  private void extractAndSaveChecklist(Long newsletterId, Long userId, String originalText, String imagePresignedUrl) {
     // 시스템 프롬프트
     String systemPrompt =
         """
@@ -161,7 +210,7 @@ public class NewsletterAiAnalyzer {
         형식: [{"content": "항목명", "detail": null}]
         """;
 
-      String response = callOpenAi(systemPrompt, originalText, 800);
+      String response = callOpenAi(systemPrompt, originalText, imagePresignedUrl, 800);
       List<ChecklistItemDto> items = parseJsonList(response, new TypeReference<>() {});
 
       if (items == null || items.isEmpty()) {
@@ -193,7 +242,7 @@ public class NewsletterAiAnalyzer {
    * YYYY-MM-DD, 없으면 null - targetDateLabel: 사용자에게 보여줄 문구 → 날짜 있으면 "5월 15일", 없으면 "지금 바로" / "행사 전날" 등
    * 맥락에 맞게 - 오늘 날짜를 프롬프트에 주입하여 "내일", "이번 주" 등 상대적 표현을 절대 날짜로 변환 - 최대 5개로 제한 (너무 많으면 핵심이 희석됨) TODO: 이거 더 얘기해보기
    */
-  private void extractAndSaveTodos(Long newsletterId, Long userId, String originalText) {
+  private void extractAndSaveTodos(Long newsletterId, Long userId, String originalText, String imagePresignedUrl) {
     // 오늘 날짜를 프롬프트에 주입 (상대적 날짜 표현 변환을 위해)
     String today = LocalDate.now().toString(); // 예: "2026-04-13"
 
@@ -220,7 +269,7 @@ public class NewsletterAiAnalyzer {
         """,
             today);
 
-    String response = callOpenAi(systemPrompt, originalText, 800);
+    String response = callOpenAi(systemPrompt, originalText, imagePresignedUrl, 800);
 
     List<TodoItemDto> items = parseJsonList(response, new TypeReference<>() {});
     if (items == null || items.isEmpty()) {
@@ -268,56 +317,84 @@ public class NewsletterAiAnalyzer {
    * @param maxTokens 응답 최대 토큰 수 (작업마다 다르게 설정)
    * @return AI 응답 텍스트
    */
-  private String callOpenAi(String systemPrompt, String userContent, int maxTokens) {
+  private String callOpenAi(String systemPrompt, String userContent, String imagePresignedUrl, int maxTokens) {
     try {
+        Object userMessageContent;
+
+        if (imagePresignedUrl != null) {
+            // Vision 요청: 이미지 먼저, 텍스트 나중 순서로 배열 구성
+            // 이미지를 먼저 보여주고 텍스트로 보완하는 방식이 GPT 분석 정확도에 유리
+            List<Map<String, Object>> contentParts = new ArrayList<>();
+
+            // 이미지 파트: S3 Presigned URL을 직접 전달
+            // OpenAI가 이 URL로 S3에서 이미지를 직접 가져감
+            contentParts.add(Map.of(
+                "type", "image_url",
+                "image_url", Map.of("url", imagePresignedUrl)
+            ));
+
+            // 텍스트 파트: OCR로 추출한 텍스트 (이미지 내용 보완용)
+            // OCR이 놓쳤거나 불명확한 부분을 이미지로 확인 가능
+            contentParts.add(Map.of(
+                "type", "text",
+                "text", userContent
+            ));
+
+            userMessageContent = contentParts;
+            log.debug("[AiAnalyzer] Vision 모드로 OpenAI 호출. (이미지 + 텍스트)");
+        } else {
+            // 텍스트만 전달 (PDF 또는 Presigned URL 생성 실패 시)
+            userMessageContent = userContent;
+            log.debug("[AiAnalyzer] 텍스트 전용 모드로 OpenAI 호출.");
+        }
       // 요청 본문 구성
-      String requestBody =
-          objectMapper.writeValueAsString(
-              Map.of(
-                  "model",
-                  openAiProperties.getModel(),
-                  "messages",
-                  List.of(
-                      Map.of("role", "system", "content", systemPrompt),
-                      Map.of("role", "user", "content", userContent)),
-                  "temperature",
-                  0.3, // 낮은 값 = 일관된 결과 (0: 결정적, 1: 창의적)
-                  "max_tokens",
-                  maxTokens));
+        String requestBody =
+            objectMapper.writeValueAsString(
+                Map.of(
+                    "model",
+                    openAiProperties.getModel(),
+                    "messages",
+                    List.of(
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", userContent)),
+                    "temperature",
+                    0.3, // 낮은 값 = 일관된 결과 (0: 결정적, 1: 창의적)
+                    "max_tokens",
+                    maxTokens));
 
-      HttpClient httpClient =
-          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+        HttpClient httpClient =
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(URI.create(openAiProperties.getApiUrl()))
-              .header("Content-Type", "application/json")
-              .header("Authorization", "Bearer " + openAiProperties.getApiKey())
-              .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-              .timeout(Duration.ofSeconds(60)) // GPT 응답 시간 고려하여 60초
-              .build();
+        HttpRequest request =
+            HttpRequest.newBuilder()
+                .uri(URI.create(openAiProperties.getApiUrl()))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + openAiProperties.getApiKey())
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .timeout(Duration.ofSeconds(60)) // GPT 응답 시간 고려하여 60초
+                .build();
 
-      HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response =
+            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-      if (response.statusCode() < 200 || response.statusCode() >= 300) {
-        log.error(
-            "[AiAnalyzer] OpenAI API 호출 실패. status={}, body={}",
-            response.statusCode(),
-            response.body());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            log.error(
+                "[AiAnalyzer] OpenAI API 호출 실패. status={}, body={}",
+                response.statusCode(),
+                response.body());
+            throw new ExternalApiException(
+                ErrorCode.EXTERNAL_API_ERROR, "OpenAI API 오류. status=" + response.statusCode());
+        }
+
+        return parseOpenAiResponse(response.body());
+
+        } catch (ExternalApiException e) {
+        throw e;
+        } catch (IOException | InterruptedException e) {
+        Thread.currentThread().interrupt();
         throw new ExternalApiException(
-            ErrorCode.EXTERNAL_API_ERROR, "OpenAI API 오류. status=" + response.statusCode());
-      }
-
-      return parseOpenAiResponse(response.body());
-
-    } catch (ExternalApiException e) {
-      throw e;
-    } catch (IOException | InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "OpenAI API 통신 오류: " + e.getMessage());
-    }
+            ErrorCode.EXTERNAL_API_ERROR, "OpenAI API 통신 오류: " + e.getMessage());
+        }
   }
 
   /** OpenAI 응답에서 텍스트 내용을 추출. */
