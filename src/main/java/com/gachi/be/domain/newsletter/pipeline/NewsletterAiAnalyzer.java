@@ -31,9 +31,9 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 
 /**
  * OpenAI를 이용한 가정통신문 AI 분석 컴포넌트. 모든 분석은 OpenAI Chat Completions API를 호출하여 수행. 모델은 application.yml의
- * app.openai.model 값으로 설정 (기본: gpt-4o-mini). -> 추후 결과 보고 일반 모델로 변경할 수도
+ * app.openai.model 값으로 설정 (기본: gpt-4o-mini). -> TODO: 추후 결과 보고 일반 모델로 변경할 수도
  *
- * <p>프롬프트 설계 원칙: - 시스템 프롬프트: AI의 역할과 출력 형식을 명확히 지정 - 사용자 프롬프트: 실제 가정통신문 텍스트 - temperature=0.3: 낮은
+ * 프롬프트 설계 원칙: - 시스템 프롬프트: AI의 역할과 출력 형식을 명확히 지정 - 사용자 프롬프트: 실제 가정통신문 텍스트 - temperature=0.3: 낮은
  * 값으로 설정하여 일관된 결과 보장 (0에 가까울수록 결정적, 1에 가까울수록 창의적)
  */
 @Slf4j
