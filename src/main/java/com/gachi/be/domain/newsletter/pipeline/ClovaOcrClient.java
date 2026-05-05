@@ -12,6 +12,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.Getter;
@@ -46,7 +47,7 @@ public class ClovaOcrClient {
    * S3에 저장된 가정통신문 파일에 대해 클로바 OCR을 호출. 파일 형식에 따라 클로바 format 값을 자동으로 결정. - PDF: "pdf" → 클로바가 내부적으로
    * 전페이지 처리 - jpg/jpeg: "jpeg" - png: "png"
    */
-  public List<OcrField> callOcr(String bucket, String fileKey) {
+  public List<List<OcrField>> callOcr(String bucket, String fileKey) {
     // S3 Presigned URL 생성
     String presignedUrl = generatePresignedUrl(bucket, fileKey);
     log.debug("[ClovaOcr] Presigned URL 생성 완료. fileKey={}", fileKey);
@@ -60,7 +61,7 @@ public class ClovaOcrClient {
     String responseBody = executeHttpRequest(requestBody);
 
     // 응답 파싱
-    return parseFields(responseBody, fileKey);
+    return parseFieldsByPage(responseBody, fileKey);
   }
 
   private String generatePresignedUrl(String bucket, String fileKey) {
@@ -122,7 +123,7 @@ public class ClovaOcrClient {
 
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         log.error(
-            "[ClovaOcr] API 호출 실패. status={}, body={}", response.statusCode(), response.body());
+            "[ClovaOcr] API 호출 실패. status={}", response.statusCode());
         throw new ExternalApiException(
             ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR API 오류. status=" + response.statusCode());
       }
@@ -132,55 +133,59 @@ public class ClovaOcrClient {
 
     } catch (ExternalApiException e) {
       throw e;
-    } catch (IOException | InterruptedException e) {
-      Thread.currentThread().interrupt();
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new ExternalApiException(
+            ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR API 통신 오류: " + e.getMessage());
+    } catch (IOException e) {
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR API 통신 오류: " + e.getMessage());
     }
   }
 
   /** 클로바 OCR 응답에서 fields 리스트를 추출. PDF의 경우 여러 페이지가 images 배열에 각각 들어오므로 모든 images의 fields를 합쳐서 반환. */
-  private List<OcrField> parseFields(String responseBody, String fileKey) {
-    try {
-      OcrResponse response = objectMapper.readValue(responseBody, OcrResponse.class);
+  private List<List<OcrField>> parseFieldsByPage(String responseBody, String fileKey) {
+      try {
+          OcrResponse response = objectMapper.readValue(responseBody, OcrResponse.class);
 
-      if (response.images() == null || response.images().isEmpty()) {
-        throw new ExternalApiException(
-            ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR 응답에 images 배열이 없습니다.");
+          if (response.images() == null || response.images().isEmpty()) {
+              throw new ExternalApiException(
+                  ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR 응답에 images 배열이 없습니다.");
+          }
+
+          List<List<OcrField>> pageFields = new ArrayList<>();
+          int pageIndex = 0;
+          for (OcrImageResult image : response.images()) {
+              if (!"SUCCESS".equals(image.inferResult())) {
+                  log.warn("[ClovaOcr] 페이지 인식 실패. pageIndex={}, inferResult={}, fileKey={}", pageIndex, image.inferResult(), fileKey);
+                  pageIndex++;
+                  continue;
+              }
+              if (image.fields() != null && !image.fields().isEmpty()) {
+                  // 성공한 페이지의 fields만 추가 (페이지 순서 유지)
+                  pageFields.add(image.fields());
+                  log.debug("[ClovaOcr] 페이지 처리 완료. pageIndex={}, fieldsCount={}",
+                      pageIndex, image.fields().size());
+              }
+              pageIndex++;
+          }
+
+          if (pageFields.isEmpty()) {
+              throw new ExternalApiException(
+                  ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR 인식 결과가 없습니다. 모든 페이지가 실패했습니다.");
+          }
+          int totalFields = pageFields.stream().mapToInt(List::size).sum();
+          log.debug("[ClovaOcr] OCR 완료. totalPages={}, totalFields={}", pageFields.size(), totalFields);
+          return pageFields;
+
+      } catch (ExternalApiException e) {
+          throw e;
+      } catch (Exception e) {
+          throw new ExternalApiException(
+              ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR 응답 파싱 실패: " + e.getMessage());
       }
-
-      // 모든 페이지(images)의 fields를 하나의 리스트로 합침
-      // PDF 여러 페이지인 경우 각 페이지 fields가 순서대로 합쳐짐
-      List<OcrField> allFields =
-          response.images().stream()
-              .peek(
-                  image -> {
-                    if (!"SUCCESS".equals(image.inferResult())) {
-                      log.warn(
-                          "[ClovaOcr] 페이지 인식 실패. inferResult={}, fileKey={}",
-                          image.inferResult(),
-                          fileKey);
-                    }
-                  })
-              .filter(image -> "SUCCESS".equals(image.inferResult()))
-              .flatMap(image -> image.fields().stream())
-              .toList();
-
-      if (allFields.isEmpty()) {
-        throw new ExternalApiException(
-            ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR 인식 결과가 없습니다. 모든 페이지가 실패했습니다.");
-      }
-
-      log.debug("[ClovaOcr] OCR 완료. totalFieldsCount={}", allFields.size());
-      return allFields;
-
-    } catch (ExternalApiException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "클로바 OCR 응답 파싱 실패: " + e.getMessage());
-    }
   }
+
 
   /** 클로바 OCR API 요청 본문 */
   record OcrRequest(String version, String requestId, long timestamp, List<OcrImage> images) {}

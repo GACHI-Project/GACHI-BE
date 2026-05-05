@@ -4,6 +4,7 @@ import com.gachi.be.file.config.S3Properties;
 import com.gachi.be.file.dto.response.S3UploadResponse;
 import com.gachi.be.file.service.S3FileService;
 import com.gachi.be.global.code.ErrorCode;
+import com.gachi.be.global.exception.BusinessException;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,15 +12,18 @@ import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriUtils;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class S3FileServiceImpl implements S3FileService {
@@ -34,6 +38,7 @@ public class S3FileServiceImpl implements S3FileService {
   private static final String NEWSLETTER_PREFIX = "newsletters";
   private final S3Client s3Client;
   private final S3Properties s3Properties;
+  private static final long MAX_NEWSLETTER_SIZE_BYTES = 10 * 1024 * 1024L;
 
   @Override
   public S3UploadResponse uploadImage(MultipartFile file) {
@@ -48,6 +53,22 @@ public class S3FileServiceImpl implements S3FileService {
     String key = buildObjectKey(file.getOriginalFilename(), NEWSLETTER_PREFIX);
     return doUpload(file, key);
   }
+
+    @Override
+    public void deleteFile(String fileKey) {
+        try {
+            DeleteObjectRequest request = DeleteObjectRequest.builder()
+                .bucket(s3Properties.getBucket())
+                .key(fileKey)
+                .build();
+            s3Client.deleteObject(request);
+            log.debug("[S3] 파일 삭제 완료. fileKey={}", fileKey);
+        } catch (S3Exception e) {
+            log.error("[S3] 파일 삭제 실패. fileKey={}, error={}", fileKey, e.getMessage());
+            throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR,
+                "S3 파일 삭제 실패: " + e.awsErrorDetails().errorMessage());
+        }
+    }
 
   private S3UploadResponse doUpload(MultipartFile file, String key) {
     String bucket = s3Properties.getBucket();
@@ -88,14 +109,16 @@ public class S3FileServiceImpl implements S3FileService {
   }
 
   private void validateNewsletter(MultipartFile file) {
-    if (file == null || file.isEmpty()) {
-      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "File is empty.");
-    }
-    String contentType = file.getContentType();
-    if (!StringUtils.hasText(contentType) || !ALLOWED_NEWSLETTER_TYPES.contains(contentType)) {
-      throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "Unsupported newsletter content type.");
-    }
+      if (file == null || file.isEmpty()) {
+          throw new BusinessException(ErrorCode.NEWSLETTER_FILE_EMPTY);
+      }
+      if (file.getSize() > MAX_NEWSLETTER_SIZE_BYTES) {
+          throw new BusinessException(ErrorCode.NEWSLETTER_FILE_SIZE_EXCEEDED);
+      }
+      String contentType = file.getContentType();
+      if (!StringUtils.hasText(contentType) || !ALLOWED_NEWSLETTER_TYPES.contains(contentType)) {
+          throw new BusinessException(ErrorCode.NEWSLETTER_FILE_TYPE_INVALID);
+      }
   }
 
   private String buildObjectKey(String originalFilename, String prefix) {

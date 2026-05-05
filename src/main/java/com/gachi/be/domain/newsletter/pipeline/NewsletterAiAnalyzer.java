@@ -33,7 +33,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
  * OpenAI를 이용한 가정통신문 AI 분석 컴포넌트. 모든 분석은 OpenAI Chat Completions API를 호출하여 수행. 모델은 application.yml의
  * app.openai.model 값으로 설정 (기본: gpt-4o-mini). -> TODO: 추후 결과 보고 일반 모델로 변경할 수도
  *
- * <p>프롬프트 설계 원칙: - 시스템 프롬프트: AI의 역할과 출력 형식을 명확히 지정 - 사용자 프롬프트: 실제 가정통신문 텍스트 - temperature=0.3: 낮은
+ * 프롬프트 설계 원칙: - 시스템 프롬프트: AI의 역할과 출력 형식을 명확히 지정 - 사용자 프롬프트: 실제 가정통신문 텍스트 - temperature=0.3: 낮은
  * 값으로 설정하여 일관된 결과 보장 (0에 가까울수록 결정적, 1에 가까울수록 창의적)
  */
 @Slf4j
@@ -53,7 +53,7 @@ public class NewsletterAiAnalyzer {
   /**
    * 가정통신문 전체 AI 분석을 수행하고 결과를 DB에 저장.
    *
-   * <p>분석 기준 텍스트: - 제목/체크리스트/해야할일: originalText (한국어 원문 기준) → 번역 텍스트보다 원문이 날짜, 고유명사 등을 더 정확하게 포함하기
+   * 분석 기준 텍스트: - 제목/체크리스트/해야할일: originalText (한국어 원문 기준) → 번역 텍스트보다 원문이 날짜, 고유명사 등을 더 정확하게 포함하기
    * 때문 - 요약: language=KO면 originalText, 그 외 translatedText 기준 → 사용자 언어로 읽기 편한 요약을 제공하기 위해
    */
   public AiAnalysisResult analyze(
@@ -159,7 +159,7 @@ public class NewsletterAiAnalyzer {
    */
   private String generateSummary(String sourceText, String language, String imagePresignedUrl) {
     String responseLanguage =
-        switch (language) {
+        switch (language == null ? "KO" : language) {
           case "US" -> "영어(English)";
           case "ZH" -> "중국어 간체(简体中文)";
           case "VI" -> "베트남어(Tiếng Việt)";
@@ -359,14 +359,14 @@ public class NewsletterAiAnalyzer {
                   "messages",
                   List.of(
                       Map.of("role", "system", "content", systemPrompt),
-                      Map.of("role", "user", "content", userContent)),
+                      Map.of("role", "user", "content", userMessageContent)),
                   "temperature",
                   0.3, // 낮은 값 = 일관된 결과 (0: 결정적, 1: 창의적)
                   "max_tokens",
                   maxTokens));
 
       HttpClient httpClient =
-          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
       HttpRequest request =
           HttpRequest.newBuilder()
@@ -393,8 +393,11 @@ public class NewsletterAiAnalyzer {
 
     } catch (ExternalApiException e) {
       throw e;
-    } catch (IOException | InterruptedException e) {
-      Thread.currentThread().interrupt();
+    } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new ExternalApiException(
+            ErrorCode.EXTERNAL_API_ERROR, "OpenAI API 통신 인터럽트: " + e.getMessage());
+    } catch (IOException e) {
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "OpenAI API 통신 오류: " + e.getMessage());
     }

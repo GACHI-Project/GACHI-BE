@@ -84,10 +84,13 @@ public class PapagoTranslateClient {
 
     } catch (ExternalApiException e) {
       throw e;
-    } catch (IOException | InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "파파고 번역 API 통신 오류: " + e.getMessage());
+    } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+              throw new ExternalApiException(
+                     ErrorCode.EXTERNAL_API_ERROR, "파파고 번역 API 통신 오류: " + e.getMessage());
+            } catch (IOException e) {
+             throw new ExternalApiException(
+                      ErrorCode.EXTERNAL_API_ERROR, "파파고 번역 API 통신 오류: " + e.getMessage());
     }
   }
 

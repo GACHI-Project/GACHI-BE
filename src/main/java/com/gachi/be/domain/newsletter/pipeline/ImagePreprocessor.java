@@ -81,7 +81,7 @@ public class ImagePreprocessor {
       // EXIF 없는 이미지(PNG 등)에서는 정상적으로 발생할 수 있음. WARN이 아닌 DEBUG로 처리.
       log.debug("[ImagePreprocessor] EXIF 읽기 실패 (정상 케이스). {}", e.getMessage());
     } catch (MetadataException e) {
-      throw new RuntimeException(e);
+        log.warn("[ImagePreprocessor] EXIF 메타데이터 파싱 실패. 기본값(1)으로 진행합니다. {}", e.getMessage());
     }
     return 1; // 기본값: 정상 방향
   }
@@ -94,7 +94,10 @@ public class ImagePreprocessor {
     int newWidth = swap ? original.getHeight() : original.getWidth();
     int newHeight = swap ? original.getWidth() : original.getHeight();
 
-    BufferedImage rotated = new BufferedImage(newWidth, newHeight, original.getType());
+    int imageType = (original.getType()== BufferedImage.TYPE_CUSTOM)
+        ? BufferedImage.TYPE_INT_ARGB
+        : original.getType();
+    BufferedImage rotated = new BufferedImage(newWidth, newHeight, imageType);
     Graphics2D g2d = rotated.createGraphics();
 
     // 새 이미지의 중심으로 좌표계를 이동한 후 회전

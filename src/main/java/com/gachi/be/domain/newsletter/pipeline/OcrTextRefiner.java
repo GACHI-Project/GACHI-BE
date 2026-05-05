@@ -14,12 +14,39 @@ import org.springframework.stereotype.Component;
 public class OcrTextRefiner {
 
   /** OcrField 리스트를 파싱하여 하나의 텍스트 문자열로 합친다. */
-  public String parseFields(List<OcrField> fields) {
-    if (fields == null || fields.isEmpty()) {
-      log.warn("[OcrTextRefiner] fields가 비어있습니다.");
+  public String parseFields(List<List<OcrField>> pageFieldsList) {
+    if (pageFieldsList == null || pageFieldsList.isEmpty()) {
+      log.warn("[OcrTextRefiner] pageFieldsList가 비어있습니다.");
       return "";
     }
 
+    StringBuilder totalResult = new StringBuilder();
+
+    for (int pageIndex = 0; pageIndex < pageFieldsList.size(); pageIndex++) {
+        List<OcrField> fields = pageFieldsList.get(pageIndex);
+
+        if (fields == null || fields.isEmpty()) {
+            log.warn("[OcrTextRefiner] pageIndex={} fields가 비어있습니다.", pageIndex);
+            continue;
+        }
+
+        // 각 페이지를 독립적으로 처리
+        String pageText = parseSinglePageFields(fields, pageIndex);
+
+        if (!pageText.isEmpty()) {
+            if (totalResult.length() > 0) {
+                  // 페이지 간 구분을 위해 줄바꿈 추가
+                totalResult.append("\n");
+            }
+            totalResult.append(pageText);
+        }
+    }
+
+      log.debug("[OcrTextRefiner] 전체 파싱 완료. pages={}, totalLength={}",
+          pageFieldsList.size(), totalResult.length());
+      return totalResult.toString();
+  }
+  private String parseSinglePageFields(List<OcrField> fields, int pageIndex) {
     // 각 field의 텍스트와 Y좌표 중앙값을 추출
     List<TextBlock> blocks = new ArrayList<>();
     for (OcrField field : fields) {
@@ -27,8 +54,9 @@ public class OcrTextRefiner {
       if (text == null || text.isBlank()) continue;
 
       double centerY = calculateCenterY(field);
+      double centerX = calculateCenterX(field);
       double height = calculateHeight(field);
-      blocks.add(new TextBlock(text.trim(), centerY, height));
+      blocks.add(new TextBlock(text.trim(), centerX, centerY, height));
     }
 
     if (blocks.isEmpty()) return "";
@@ -36,37 +64,64 @@ public class OcrTextRefiner {
     // Y좌표 기준 오름차순 정렬 (위에서 아래로)
     blocks.sort(Comparator.comparingDouble(TextBlock::centerY));
 
+    List<List<TextBlock>> rows = groupIntoRows(blocks);
+
     // 줄 그룹핑
     StringBuilder result = new StringBuilder();
-    TextBlock prev = null;
-    for (TextBlock block : blocks) {
-      if (prev == null) {
-        // 첫 번째 블록
-        result.append(block.text());
-      } else {
-        // 이전 블록의 높이를 기준으로 임계값 동적 계산
-        // prev.height()가 0이면 fallback으로 15픽셀 사용
-        double threshold = prev.height() > 0 ? prev.height() * 0.7 : 15.0;
+    for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+        List<TextBlock> row = rows.get(rowIndex);
+        row.sort(Comparator.comparingDouble(TextBlock::centerX));
 
-        double yDiff = block.centerY() - prev.centerY();
-
-        if (yDiff < threshold) {
-          // 같은 줄 → 공백으로 연결
-          result.append(" ").append(block.text());
-        } else {
-          // 새 줄 → 개행 추가
-          result.append("\n").append(block.text());
+        if (rowIndex > 0) {
+            result.append("\n");
         }
-      }
-      prev = block;
+        // 같은 줄의 블록들을 공백으로 연결
+        result.append(row.stream()
+            .map(TextBlock::text)
+            .collect(Collectors.joining(" ")));
     }
 
-    log.debug(
-        "[OcrTextRefiner] 파싱 완료. blocksCount={}, textLength={}", blocks.size(), result.length());
+    log.debug("[OcrTextRefiner] 페이지 파싱 완료. pageIndex={}, blocks={}, rows={}",
+        pageIndex, blocks.size(), rows.size());
     return result.toString();
   }
+    private List<List<TextBlock>> groupIntoRows(List<TextBlock> blocks) {
+        List<List<TextBlock>> rows = new ArrayList<>();
+        List<TextBlock> currentRow = new ArrayList<>();
+        TextBlock prev = null;
 
-  /** OCR로 추출한 텍스트에서 노이즈를 제거하고 정제 */
+        for (TextBlock block : blocks) {
+            if (prev == null) {
+                // 첫 번째 블록은 새 줄 시작
+                currentRow.add(block);
+            } else {
+                // 이전 블록 높이 기반 임계값 (height가 0이면 fallback 15픽셀)
+                double threshold = prev.height() > 0 ? prev.height() * 0.7 : 15.0;
+                double yDiff = block.centerY() - prev.centerY();
+
+                if (yDiff < threshold) {
+                    // 같은 줄
+                    currentRow.add(block);
+                } else {
+                    // 새 줄 → 현재 줄 저장 후 새 줄 시작
+                    rows.add(new ArrayList<>(currentRow));
+                    currentRow.clear();
+                    currentRow.add(block);
+                }
+            }
+            prev = block;
+        }
+
+        // 마지막 줄 저장
+        if (!currentRow.isEmpty()) {
+            rows.add(currentRow);
+        }
+
+        return rows;
+    }
+
+
+    /** OCR로 추출한 텍스트에서 노이즈를 제거하고 정제 */
   public String refineText(String rawText) {
     if (rawText == null || rawText.isBlank()) return "";
 
@@ -109,6 +164,22 @@ public class OcrTextRefiner {
     }
     return count > 0 ? sumY / count : 0.0;
   }
+  private double calculateCenterX(OcrField field) {
+      if (field.getBoundingPoly() == null
+          || field.getBoundingPoly().getVertices() == null
+          || field.getBoundingPoly().getVertices().isEmpty()) {
+          return 0.0;
+      }
+      double sumX = 0;
+      int count = 0;
+      for (OcrField.BoundingPoly.Vertex vertex : field.getBoundingPoly().getVertices()) {
+          if (vertex.getX() != null) {
+              sumX += vertex.getX();
+              count++;
+          }
+      }
+      return count > 0 ? sumX / count : 0.0;
+  }
 
   private double calculateHeight(OcrField field) {
     if (field.getBoundingPoly() == null
@@ -130,6 +201,6 @@ public class OcrTextRefiner {
     return (minY == Double.MAX_VALUE) ? 0.0 : maxY - minY;
   }
 
-  /** OCR 텍스트 블록 (텍스트 + Y좌표 중앙값) */
-  private record TextBlock(String text, double centerY, double height) {}
+  /** OCR 텍스트 블록 */
+  private record TextBlock(String text, double centerX, double centerY, double height) {}
 }

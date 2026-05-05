@@ -9,4 +9,6 @@ public interface S3FileService {
 
   /** 가정통신문 파일을 S3에 업로드 */
   S3UploadResponse uploadNewsletter(MultipartFile file);
+
+  void deleteFile(String fileKey);
 }

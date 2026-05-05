@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -49,8 +50,7 @@ public class NewsletterPipelineService {
     }
 
     // PROCESSING 상태로 전이
-    newsletter.startProcessing();
-    newsletterRepository.save(newsletter);
+    markProcessing(newsletterId);
     log.debug("[Pipeline] PROCESSING 전이 완료. newsletterId={}", newsletterId);
 
     try {
@@ -74,7 +74,7 @@ public class NewsletterPipelineService {
       // PDF: format="pdf" → 클로바가 전 페이지 처리 → 모든 pages fields 합쳐서 반환
       // 이미지: format="jpeg"/"png" → 단일 이미지 처리
       log.debug("[Pipeline][STEP3] 클로바 OCR 호출 시작.");
-      List<OcrField> ocrFields =
+      List<List<OcrField>> ocrFields =
           clovaOcrClient.callOcr(s3Properties.getBucket(), newsletter.getFileKey());
       log.debug("[Pipeline][STEP3] OCR 완료. totalFieldsCount={}", ocrFields.size());
 
@@ -104,17 +104,40 @@ public class NewsletterPipelineService {
       log.debug("[Pipeline][STEP7] 완료. title={}", aiResult.title());
 
       // DB 업데이트 (COMPLETED)
-      newsletter.complete(
-          ocrText, originalText, translatedText, aiResult.title(), aiResult.summary());
-      newsletterRepository.save(newsletter);
+      markCompleted(newsletterId, ocrText, originalText, translatedText,
+          aiResult.title(), aiResult.summary());
 
       log.info("[Pipeline] 파이프라인 완료. newsletterId={}", newsletterId);
 
     } catch (Exception e) {
       log.error("[Pipeline] 파이프라인 실패. newsletterId={}, error={}", newsletterId, e.getMessage(), e);
-      newsletter.fail();
-      newsletterRepository.save(newsletter);
+      markFailed(newsletterId);
     }
+  }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markProcessing(Long newsletterId) {
+        newsletterRepository.findById(newsletterId).ifPresent(n -> {
+            n.startProcessing();
+            newsletterRepository.save(n);
+        });
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markCompleted(Long newsletterId, String ocrText, String originalText,
+                              String translatedText, String title, String summary) {
+        newsletterRepository.findById(newsletterId).ifPresent(n -> {
+            n.complete(ocrText, originalText, translatedText, title, summary);
+            newsletterRepository.save(n);
+        });
+    }
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void markFailed(Long newsletterId) {
+      newsletterRepository.findById(newsletterId).ifPresent((n->{
+          n.fail();
+          newsletterRepository.save(n);
+      }));
   }
 
   /** S3에서 파일을 바이트 배열로 다운로드. */

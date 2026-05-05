@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS newsletter (
     child_color      VARCHAR(7)   NULL,
     file_key         VARCHAR(500) NOT NULL,
     file_hash        VARCHAR(64)  NOT NULL,
-    status           VARCHAR(20)  NOT NULL DEFAULT 'PENDING'
+    status           VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
     CONSTRAINT chk_newsletter_status
     CHECK (status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
     is_saved         BOOLEAN      NOT NULL DEFAULT FALSE,
