@@ -132,16 +132,16 @@ public class NewsletterPipelineService {
       log.error("[Pipeline] 파이프라인 실패. newsletterId={}, error={}", newsletterId, e.getMessage(), e);
       markFailed(newsletterId);
     } finally {
-        if (tempFileKey != null) {
-            try {
-                deleteFromS3(tempFileKey);
-                log.debug("[Pipeline] 임시 파일 삭제 완료. tempFileKey={}", tempFileKey);
-            } catch (Exception ex) {
-                // 임시 파일 삭제 실패는 파이프라인 결과에 영향 없음 — 로그만 남김
-                log.warn("[Pipeline] 임시 파일 삭제 실패. tempFileKey={}, error={}",
-                    tempFileKey, ex.getMessage());
-            }
+      if (tempFileKey != null) {
+        try {
+          deleteFromS3(tempFileKey);
+          log.debug("[Pipeline] 임시 파일 삭제 완료. tempFileKey={}", tempFileKey);
+        } catch (Exception ex) {
+          // 임시 파일 삭제 실패는 파이프라인 결과에 영향 없음 — 로그만 남김
+          log.warn(
+              "[Pipeline] 임시 파일 삭제 실패. tempFileKey={}, error={}", tempFileKey, ex.getMessage());
         }
+      }
     }
   }
 
@@ -193,18 +193,19 @@ public class NewsletterPipelineService {
     return responseBytes.asByteArray();
   }
 
-    /** 전처리된 이미지를 임시 키로 저장할 때 사용.*/
-    private void uploadBytesToS3(byte[] bytes, String key, String contentType) {
-        PutObjectRequest request = PutObjectRequest.builder()
+  /** 전처리된 이미지를 임시 키로 저장할 때 사용. */
+  private void uploadBytesToS3(byte[] bytes, String key, String contentType) {
+    PutObjectRequest request =
+        PutObjectRequest.builder()
             .bucket(s3Properties.getBucket())
             .key(key)
             .contentType(contentType)
             .build();
-        s3Client.putObject(request, RequestBody.fromBytes(bytes));
-    }
+    s3Client.putObject(request, RequestBody.fromBytes(bytes));
+  }
 
-    /**전처리 임시 파일 정리에 사용*/
-    private void deleteFromS3(String fileKey) {
-        s3Client.deleteObject(b -> b.bucket(s3Properties.getBucket()).key(fileKey));
-    }
+  /** 전처리 임시 파일 정리에 사용 */
+  private void deleteFromS3(String fileKey) {
+    s3Client.deleteObject(b -> b.bucket(s3Properties.getBucket()).key(fileKey));
+  }
 }

@@ -21,8 +21,8 @@ public record NewsletterStatusResponse(
       case PENDING -> new NewsletterStatusResponse(status, 0, "문서를 준비하고 있어요", null);
       case PROCESSING -> new NewsletterStatusResponse(status, 60, "텍스트를 인식하고 번역하고 있어요", null);
       case COMPLETED -> new NewsletterStatusResponse(status, 100, "분석이 완료되었어요", null);
-      case FAILED     -> new NewsletterStatusResponse(status, 0,   null,
-            "분석 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.");
+      case FAILED ->
+          new NewsletterStatusResponse(status, 0, null, "분석 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.");
     };
   }
 }
