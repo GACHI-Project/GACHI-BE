@@ -44,7 +44,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
    *
-   * 처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
+   * <p>처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
    * file_key 획득 childId가 있으면 children 테이블에서 자녀 정보 조회 (스냅샷용) newsletter 레코드 DB 저장 (status=PENDING 으로
    * 변경) AI 분석 파이프라인 비동기 트리거 -> Asyncㅏ로 별도 스레드에서 실행하게 함.
    */
@@ -137,16 +137,16 @@ public class NewsletterServiceImpl implements NewsletterService {
   @Override
   @Transactional(readOnly = true)
   public NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId) {
-      Newsletter newsletter = findNewsletterById(newsletterId);
-      validateOwnership(newsletter, userId);
-      validateCompleted(newsletter);
-      return NewsletterTranslationResponse.from(newsletter);
+    Newsletter newsletter = findNewsletterById(newsletterId);
+    validateOwnership(newsletter, userId);
+    validateCompleted(newsletter);
+    return NewsletterTranslationResponse.from(newsletter);
   }
 
   /**
    * 파일 유효성 검사.
    *
-   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
    * 최대 크기: 10MB
    */
   private void validateFile(MultipartFile file) {
@@ -191,9 +191,8 @@ public class NewsletterServiceImpl implements NewsletterService {
   }
 
   /**
-   * 동일 파일 중복 업로드 여부 확인.
-   * 중복 판단 기준 (DB Partial Unique Index와 동일) 자녀 특정: (user_id + child_name +file_hash) 조합
-   * 자녀 미선택: (user_id + file_hash) 조합
+   * 동일 파일 중복 업로드 여부 확인. 중복 판단 기준 (DB Partial Unique Index와 동일) 자녀 특정: (user_id + child_name
+   * +file_hash) 조합 자녀 미선택: (user_id + file_hash) 조합
    */
   private void checkDuplicate(Long userId, String childName, String fileHash) {
     boolean isDuplicate;
@@ -231,10 +230,10 @@ public class NewsletterServiceImpl implements NewsletterService {
     }
   }
 
-  /** newsletter가 completed 상태인지 먼저 검증 -> for 결과 조회*/
+  /** newsletter가 completed 상태인지 먼저 검증 -> for 결과 조회 */
   private void validateCompleted(Newsletter newsletter) {
-      if (newsletter.getStatus() != NewsletterStatus.COMPLETED) {
-          throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
-      }
+    if (newsletter.getStatus() != NewsletterStatus.COMPLETED) {
+      throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
+    }
   }
 }

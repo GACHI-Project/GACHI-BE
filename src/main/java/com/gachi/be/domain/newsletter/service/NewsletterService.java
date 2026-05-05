@@ -28,6 +28,6 @@ public interface NewsletterService {
    */
   NewsletterStatusResponse getStatus(Long userId, Long newsletterId);
 
-    /** 번역 결과 조회*/
-    NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId);
+  /** 번역 결과 조회 */
+  NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId);
 }

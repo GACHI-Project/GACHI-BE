@@ -148,13 +148,13 @@ public enum ErrorCode {
       "로그아웃/회전으로 무효화된 토큰",
       ErrorLogLevel.WARN),
 
-  //child
+  // child
   CHILD_NOT_FOUND(
-    HttpStatus.NOT_FOUND,
-    "CHILD4041",
-    "자녀 정보를 찾을 수 없습니다.",
-    "childId에 해당하는 레코드 없음",
-    ErrorLogLevel.INFO),
+      HttpStatus.NOT_FOUND,
+      "CHILD4041",
+      "자녀 정보를 찾을 수 없습니다.",
+      "childId에 해당하는 레코드 없음",
+      ErrorLogLevel.INFO),
 
   // Newsletter
   NEWSLETTER_NOT_FOUND(
@@ -196,12 +196,12 @@ public enum ErrorCode {
       "COMPLETED 상태가 아닌 newsletter 조회 시도",
       ErrorLogLevel.WARN),
 
-   CHECKLIST_NOT_FOUND(
-       HttpStatus.NOT_FOUND,
-       "CL4041",
-       "체크리스트 항목을 찾을 수 없습니다.",
-       "checklistId에 해당하는 레코드 없음",
-       ErrorLogLevel.INFO),
+  CHECKLIST_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "CL4041",
+      "체크리스트 항목을 찾을 수 없습니다.",
+      "checklistId에 해당하는 레코드 없음",
+      ErrorLogLevel.INFO),
 
   EXTERNAL_API_ERROR(
       HttpStatus.BAD_GATEWAY,

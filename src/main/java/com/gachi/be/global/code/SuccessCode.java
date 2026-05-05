@@ -25,8 +25,7 @@ public enum SuccessCode {
   NEWSLETTER_SUMMARY_SUCCESS(HttpStatus.OK, "NL2003", "요약 결과 조회에 성공하였습니다."),
   NEWSLETTER_CHECKLIST_SUCCESS(HttpStatus.OK, "NL2004", "체크리스트 조회에 성공하였습니다.");
 
-
-    private final HttpStatus httpStatus;
+  private final HttpStatus httpStatus;
   private final String code;
   private final String message;
 }

@@ -6,7 +6,7 @@ import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 /**
  * 가정통신문 분석 상태 조회(폴링) API의 응답 DTO.
  *
- * 프론트엔드가 주기적으로 이 API를 호출하여 분석 진행률을 확인, COMPLETED가 되면 결과 화면으로 이동.
+ * <p>프론트엔드가 주기적으로 이 API를 호출하여 분석 진행률을 확인, COMPLETED가 되면 결과 화면으로 이동.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL) // null인 필드는 JSON 응답에서 제외
 public record NewsletterStatusResponse(

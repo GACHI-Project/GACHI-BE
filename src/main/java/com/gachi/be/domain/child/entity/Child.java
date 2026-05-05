@@ -88,11 +88,10 @@ public class Child {
   }
 
   public void softDelete() {
-      this.deletedAt = LocalDateTime.now();
+    this.deletedAt = LocalDateTime.now();
   }
 
   public void updateColorCode(String newColorCode) {
-      this.colorCode = newColorCode;
+    this.colorCode = newColorCode;
   }
-
 }
