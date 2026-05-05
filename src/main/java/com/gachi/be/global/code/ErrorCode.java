@@ -147,6 +147,62 @@ public enum ErrorCode {
       "철회된 리프레시 토큰입니다.",
       "로그아웃/회전으로 무효화된 토큰",
       ErrorLogLevel.WARN),
+
+  // child
+  CHILD_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "CHILD4041",
+      "자녀 정보를 찾을 수 없습니다.",
+      "childId에 해당하는 레코드 없음",
+      ErrorLogLevel.INFO),
+
+  // Newsletter
+  NEWSLETTER_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "NL4041",
+      "가정통신문을 찾을 수 없습니다.",
+      "newsletterId에 해당하는 레코드 없음 또는 소유권 불일치",
+      ErrorLogLevel.INFO),
+  NEWSLETTER_DUPLICATE(
+      HttpStatus.CONFLICT,
+      "NL4091",
+      "이미 업로드된 가정통신문입니다.",
+      "동일한 file_hash를 가진 가정통신문이 이미 존재함",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_FILE_EMPTY(
+      HttpStatus.BAD_REQUEST, "NL4001", "파일이 비어있습니다.", "업로드 파일 null 또는 empty", ErrorLogLevel.WARN),
+  NEWSLETTER_FILE_TYPE_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "NL4002",
+      "지원하지 않는 파일 형식입니다. (jpg, png, pdf만 허용)",
+      "허용되지 않는 Content-Type",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_FILE_SIZE_EXCEEDED(
+      HttpStatus.BAD_REQUEST,
+      "NL4003",
+      "파일 크기는 10MB 이하여야 합니다.",
+      "10MB 초과 파일 업로드 시도",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_FILE_READ_FAILED(
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      "NL5001",
+      "파일을 읽는 중 오류가 발생했습니다.",
+      "SHA-256 해시 계산 중 InputStream 읽기 실패",
+      ErrorLogLevel.ERROR),
+  NEWSLETTER_NOT_COMPLETED(
+      HttpStatus.BAD_REQUEST,
+      "NL4004",
+      "아직 분석이 완료되지 않은 가정통신문입니다.",
+      "COMPLETED 상태가 아닌 newsletter 조회 시도",
+      ErrorLogLevel.WARN),
+
+  CHECKLIST_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "CL4041",
+      "체크리스트 항목을 찾을 수 없습니다.",
+      "checklistId에 해당하는 레코드 없음",
+      ErrorLogLevel.INFO),
+
   EXTERNAL_API_ERROR(
       HttpStatus.BAD_GATEWAY,
       "EXT5021",

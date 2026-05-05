@@ -12,4 +12,6 @@ public class S3Properties {
   private String bucket;
   private String publicBaseUrl;
   private String imagePrefix = "images";
+  private String accessKeyId;
+  private String secretAccessKey;
 }
