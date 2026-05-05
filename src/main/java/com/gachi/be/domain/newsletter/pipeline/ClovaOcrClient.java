@@ -26,14 +26,9 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 /**
  * 클로바 OCR API 호출 클라이언트.
  *
- * <p>호출 방식: Presigned URL 방식 파일을 Base64로 인코딩하는 대신 S3 Presigned URL을 클로바에 전달하고 클로바가 직접 S3에서 파일을 가져가는
- * 방식.
- *
- * <p>PDF 지원: 클로바 OCR은 PDF를 직접 지원하므로 여러 페이지 가정통신문도 1회 호출로 처리 가능. format 필드를 "jpeg"/"png"/"pdf" 중에서
- * 파일 형식에 맞게 지정하면 된다.
- *
- * <p>ObjectMapper: Spring Boot가 자동으로 빈으로 등록하므로 @RequiredArgsConstructor로 주입받아 사용. IDE에서 빨간 줄이 생길 수
- * 있으나 실제 실행 시에는 정상 주입된다.
+ * 호출 방식: Presigned URL 방식 파일을 Base64로 인코딩하는 대신 S3 Presigned URL을 클로바에 전달하고 클로바가 직접 S3에서 파일을 가져가는 방식.
+ * PDF 지원: 클로바 OCR은 PDF를 직접 지원하므로 여러 페이지 가정통신문도 1회 호출로 처리 가능. format 필드를 "jpeg"/"png"/"pdf" 중에서
+ * ObjectMapper: Spring Boot가 자동으로 빈으로 등록하므로 @RequiredArgsConstructor로 주입받아 사용.
  */
 @Slf4j
 @Component
@@ -48,23 +43,22 @@ public class ClovaOcrClient {
   private final ObjectMapper objectMapper;
 
   /**
-   * S3에 저장된 가정통신문 파일에 대해 클로바 OCR을 호출. 파일 형식에 따라 클로바 format 값을 자동으로 결정. - PDF: "pdf" → 클로바가 내부적으로 전
-   * 페이지 처리 - jpg/jpeg: "jpeg" - png: "png"
+   * S3에 저장된 가정통신문 파일에 대해 클로바 OCR을 호출. 파일 형식에 따라 클로바 format 값을 자동으로 결정. - PDF: "pdf" → 클로바가 내부적으로 전페이지 처리 - jpg/jpeg: "jpeg" - png: "png"
    */
   public List<OcrField> callOcr(String bucket, String fileKey) {
-    // 1. S3 Presigned URL 생성
+    // S3 Presigned URL 생성
     String presignedUrl = generatePresignedUrl(bucket, fileKey);
     log.debug("[ClovaOcr] Presigned URL 생성 완료. fileKey={}", fileKey);
 
-    // 2. 파일 형식 결정
+    // 파일 형식 결정
     String format = resolveFormat(fileKey);
     log.debug("[ClovaOcr] 파일 형식 결정. format={}", format);
 
-    // 3. 요청 본문 구성 및 API 호출
+    // 요청 본문 구성 및 API 호출
     String requestBody = buildRequestBody(presignedUrl, format);
     String responseBody = executeHttpRequest(requestBody);
 
-    // 4. 응답 파싱
+    // 응답 파싱
     return parseFields(responseBody, fileKey);
   }
 
@@ -82,8 +76,7 @@ public class ClovaOcrClient {
   }
 
   /**
-   * file_key의 확장자로 클로바 OCR format 값을 결정 클로바 OCR 허용 format 값: "jpeg", "png", "pdf", "tiff" PDF는 클로바가
-   * 전 페이지를 처리하므로 별도 변환 불필요.
+   * file_key의 확장자로 클로바 OCR format 값을 결정 클로바 OCR 허용 format 값: "jpeg", "png", "pdf", "tiff" PDF는 클로바가 전 페이지를 처리하므로 별도 변환 불필요.
    */
   private String resolveFormat(String fileKey) {
     String lowerKey = fileKey.toLowerCase();
