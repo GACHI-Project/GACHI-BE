@@ -1,6 +1,7 @@
 package com.gachi.be.domain.newsletter.service;
 
 import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -26,4 +27,7 @@ public interface NewsletterService {
    * @return status, progressPercent, errorMessage
    */
   NewsletterStatusResponse getStatus(Long userId, Long newsletterId);
+
+    /** 번역 결과 조회*/
+    NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId);
 }
