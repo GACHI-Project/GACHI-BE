@@ -74,8 +74,9 @@ public class NewsletterServiceImpl implements NewsletterService {
           childRepository
               .findByIdAndUserIdAndDeletedAtIsNull(childId, userId)
               .orElseThrow(
-                  ()-> new BusinessException(
-                      ErrorCode.INVALID_INPUT_VALUE, "존재하지 않는 자녀입니다. childId=" + childId));
+                  () ->
+                      new BusinessException(
+                          ErrorCode.INVALID_INPUT_VALUE, "존재하지 않는 자녀입니다. childId=" + childId));
 
       // 업로드 시점의 값을 복사 (이후 child 정보가 변경되어도 여기는 유지)
       childName = child.getName();
@@ -92,69 +93,76 @@ public class NewsletterServiceImpl implements NewsletterService {
     String fileKey = s3FileService.uploadNewsletter(file).key();
     log.debug("[Newsletter] S3 업로드 완료. userId={}, fileKey={}", userId, fileKey);
 
-    return saveAndTriggerPipeline(userId, childName, childGrade, childColor,
-        fileKey, fileHash, userLanguage);
+    return saveAndTriggerPipeline(
+        userId, childName, childGrade, childColor, fileKey, fileHash, userLanguage);
   }
 
-    @Transactional
-    protected NewsletterUploadResponse saveAndTriggerPipeline(
-        Long userId, String childName, Integer childGrade, String childColor,
-        String fileKey, String fileHash, String userLanguage) {
+  @Transactional
+  protected NewsletterUploadResponse saveAndTriggerPipeline(
+      Long userId,
+      String childName,
+      Integer childGrade,
+      String childColor,
+      String fileKey,
+      String fileHash,
+      String userLanguage) {
 
-        Newsletter newsletter =
-            Newsletter.builder()
-                .userId(userId)
-                .childName(childName)
-                .childGrade(childGrade)
-                .childColor(childColor)
-                .fileKey(fileKey)
-                .fileHash(fileHash)
-                .status(NewsletterStatus.PENDING)
-                .language(userLanguage != null ? userLanguage : "KO")
-                .build();
+    Newsletter newsletter =
+        Newsletter.builder()
+            .userId(userId)
+            .childName(childName)
+            .childGrade(childGrade)
+            .childColor(childColor)
+            .fileKey(fileKey)
+            .fileHash(fileHash)
+            .status(NewsletterStatus.PENDING)
+            .language(userLanguage != null ? userLanguage : "KO")
+            .build();
 
-        Newsletter saved;
-        try {
-            // [리뷰 반영 #7] DataIntegrityViolationException → NEWSLETTER_DUPLICATE 변환
-            // checkDuplicate()를 통과했더라도 동시에 두 요청이 들어오면
-            // 한쪽이 DB 유니크 인덱스 위반으로 예외를 받을 수 있음
-            saved = newsletterRepository.save(newsletter);
-        } catch (DataIntegrityViolationException e) {
-            log.warn("[Newsletter] DB 유니크 인덱스 위반 (동시 업로드). userId={}, fileHash={}", userId, fileHash);
-            throw new BusinessException(ErrorCode.NEWSLETTER_DUPLICATE);
-        }
-
-        final Long savedId = saved.getId();
-        final String savedFileKey = fileKey;
-        log.info("[Newsletter] 업로드 완료. userId={}, newsletterId={}", userId, savedId);
-
-        TransactionSynchronizationManager.registerSynchronization(
-            new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    // 트랜잭션 커밋 후 파이프라인 비동기 실행
-                    log.debug("[Newsletter] 트랜잭션 커밋. 파이프라인 트리거. newsletterId={}", savedId);
-                    newsletterPipelineService.runPipeline(savedId);
-                }
-
-                @Override
-                public void afterCompletion(int status) {
-                    // [리뷰 반영 #6] 트랜잭션 롤백 시 S3 고아 파일 삭제
-                    if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
-                        log.warn("[Newsletter] 트랜잭션 롤백. S3 파일 정리. fileKey={}", savedFileKey);
-                        try {
-                            s3FileService.deleteFile(savedFileKey);
-                        } catch (Exception ex) {
-                            // S3 삭제 실패는 로그만 남기고 진행 (별도 정리 배치 가능)
-                            log.error("[Newsletter] S3 파일 삭제 실패. fileKey={}, error={}",
-                                savedFileKey, ex.getMessage());
-                        }
-                    }
-                }
-            });
-
-        return new NewsletterUploadResponse(saved.getId(), saved.getStatus());
+    Newsletter saved;
+    try {
+      // [리뷰 반영 #7] DataIntegrityViolationException → NEWSLETTER_DUPLICATE 변환
+      // checkDuplicate()를 통과했더라도 동시에 두 요청이 들어오면
+      // 한쪽이 DB 유니크 인덱스 위반으로 예외를 받을 수 있음
+      saved = newsletterRepository.save(newsletter);
+    } catch (DataIntegrityViolationException e) {
+      log.warn("[Newsletter] DB 유니크 인덱스 위반 (동시 업로드). userId={}, fileHash={}", userId, fileHash);
+      throw new BusinessException(ErrorCode.NEWSLETTER_DUPLICATE);
     }
+
+    final Long savedId = saved.getId();
+    final String savedFileKey = fileKey;
+    log.info("[Newsletter] 업로드 완료. userId={}, newsletterId={}", userId, savedId);
+
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            // 트랜잭션 커밋 후 파이프라인 비동기 실행
+            log.debug("[Newsletter] 트랜잭션 커밋. 파이프라인 트리거. newsletterId={}", savedId);
+            newsletterPipelineService.runPipeline(savedId);
+          }
+
+          @Override
+          public void afterCompletion(int status) {
+            // [리뷰 반영 #6] 트랜잭션 롤백 시 S3 고아 파일 삭제
+            if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+              log.warn("[Newsletter] 트랜잭션 롤백. S3 파일 정리. fileKey={}", savedFileKey);
+              try {
+                s3FileService.deleteFile(savedFileKey);
+              } catch (Exception ex) {
+                // S3 삭제 실패는 로그만 남기고 진행 (별도 정리 배치 가능)
+                log.error(
+                    "[Newsletter] S3 파일 삭제 실패. fileKey={}, error={}",
+                    savedFileKey,
+                    ex.getMessage());
+              }
+            }
+          }
+        });
+
+    return new NewsletterUploadResponse(saved.getId(), saved.getStatus());
+  }
 
   /**
    * 가정통신문의 현재 분석 상태와 진행률을 반환. 프론트엔드 스캔 중 화면에서 2초마다 이 API를 호출(폴링)하여 진행률을 표시. TODO : 추후 AI 서버에서 단계별

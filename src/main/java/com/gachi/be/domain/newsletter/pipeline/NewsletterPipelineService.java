@@ -104,8 +104,13 @@ public class NewsletterPipelineService {
       log.debug("[Pipeline][STEP7] 완료. title={}", aiResult.title());
 
       // DB 업데이트 (COMPLETED)
-      markCompleted(newsletterId, ocrText, originalText, translatedText,
-          aiResult.title(), aiResult.summary());
+      markCompleted(
+          newsletterId,
+          ocrText,
+          originalText,
+          translatedText,
+          aiResult.title(),
+          aiResult.summary());
 
       log.info("[Pipeline] 파이프라인 완료. newsletterId={}", newsletterId);
 
@@ -115,29 +120,43 @@ public class NewsletterPipelineService {
     }
   }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markProcessing(Long newsletterId) {
-        newsletterRepository.findById(newsletterId).ifPresent(n -> {
-            n.startProcessing();
-            newsletterRepository.save(n);
-        });
-    }
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void markProcessing(Long newsletterId) {
+    newsletterRepository
+        .findById(newsletterId)
+        .ifPresent(
+            n -> {
+              n.startProcessing();
+              newsletterRepository.save(n);
+            });
+  }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void markCompleted(Long newsletterId, String ocrText, String originalText,
-                              String translatedText, String title, String summary) {
-        newsletterRepository.findById(newsletterId).ifPresent(n -> {
-            n.complete(ocrText, originalText, translatedText, title, summary);
-            newsletterRepository.save(n);
-        });
-    }
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void markCompleted(
+      Long newsletterId,
+      String ocrText,
+      String originalText,
+      String translatedText,
+      String title,
+      String summary) {
+    newsletterRepository
+        .findById(newsletterId)
+        .ifPresent(
+            n -> {
+              n.complete(ocrText, originalText, translatedText, title, summary);
+              newsletterRepository.save(n);
+            });
+  }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void markFailed(Long newsletterId) {
-      newsletterRepository.findById(newsletterId).ifPresent((n->{
-          n.fail();
-          newsletterRepository.save(n);
-      }));
+    newsletterRepository
+        .findById(newsletterId)
+        .ifPresent(
+            (n -> {
+              n.fail();
+              newsletterRepository.save(n);
+            }));
   }
 
   /** S3에서 파일을 바이트 배열로 다운로드. */

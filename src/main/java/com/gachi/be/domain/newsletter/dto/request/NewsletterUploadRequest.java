@@ -13,8 +13,9 @@ public record NewsletterUploadRequest(
   public NewsletterUploadRequest {
     // childUnknown이 전송되지 않으면 false (기본값)
   }
+
   @AssertTrue(message = "childUnknown이 true이면 childId는 null이어야 합니다.")
-    public boolean isChildConsistent() {
-      return !(childUnknown && childId != null);
+  public boolean isChildConsistent() {
+    return !(childUnknown && childId != null);
   }
 }

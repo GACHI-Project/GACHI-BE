@@ -54,21 +54,19 @@ public class S3FileServiceImpl implements S3FileService {
     return doUpload(file, key);
   }
 
-    @Override
-    public void deleteFile(String fileKey) {
-        try {
-            DeleteObjectRequest request = DeleteObjectRequest.builder()
-                .bucket(s3Properties.getBucket())
-                .key(fileKey)
-                .build();
-            s3Client.deleteObject(request);
-            log.debug("[S3] 파일 삭제 완료. fileKey={}", fileKey);
-        } catch (S3Exception e) {
-            log.error("[S3] 파일 삭제 실패. fileKey={}, error={}", fileKey, e.getMessage());
-            throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR,
-                "S3 파일 삭제 실패: " + e.awsErrorDetails().errorMessage());
-        }
+  @Override
+  public void deleteFile(String fileKey) {
+    try {
+      DeleteObjectRequest request =
+          DeleteObjectRequest.builder().bucket(s3Properties.getBucket()).key(fileKey).build();
+      s3Client.deleteObject(request);
+      log.debug("[S3] 파일 삭제 완료. fileKey={}", fileKey);
+    } catch (S3Exception e) {
+      log.error("[S3] 파일 삭제 실패. fileKey={}, error={}", fileKey, e.getMessage());
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, "S3 파일 삭제 실패: " + e.awsErrorDetails().errorMessage());
     }
+  }
 
   private S3UploadResponse doUpload(MultipartFile file, String key) {
     String bucket = s3Properties.getBucket();
@@ -109,16 +107,16 @@ public class S3FileServiceImpl implements S3FileService {
   }
 
   private void validateNewsletter(MultipartFile file) {
-      if (file == null || file.isEmpty()) {
-          throw new BusinessException(ErrorCode.NEWSLETTER_FILE_EMPTY);
-      }
-      if (file.getSize() > MAX_NEWSLETTER_SIZE_BYTES) {
-          throw new BusinessException(ErrorCode.NEWSLETTER_FILE_SIZE_EXCEEDED);
-      }
-      String contentType = file.getContentType();
-      if (!StringUtils.hasText(contentType) || !ALLOWED_NEWSLETTER_TYPES.contains(contentType)) {
-          throw new BusinessException(ErrorCode.NEWSLETTER_FILE_TYPE_INVALID);
-      }
+    if (file == null || file.isEmpty()) {
+      throw new BusinessException(ErrorCode.NEWSLETTER_FILE_EMPTY);
+    }
+    if (file.getSize() > MAX_NEWSLETTER_SIZE_BYTES) {
+      throw new BusinessException(ErrorCode.NEWSLETTER_FILE_SIZE_EXCEEDED);
+    }
+    String contentType = file.getContentType();
+    if (!StringUtils.hasText(contentType) || !ALLOWED_NEWSLETTER_TYPES.contains(contentType)) {
+      throw new BusinessException(ErrorCode.NEWSLETTER_FILE_TYPE_INVALID);
+    }
   }
 
   private String buildObjectKey(String originalFilename, String prefix) {

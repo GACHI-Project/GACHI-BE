@@ -23,29 +23,32 @@ public class OcrTextRefiner {
     StringBuilder totalResult = new StringBuilder();
 
     for (int pageIndex = 0; pageIndex < pageFieldsList.size(); pageIndex++) {
-        List<OcrField> fields = pageFieldsList.get(pageIndex);
+      List<OcrField> fields = pageFieldsList.get(pageIndex);
 
-        if (fields == null || fields.isEmpty()) {
-            log.warn("[OcrTextRefiner] pageIndex={} fields가 비어있습니다.", pageIndex);
-            continue;
+      if (fields == null || fields.isEmpty()) {
+        log.warn("[OcrTextRefiner] pageIndex={} fields가 비어있습니다.", pageIndex);
+        continue;
+      }
+
+      // 각 페이지를 독립적으로 처리
+      String pageText = parseSinglePageFields(fields, pageIndex);
+
+      if (!pageText.isEmpty()) {
+        if (totalResult.length() > 0) {
+          // 페이지 간 구분을 위해 줄바꿈 추가
+          totalResult.append("\n");
         }
-
-        // 각 페이지를 독립적으로 처리
-        String pageText = parseSinglePageFields(fields, pageIndex);
-
-        if (!pageText.isEmpty()) {
-            if (totalResult.length() > 0) {
-                  // 페이지 간 구분을 위해 줄바꿈 추가
-                totalResult.append("\n");
-            }
-            totalResult.append(pageText);
-        }
+        totalResult.append(pageText);
+      }
     }
 
-      log.debug("[OcrTextRefiner] 전체 파싱 완료. pages={}, totalLength={}",
-          pageFieldsList.size(), totalResult.length());
-      return totalResult.toString();
+    log.debug(
+        "[OcrTextRefiner] 전체 파싱 완료. pages={}, totalLength={}",
+        pageFieldsList.size(),
+        totalResult.length());
+    return totalResult.toString();
   }
+
   private String parseSinglePageFields(List<OcrField> fields, int pageIndex) {
     // 각 field의 텍스트와 Y좌표 중앙값을 추출
     List<TextBlock> blocks = new ArrayList<>();
@@ -69,59 +72,60 @@ public class OcrTextRefiner {
     // 줄 그룹핑
     StringBuilder result = new StringBuilder();
     for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
-        List<TextBlock> row = rows.get(rowIndex);
-        row.sort(Comparator.comparingDouble(TextBlock::centerX));
+      List<TextBlock> row = rows.get(rowIndex);
+      row.sort(Comparator.comparingDouble(TextBlock::centerX));
 
-        if (rowIndex > 0) {
-            result.append("\n");
-        }
-        // 같은 줄의 블록들을 공백으로 연결
-        result.append(row.stream()
-            .map(TextBlock::text)
-            .collect(Collectors.joining(" ")));
+      if (rowIndex > 0) {
+        result.append("\n");
+      }
+      // 같은 줄의 블록들을 공백으로 연결
+      result.append(row.stream().map(TextBlock::text).collect(Collectors.joining(" ")));
     }
 
-    log.debug("[OcrTextRefiner] 페이지 파싱 완료. pageIndex={}, blocks={}, rows={}",
-        pageIndex, blocks.size(), rows.size());
+    log.debug(
+        "[OcrTextRefiner] 페이지 파싱 완료. pageIndex={}, blocks={}, rows={}",
+        pageIndex,
+        blocks.size(),
+        rows.size());
     return result.toString();
   }
-    private List<List<TextBlock>> groupIntoRows(List<TextBlock> blocks) {
-        List<List<TextBlock>> rows = new ArrayList<>();
-        List<TextBlock> currentRow = new ArrayList<>();
-        TextBlock prev = null;
 
-        for (TextBlock block : blocks) {
-            if (prev == null) {
-                // 첫 번째 블록은 새 줄 시작
-                currentRow.add(block);
-            } else {
-                // 이전 블록 높이 기반 임계값 (height가 0이면 fallback 15픽셀)
-                double threshold = prev.height() > 0 ? prev.height() * 0.7 : 15.0;
-                double yDiff = block.centerY() - prev.centerY();
+  private List<List<TextBlock>> groupIntoRows(List<TextBlock> blocks) {
+    List<List<TextBlock>> rows = new ArrayList<>();
+    List<TextBlock> currentRow = new ArrayList<>();
+    TextBlock prev = null;
 
-                if (yDiff < threshold) {
-                    // 같은 줄
-                    currentRow.add(block);
-                } else {
-                    // 새 줄 → 현재 줄 저장 후 새 줄 시작
-                    rows.add(new ArrayList<>(currentRow));
-                    currentRow.clear();
-                    currentRow.add(block);
-                }
-            }
-            prev = block;
+    for (TextBlock block : blocks) {
+      if (prev == null) {
+        // 첫 번째 블록은 새 줄 시작
+        currentRow.add(block);
+      } else {
+        // 이전 블록 높이 기반 임계값 (height가 0이면 fallback 15픽셀)
+        double threshold = prev.height() > 0 ? prev.height() * 0.7 : 15.0;
+        double yDiff = block.centerY() - prev.centerY();
+
+        if (yDiff < threshold) {
+          // 같은 줄
+          currentRow.add(block);
+        } else {
+          // 새 줄 → 현재 줄 저장 후 새 줄 시작
+          rows.add(new ArrayList<>(currentRow));
+          currentRow.clear();
+          currentRow.add(block);
         }
-
-        // 마지막 줄 저장
-        if (!currentRow.isEmpty()) {
-            rows.add(currentRow);
-        }
-
-        return rows;
+      }
+      prev = block;
     }
 
+    // 마지막 줄 저장
+    if (!currentRow.isEmpty()) {
+      rows.add(currentRow);
+    }
 
-    /** OCR로 추출한 텍스트에서 노이즈를 제거하고 정제 */
+    return rows;
+  }
+
+  /** OCR로 추출한 텍스트에서 노이즈를 제거하고 정제 */
   public String refineText(String rawText) {
     if (rawText == null || rawText.isBlank()) return "";
 
@@ -164,21 +168,22 @@ public class OcrTextRefiner {
     }
     return count > 0 ? sumY / count : 0.0;
   }
+
   private double calculateCenterX(OcrField field) {
-      if (field.getBoundingPoly() == null
-          || field.getBoundingPoly().getVertices() == null
-          || field.getBoundingPoly().getVertices().isEmpty()) {
-          return 0.0;
+    if (field.getBoundingPoly() == null
+        || field.getBoundingPoly().getVertices() == null
+        || field.getBoundingPoly().getVertices().isEmpty()) {
+      return 0.0;
+    }
+    double sumX = 0;
+    int count = 0;
+    for (OcrField.BoundingPoly.Vertex vertex : field.getBoundingPoly().getVertices()) {
+      if (vertex.getX() != null) {
+        sumX += vertex.getX();
+        count++;
       }
-      double sumX = 0;
-      int count = 0;
-      for (OcrField.BoundingPoly.Vertex vertex : field.getBoundingPoly().getVertices()) {
-          if (vertex.getX() != null) {
-              sumX += vertex.getX();
-              count++;
-          }
-      }
-      return count > 0 ? sumX / count : 0.0;
+    }
+    return count > 0 ? sumX / count : 0.0;
   }
 
   private double calculateHeight(OcrField field) {
