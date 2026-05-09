@@ -32,6 +32,9 @@ public class Checklist {
   @Column(name = "newsletter_id", nullable = false)
   private Long newsletterId;
 
+  @Column(name = "calendar_event_id")
+  private Long calendarEventId;
+
   @Column(name = "user_id", nullable = false)
   private Long userId;
 
@@ -63,6 +66,7 @@ public class Checklist {
   @Builder
   public Checklist(
       Long newsletterId,
+      Long calendarEventId,
       Long userId,
       ChecklistType type,
       String content,
@@ -94,5 +98,10 @@ public class Checklist {
   /** 완료 상태 업데이트 */
   public void updateCompleted(boolean isCompleted) {
     this.completed = isCompleted;
+  }
+
+  /** 캘린더 일정 연결 시 사용 */
+  public void linkToCalendarEvent(Long calendarEventId) {
+      this.calendarEventId = calendarEventId;
   }
 }
