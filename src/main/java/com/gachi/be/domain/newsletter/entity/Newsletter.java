@@ -162,5 +162,4 @@ public class Newsletter {
   public void updateChildColor(String newColor) {
     this.childColor = newColor;
   }
-
 }
