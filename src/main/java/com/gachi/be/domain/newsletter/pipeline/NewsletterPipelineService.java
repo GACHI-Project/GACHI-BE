@@ -211,11 +211,11 @@ public class NewsletterPipelineService {
         // 이 페이지를 추가했을 때 총량이 제한을 초과하면 중단
         byte[] jpegBytes = baos.toByteArray();
         if (totalJpegBytes + jpegBytes.length > PDF_MAX_TOTAL_JPEG_BYTES) {
-            log.warn(
-                "[Pipeline] PDF 이미지 총량 제한 도달. pageIndex={}, totalBytes={}. 이후 페이지는 OCR 텍스트로 커버.",
-                pageIndex,
-                totalJpegBytes);
-            break;
+          log.warn(
+              "[Pipeline] PDF 이미지 총량 제한 도달. pageIndex={}, totalBytes={}. 이후 페이지는 OCR 텍스트로 커버.",
+              pageIndex,
+              totalJpegBytes);
+          break;
         }
 
         // JPEG 바이트를 Base64 문자열로 인코딩
