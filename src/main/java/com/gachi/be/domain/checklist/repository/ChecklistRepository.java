@@ -23,10 +23,10 @@ public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
   /** 특정 사용자의 미완료 CHECKLIST 항목 전체 조회. */
   List<Checklist> findByUserIdAndTypeAndCompletedFalse(Long userId, ChecklistType type);
 
-    /** 특정 캘린더 일정에 연결된 CHECKLIST 타입 항목 조회.*/
-    List<Checklist> findByCalendarEventIdAndTypeOrderByIdAsc(
-        Long calendarEventId, ChecklistType type);
+  /** 특정 캘린더 일정에 연결된 CHECKLIST 타입 항목 조회.*/
+  List<Checklist> findByCalendarEventIdAndTypeOrderByIdAsc(
+      Long calendarEventId, ChecklistType type);
 
-    /** 특정 캘린더 일정에 연결된 모든 CHECKLIST 항목 삭제. */
-    void deleteByCalendarEventId(Long calendarEventId);
+  /** 특정 캘린더 일정에 연결된 모든 CHECKLIST 항목 삭제. */
+  void deleteByCalendarEventId(Long calendarEventId);
 }
