@@ -56,9 +56,9 @@ public class Newsletter {
   @Column(nullable = false, length = 20)
   private NewsletterStatus status;
 
-  /** "저장하기" 버튼 클릭 여부. FALSE -> 홈 화면, 문서 목록 노출x, 분석 결과 화면에서 저장하기 누르면 TREU 업데이트 */
+  /** 가정통신문 업로드 시 자동 저장 */
   @Column(name = "is_saved", nullable = false)
-  private boolean saved = false;
+  private boolean saved = true;
 
   /** 클로바 OCR이 추출한 원문 텍스트. fields 배열의 inferText를 Y좌표 기반으로 정렬·합친 결과. AI 분석 완료 전까지 NULL. */
   @Column(name = "ocr_text", columnDefinition = "TEXT")
@@ -158,18 +158,8 @@ public class Newsletter {
     this.status = NewsletterStatus.FAILED;
   }
 
-  /** "저장하기" 클릭 처리. 홈 화면·문서 목록에 노출 O */
-  public void markAsSaved() {
-    this.saved = true;
-  }
-
   /** 자녀 색상 동기화. ChildService에서 색상 변경 시 이 메서드로 newsletter도 업데이트 */
   public void updateChildColor(String newColor) {
     this.childColor = newColor;
-  }
-
-  /** is_saved 값 반환 */
-  public boolean isSaved() {
-    return saved;
   }
 }
