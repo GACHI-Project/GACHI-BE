@@ -56,7 +56,7 @@ public class Newsletter {
   @Column(nullable = false, length = 20)
   private NewsletterStatus status;
 
-  /** "저장하기" 버튼 클릭 여부. FALSE -> 홈 화면, 문서 목록 노출x, 분석 결과 화면에서 저장하기 누르면 TREU 업데이트 */
+  /** 가정통신문 업로드 시 자동 저장 */
   @Column(name = "is_saved", nullable = false)
   private boolean saved = true;
 

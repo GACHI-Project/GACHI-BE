@@ -50,10 +50,25 @@ public class NewsletterAiAnalyzer {
   // vision 용 presigned URL 유효시간 -> DB에는 S3 key 만
   private static final int VISION_PRESIGNED_URL_MINUTES = 15;
 
+  // Vision 입력을 담는 내부 DTO -> analyze 진입 시 1회만 구성하고 제목 추출에만 전달
+  private record VisionInput(String imagePresignedUrl, List<String> pdfPageBase64Images) {
+
+      /** Vision 입력이 있는지 여부. */
+      boolean hasVision() {
+          return imagePresignedUrl != null
+              || (pdfPageBase64Images != null && !pdfPageBase64Images.isEmpty());
+      }
+
+      /** Vision 없는 빈 입력 생성 (텍스트 전용 모드용). */
+      static VisionInput none() {
+          return new VisionInput(null, null);
+      }
+  }
+
   /**
    * 가정통신문 전체 AI 분석을 수행하고 결과를 DB에 저장.
    *
-   * <p>분석 기준 텍스트: - 제목/체크리스트/해야할일: originalText (한국어 원문 기준) → 번역 텍스트보다 원문이 날짜, 고유명사 등을 더 정확하게 포함하기
+   * 분석 기준 텍스트: - 제목/체크리스트/해야할일: originalText (한국어 원문 기준) → 번역 텍스트보다 원문이 날짜, 고유명사 등을 더 정확하게 포함하기
    * 때문 - 요약: language=KO면 originalText, 그 외 translatedText 기준 → 사용자 언어로 읽기 편한 요약을 제공하기 위해
    */
   public AiAnalysisResult analyze(
@@ -79,16 +94,17 @@ public class NewsletterAiAnalyzer {
     boolean isImage = isImageFile(fileKey);
     log.debug("[AiAnalyzer] 파일 타입 판단. fileKey={}, isImage={}", fileKey, isImage);
 
-    // 이미지일 때만 presigned URL 생성이고 pdf는 null처리로 들어감
-    String imagePresignedUrl = null;
+    VisionInput visionInput;
     if (isImage) {
-      imagePresignedUrl = generatePresignedUrl(fileKey);
-      log.debug("[AiAnalyzer] Vision용 Presigned URL 생성 완료.");
+        String presignedUrl = generatePresignedUrl(fileKey);
+        visionInput = new VisionInput(presignedUrl, null);
+        log.debug("[AiAnalyzer] 이미지 Vision 입력 구성 완료.");
+    } else if (pdfPageBase64Images != null && !pdfPageBase64Images.isEmpty()) {
+        visionInput = new VisionInput(null, pdfPageBase64Images);
+        log.debug("[AiAnalyzer] PDF Vision 입력 구성 완료. pages={}", pdfPageBase64Images.size());
     } else {
-      boolean hasPdfImages = pdfPageBase64Images != null && !pdfPageBase64Images.isEmpty();
-      log.debug(
-          "[AiAnalyzer] PDF 파일. pdfPageBase64Images 사용. pages={}",
-          hasPdfImages ? pdfPageBase64Images.size() : 0);
+        visionInput = VisionInput.none();
+        log.debug("[AiAnalyzer] Vision 입력 없음. 텍스트 전용 모드.");
     }
 
     // 요약 기준 텍스트 결정
@@ -96,21 +112,21 @@ public class NewsletterAiAnalyzer {
         (translatedText != null && !translatedText.isBlank()) ? translatedText : originalText;
 
     // 제목 추출
-    String title = extractTitle(originalText, imagePresignedUrl, pdfPageBase64Images);
+    String title = extractTitle(originalText, visionInput);
     log.debug("[AiAnalyzer] 제목 추출 완료. title={}", title);
 
     // AI 요약
     String summary =
-        generateSummary(summarySourceText, language, imagePresignedUrl, pdfPageBase64Images);
+        generateSummary(summarySourceText, language, VisionInput.none());
     log.debug("[AiAnalyzer] 요약 완료. length={}chars", summary.length());
 
     // 체크리스트 추출 + DB 저장
     extractAndSaveChecklist(
-        newsletterId, userId, originalText, imagePresignedUrl, pdfPageBase64Images);
+        newsletterId, userId, originalText, VisionInput.none());
     log.debug("[AiAnalyzer] 체크리스트 저장 완료.");
 
     // 해야 할 일 추출 + DB 저장
-    extractAndSaveTodos(newsletterId, userId, originalText, imagePresignedUrl, pdfPageBase64Images);
+    extractAndSaveTodos(newsletterId, userId, originalText, VisionInput.none());
     log.debug("[AiAnalyzer] 해야 할 일 저장 완료.");
 
     log.info("[AiAnalyzer] 분석 완료. newsletterId={}", newsletterId);
@@ -144,7 +160,7 @@ public class NewsletterAiAnalyzer {
 
   /** 가정통신문 원문에서 제목을 추출. */
   private String extractTitle(
-      String originalText, String imagePresignedUrl, List<String> pdfPageBase64Images) {
+      String originalText, VisionInput visionInput) {
     // 시스템 프롬프트 (AI 역할 + 출력 형식 지정)
     String systemPrompt =
         """
@@ -159,7 +175,7 @@ public class NewsletterAiAnalyzer {
         - 제목을 찾을 수 없으면 "가정통신문 안내"를 반환하세요.
         """;
     String response =
-        callOpenAi(systemPrompt, originalText, imagePresignedUrl, pdfPageBase64Images, 100);
+        callOpenAi(systemPrompt, originalText, visionInput, 100);
     return response.trim();
   }
 
@@ -171,8 +187,7 @@ public class NewsletterAiAnalyzer {
   private String generateSummary(
       String sourceText,
       String language,
-      String imagePresignedUrl,
-      List<String> pdfPageBase64Images) {
+      VisionInput visionInput) {
     String responseLanguage =
         switch (language == null ? "KO" : language) {
           case "US" -> "영어(English)";
@@ -199,7 +214,7 @@ public class NewsletterAiAnalyzer {
             responseLanguage);
 
     String response =
-        callOpenAi(systemPrompt, sourceText, imagePresignedUrl, pdfPageBase64Images, 500);
+        callOpenAi(systemPrompt, sourceText, visionInput, 500);
     return response.trim();
   }
 
@@ -212,8 +227,7 @@ public class NewsletterAiAnalyzer {
       Long newsletterId,
       Long userId,
       String originalText,
-      String imagePresignedUrl,
-      List<String> pdfPageBase64Images) {
+      VisionInput visionInput) {
     // 시스템 프롬프트
     String systemPrompt =
         """
@@ -235,7 +249,7 @@ public class NewsletterAiAnalyzer {
         """;
 
     String response =
-        callOpenAi(systemPrompt, originalText, imagePresignedUrl, pdfPageBase64Images, 800);
+        callOpenAi(systemPrompt, originalText, visionInput, 800);
     List<ChecklistItemDto> items = parseJsonList(response, new TypeReference<>() {});
 
     if (items == null || items.isEmpty()) {
@@ -273,8 +287,7 @@ public class NewsletterAiAnalyzer {
       Long newsletterId,
       Long userId,
       String originalText,
-      String imagePresignedUrl,
-      List<String> pdfPageBase64Images) {
+      VisionInput visionInput) {
     // 오늘 날짜를 프롬프트에 주입 (상대적 날짜 표현 변환을 위해)
     String today = LocalDate.now().toString(); // 예: "2026-04-13"
 
@@ -309,7 +322,7 @@ public class NewsletterAiAnalyzer {
             today);
 
     String response =
-        callOpenAi(systemPrompt, originalText, imagePresignedUrl, pdfPageBase64Images, 800);
+        callOpenAi(systemPrompt, originalText, visionInput, 800);
 
     List<TodoItemDto> items = parseJsonList(response, new TypeReference<>() {});
     if (items == null || items.isEmpty()) {
@@ -360,65 +373,54 @@ public class NewsletterAiAnalyzer {
   private String callOpenAi(
       String systemPrompt,
       String userContent,
-      String imagePresignedUrl,
-      List<String> pdfPageBase64Images,
+      VisionInput visionInput,
       int maxTokens) {
     try {
       Object userMessageContent;
 
-      if (imagePresignedUrl != null) {
-        // Vision 요청: 이미지 먼저, 텍스트 나중 순서로 배열 구성
-        // 이미지를 먼저 보여주고 텍스트로 보완하는 방식이 GPT 분석 정확도에 유리
-        List<Map<String, Object>> contentParts = new ArrayList<>();
+        if (visionInput.imagePresignedUrl() != null) {
+            // 이미지 파일: S3 Presigned URL로 Vision 전달 (detail:high)
+            List<Map<String, Object>> contentParts = new ArrayList<>();
+            contentParts.add(
+                Map.of(
+                    "type", "image_url",
+                    "image_url", Map.of("url", visionInput.imagePresignedUrl(), "detail", "high")));
+            contentParts.add(Map.of("type", "text", "text", userContent));
+            userMessageContent = contentParts;
+            log.debug("[AiAnalyzer] Vision 모드(이미지, detail:high)로 OpenAI 호출.");
 
-        // 이미지 파트: S3 Presigned URL을 직접 전달
-        // OpenAI가 이 URL로 S3에서 이미지를 직접 가져감
-        contentParts.add(
-            Map.of(
-                "type",
-                "image_url",
-                "image_url",
-                Map.of("url", imagePresignedUrl, "detail", "high")));
+        } else if (visionInput.pdfPageBase64Images() != null
+            && !visionInput.pdfPageBase64Images().isEmpty()) {
+            // PDF 파일: Base64 이미지 목록으로 Vision 전달 (detail:high, 다중 페이지)
+            List<Map<String, Object>> contentParts = new ArrayList<>();
+            int pageCount = visionInput.pdfPageBase64Images().size();
 
-        // 텍스트 파트: OCR로 추출한 텍스트 (이미지 내용 보완용)
-        // OCR이 놓쳤거나 불명확한 부분을 이미지로 확인 가능
-        contentParts.add(Map.of("type", "text", "text", userContent));
+            // 페이지 수 안내 텍스트: GPT가 페이지 구조를 인식하도록 유도
+            contentParts.add(
+                Map.of(
+                    "type", "text",
+                    "text",
+                    String.format(
+                        "이 가정통신문은 %d페이지로 구성됩니다. 아래 이미지를 순서대로 참고하여 전체 문맥을 이해하세요.", pageCount)));
 
-        userMessageContent = contentParts;
-        log.debug("[AiAnalyzer] Vision 모드(이미지, detail:high)로 OpenAI 호출.");
-      } else if (pdfPageBase64Images != null && !pdfPageBase64Images.isEmpty()) {
-        // PDF 파일: Base64 이미지 목록으로 Vision 전달
-        // 다중 페이지 처리: 각 페이지를 순서대로 contentParts에 추가
-        // OpenAI가 여러 이미지를 하나의 문맥으로 함께 분석함
-        List<Map<String, Object>> contentParts = new ArrayList<>();
+            // 각 페이지를 Base64 data URL로 변환하여 순서대로 추가
+            for (int i = 0; i < pageCount; i++) {
+                String dataUrl = "data:image/jpeg;base64," + visionInput.pdfPageBase64Images().get(i);
+                contentParts.add(
+                    Map.of("type", "image_url", "image_url", Map.of("url", dataUrl, "detail", "high")));
+                log.debug("[AiAnalyzer] PDF 페이지 이미지 추가. page={}/{}", i + 1, pageCount);
+            }
 
-        int pageCount = pdfPageBase64Images.size();
-        String pageHint =
-            String.format("이 가정통신문은 %d페이지로 구성됩니다. 아래 이미지를 순서대로 참고하여 전체 문맥을 이해하세요.", pageCount);
-        contentParts.add(Map.of("type", "text", "text", pageHint));
+            // OCR 텍스트: 이미지로 못 읽은 부분 보완
+            contentParts.add(Map.of("type", "text", "text", userContent));
+            userMessageContent = contentParts;
+            log.debug("[AiAnalyzer] Vision 모드(PDF {}페이지, detail:high)로 OpenAI 호출.", pageCount);
 
-        // 각 페이지 이미지를 Base64 data URL로 변환하여 추가
-        // 형식: "data:image/jpeg;base64,{base64문자열}"
-        for (int i = 0; i < pdfPageBase64Images.size(); i++) {
-          String base64Image = pdfPageBase64Images.get(i);
-          String dataUrl = "data:image/jpeg;base64," + base64Image;
-
-          contentParts.add(
-              Map.of("type", "image_url", "image_url", Map.of("url", dataUrl, "detail", "high")));
-
-          log.debug("[AiAnalyzer] PDF 페이지 이미지 추가. page={}/{}", i + 1, pageCount);
+        } else {
+            // 텍스트 전용 모드: Vision 입력 없음
+            userMessageContent = userContent;
+            log.debug("[AiAnalyzer] 텍스트 전용 모드로 OpenAI 호출.");
         }
-
-        // OCR 텍스트 파트: 이미지로 못 읽은 부분 보완
-        contentParts.add(Map.of("type", "text", "text", userContent));
-
-        userMessageContent = contentParts;
-        log.debug("[AiAnalyzer] Vision 모드(PDF {}페이지, detail:high)로 OpenAI 호출.", pageCount);
-      } else {
-        // 텍스트만 전달 (PDF 또는 Presigned URL 생성 실패 시)
-        userMessageContent = userContent;
-        log.debug("[AiAnalyzer] 텍스트 전용 모드로 OpenAI 호출. -> Vision 입력 없음");
-      }
       // 요청 본문 구성
       String requestBody =
           objectMapper.writeValueAsString(

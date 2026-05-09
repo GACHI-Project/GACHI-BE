@@ -53,6 +53,8 @@ public class NewsletterPipelineService {
   private static final float PDF_RENDER_DPI = 150f;
   // PDF 변환시 처리할 최대 페이지 수
   private static final int PDF_MAX_PAGES = 5;
+  // PDF 이미지 총량 제한 -> 이미지 제한을 안하면 timeout 또는 413 에러 발생 가능
+  private static final int PDF_MAX_TOTAL_JPEG_BYTES = 8 * 1024 * 1024;
 
   /** 가정통신문 AI 분석 파이프라인을 비동기로 실행. */
   @Async
@@ -175,6 +177,9 @@ public class NewsletterPipelineService {
   private List<String> convertPdfToBase64Images(byte[] pdfBytes) {
     List<String> base64Images = new ArrayList<>();
 
+    // 누적 JPEG 바이트 추적 변수
+    int totalJpegBytes = 0;
+
     // PDFBox로 PDF 파일을 열고 페이지별로 이미지 렌더링
     // try-with-resources: PDDocument는 Closeable이므로 자동으로 닫힘
     try (PDDocument document = Loader.loadPDF(pdfBytes)) {
@@ -203,9 +208,20 @@ public class NewsletterPipelineService {
           continue;
         }
 
+        // 이 페이지를 추가했을 때 총량이 제한을 초과하면 중단
+        byte[] jpegBytes = baos.toByteArray();
+        if (totalJpegBytes + jpegBytes.length > PDF_MAX_TOTAL_JPEG_BYTES) {
+            log.warn(
+                "[Pipeline] PDF 이미지 총량 제한 도달. pageIndex={}, totalBytes={}. 이후 페이지는 OCR 텍스트로 커버.",
+                pageIndex,
+                totalJpegBytes);
+            break;
+        }
+
         // JPEG 바이트를 Base64 문자열로 인코딩
-        String base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        String base64 = Base64.getEncoder().encodeToString(jpegBytes);
         base64Images.add(base64);
+        totalJpegBytes += jpegBytes.length;
 
         log.debug("[Pipeline] 페이지 변환 완료. pageIndex={}, jpegBytes={}", pageIndex, baos.size());
       }
