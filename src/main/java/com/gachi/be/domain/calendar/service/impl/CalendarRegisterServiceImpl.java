@@ -106,7 +106,8 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                         event.tempEventId(),
                         event.title(),
                         correctedDate,
-                        true
+                        true,
+                        event.checklistIds()
                     );
                 }
                 return event;
