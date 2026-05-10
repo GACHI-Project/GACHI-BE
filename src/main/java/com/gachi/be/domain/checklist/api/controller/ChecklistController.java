@@ -68,7 +68,7 @@ public class ChecklistController {
         summary = "체크리스트 삭제",
         description = """
           체크리스트 항목을 삭제합니다.
-          CHECKLIST, TODO 타입 모두 삭제 가능합니다.
+          CHECKLIST 타입만 삭제 가능합니다.
           캘린더 등록 전/후 모두 삭제 가능합니다.
           """)
     @DeleteMapping("/{checklistId}")

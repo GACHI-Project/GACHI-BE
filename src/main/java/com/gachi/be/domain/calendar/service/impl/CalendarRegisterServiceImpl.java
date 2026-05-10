@@ -169,9 +169,12 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                 saved.getId(), saved.getTitle(), saved.getStartAt());
         }
 
-        // 등록된 일정이 있으면 CHECKLIST 타입 체크리스트에 calendar_event_id 연결
+        // preview 목록 기반으로 체크리스트를 각 일정에 정확하게 연결
         if (!savedEvents.isEmpty()) {
-            linkChecklistsToEvents(newsletterId, savedEvents);
+            List<CalendarPreviewEvent> previewEvents = previewRedisService.getPreview(newsletterId);
+            if (previewEvents != null) {
+                linkChecklistsToEvents(newsletterId, savedEvents, previewEvents);
+            }
         }
 
         // Redis preview 데이터 삭제 (등록 완료 후 임시 데이터 정리)
@@ -183,34 +186,42 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
 
         return new CalendarRegisterResponse(count);
     }
+
     /** CHECKLIST 타입 항목들을 등록된 캘린더 일정에 연결.*/
-    private void linkChecklistsToEvents(Long newsletterId, List<CalendarEvent> savedEvents) {
-        // 해당 가정통신문의 CHECKLIST 타입 항목만 조회 (TODO 제외)
-        List<Checklist> checklists = checklistRepository
-            .findByNewsletterIdAndTypeOrderByIdAsc(newsletterId, ChecklistType.CHECKLIST);
+    private void linkChecklistsToEvents(Long newsletterId, List<CalendarEvent> savedEvents,List<CalendarPreviewEvent> previewEvents) {
+        // tempEventId → savedCalendarEvent 맵
+        Map<String, CalendarEvent> eventByTempId = savedEvents.stream()
+            .collect(Collectors.toMap(
+                e -> extractTempId(e.getExternalKey(), newsletterId),
+                e -> e
+            ));
 
-        if (checklists.isEmpty()) {
-            log.debug("[CalendarRegister] 연결할 CHECKLIST 항목 없음. newsletterId={}", newsletterId);
-            return;
-        }
-
-        if (savedEvents.size() == 1) {
-            // 일정이 1개이면 모든 체크리스트를 해당 일정에 연결
-            Long eventId = savedEvents.get(0).getId();
-            checklists.forEach(c -> c.linkToCalendarEvent(eventId));
-        } else {
-            // 일정이 여러 개이면 균등 분배
-            // 인덱스 기반으로 체크리스트를 순서대로 일정에 나눠서 연결
-            int eventCount = savedEvents.size();
-            for (int i = 0; i < checklists.size(); i++) {
-                Long eventId = savedEvents.get(i % eventCount).getId();
-                checklists.get(i).linkToCalendarEvent(eventId);
+        for (CalendarPreviewEvent preview : previewEvents) {
+            if (preview.checklistIds() == null || preview.checklistIds().isEmpty()) {
+                continue; // 이 일정에 연결할 체크리스트 없음
             }
-        }
 
-        checklistRepository.saveAll(checklists);
-        log.debug("[CalendarRegister] CHECKLIST {}개 → 일정 {}개 연결 완료. newsletterId={}",
-            checklists.size(), savedEvents.size(), newsletterId);
+            CalendarEvent linkedEvent = eventByTempId.get(preview.tempEventId());
+            if (linkedEvent == null) {
+                // 중복 등록 스킵된 일정이면 eventByTempId에 없을 수 있음
+                log.debug("[CalendarRegister] tempEventId에 해당하는 등록 일정 없음. tempEventId={}", preview.tempEventId());
+                continue;
+            }
+
+            // checklistIds 목록에 해당하는 체크리스트에 calendar_event_id 연결
+            List<Checklist> checklists = checklistRepository.findAllById(preview.checklistIds());
+            checklists.forEach(c -> c.linkToCalendarEvent(linkedEvent.getId()));
+            checklistRepository.saveAll(checklists);
+
+            log.debug("[CalendarRegister] 체크리스트 {}개 → 일정({}) 연결. tempEventId={}",
+                checklists.size(), linkedEvent.getId(), preview.tempEventId());
+        }
+    }
+
+    //external_key에서 tempEventId 추출.
+    private String extractTempId(String externalKey, Long newsletterId) {
+        String prefix = newsletterId + "_";
+        return externalKey.startsWith(prefix) ? externalKey.substring(prefix.length()) : externalKey;
     }
 
     /** 날짜/시간 문자열을 KST 기준 OffsetDateTime으로 변환*/

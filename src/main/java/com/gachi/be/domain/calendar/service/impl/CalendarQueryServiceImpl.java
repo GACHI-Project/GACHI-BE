@@ -156,21 +156,6 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
         );
     }
 
-    /** 일정 삭제. */
-    @Override
-    @Transactional
-    public void deleteEvent(Long userId, Long eventId) {
-
-        // 소유권 검증
-        CalendarEvent event = calendarEventRepository.findByIdAndUserId(eventId, userId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.CALENDAR_EVENT_NOT_FOUND));
-
-        checklistRepository.deleteByCalendarEventId(eventId);
-        calendarEventRepository.delete(event);
-
-        log.info("[CalendarQuery] 일정 삭제. userId={}, eventId={}", userId, eventId);
-    }
-
     /**일정 엔티티 → 응답 DTO 변환 (체크리스트 조회 포함). */
     private CalendarEventResponse toEventResponse(CalendarEvent event, LocalDate today) {
         // 가정통신문 제목 조회

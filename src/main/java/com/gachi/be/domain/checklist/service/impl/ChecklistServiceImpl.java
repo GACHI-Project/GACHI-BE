@@ -6,6 +6,7 @@ import com.gachi.be.domain.checklist.dto.request.ChecklistCompleteRequest;
 import com.gachi.be.domain.checklist.dto.response.ChecklistTodayItem;
 import com.gachi.be.domain.checklist.dto.response.ChecklistTodayResponse;
 import com.gachi.be.domain.checklist.entity.Checklist;
+import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.checklist.service.ChecklistService;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
@@ -100,6 +101,10 @@ public class ChecklistServiceImpl implements ChecklistService {
         Checklist checklist = checklistRepository.findByIdAndUserId(checklistId, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.CHECKLIST_NOT_FOUND));
 
+        if (checklist.getType() == ChecklistType.TODO) {
+            throw new BusinessException(ErrorCode.CHECKLIST_NOT_FOUND);
+        }
+
         checklist.updateCompleted(request.isCompleted());
 
         log.debug("[ChecklistService] 완료 처리. userId={}, checklistId={}, isCompleted={}",
@@ -113,6 +118,10 @@ public class ChecklistServiceImpl implements ChecklistService {
 
         Checklist checklist = checklistRepository.findByIdAndUserId(checklistId, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.CHECKLIST_NOT_FOUND));
+
+        if (checklist.getType() == ChecklistType.TODO) {
+            throw new BusinessException(ErrorCode.CHECKLIST_NOT_FOUND);
+        }
 
         checklistRepository.delete(checklist);
 

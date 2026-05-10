@@ -1,5 +1,6 @@
 package com.gachi.be.domain.newsletter.service;
 
+import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
@@ -30,4 +31,7 @@ public interface NewsletterService {
 
   /** 번역 결과 조회 */
   NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId);
+
+  /**체크리스트 탭 조회*/
+  NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId);
 }

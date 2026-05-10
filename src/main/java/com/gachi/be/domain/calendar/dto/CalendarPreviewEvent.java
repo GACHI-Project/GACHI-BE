@@ -2,6 +2,8 @@ package com.gachi.be.domain.calendar.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import java.util.List;
+
 /**Redis에 저장되고 조회되는 캘린더 일정 미리보기 단건 DTO.*/
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record CalendarPreviewEvent(
@@ -15,5 +17,8 @@ public record CalendarPreviewEvent(
     String extractedDate,
 
     /** 날짜 추출 성공 여부. false면 사용자가 직접 수정해야 함. */
-    boolean isDateExtracted
+    boolean isDateExtracted,
+
+    // 이 일정에 속하는 체크리스트 ID 목록
+    List<Long> checklistIds
 ) {}

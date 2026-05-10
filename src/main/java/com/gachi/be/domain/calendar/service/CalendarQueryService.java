@@ -16,6 +16,4 @@ public interface CalendarQueryService {
     /** 날짜별 일정+체크리스트 조회 */
     CalendarDailyResponse getDaily(Long userId, String date, String childName);
 
-    /** 일정 삭제 (연결 체크리스트 포함) */
-    void deleteEvent(Long userId, Long eventId);
 }

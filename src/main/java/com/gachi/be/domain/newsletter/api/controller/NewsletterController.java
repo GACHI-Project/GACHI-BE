@@ -5,6 +5,7 @@ import com.gachi.be.domain.calendar.dto.request.CalendarRegisterRequest;
 import com.gachi.be.domain.calendar.dto.response.CalendarPreviewResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarRegisterResponse;
 import com.gachi.be.domain.calendar.service.CalendarRegisterService;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
@@ -39,7 +40,7 @@ public class NewsletterController {
     /**
    * 가정통신문 업로드 API.
    *
-   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -105,6 +106,22 @@ public class NewsletterController {
     NewsletterTranslationResponse response = newsletterService.getTranslation(userId, newsletterId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_TRANSLATION_SUCCESS, response);
   }
+
+  /** 체크리스트 탭 조회 */
+    @Operation(summary = "체크리스트 조회", description = """
+      스캔 결과 체크리스트 탭에 표시할 항목을 반환합니다.
+      CHECKLIST 타입만 반환됩니다 (TODO는 AI요약 탭 전용).
+      dueDate는 연결된 캘린더 일정의 날짜(YYYY-MM-DD)입니다.
+      캘린더 등록 전이면 dueDate=null입니다.
+      """)
+    @GetMapping("/{newsletterId}/checklist")
+    public ApiResponse<NewsletterChecklistResponse> getChecklist(
+        @AuthenticationPrincipal Long userId,
+        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+
+        NewsletterChecklistResponse response = newsletterService.getChecklist(userId, newsletterId);
+        return ApiResponse.success(SuccessCode.NEWSLETTER_CHECKLIST_SUCCESS, response);
+    }
 
     /** 캘린더 일정 미리보기 조회. */
     @Operation(summary = "캘린더 일정 미리보기 조회", description = """

@@ -94,20 +94,4 @@ public class CalendarController {
         CalendarDailyResponse response = calendarQueryService.getDaily(userId, date, childName);
         return ApiResponse.success(SuccessCode.CALENDAR_DAILY_SUCCESS, response);
     }
-
-    /**일정 삭제 API.*/
-    @Operation(
-        summary = "일정 삭제",
-        description = """
-          캘린더 일정을 삭제합니다.
-          연결된 체크리스트(type=CHECKLIST)도 함께 삭제됩니다.
-          """)
-    @DeleteMapping("/{eventId}")
-    public ApiResponse<Void> deleteEvent(
-        @AuthenticationPrincipal Long userId,
-        @Parameter(description = "삭제할 일정 ID", required = true) @PathVariable Long eventId) {
-
-        calendarQueryService.deleteEvent(userId, eventId);
-        return ApiResponse.success(SuccessCode.CALENDAR_EVENT_DELETED, null);
-    }
 }
