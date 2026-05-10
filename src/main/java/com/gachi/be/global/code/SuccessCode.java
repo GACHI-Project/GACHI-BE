@@ -23,7 +23,17 @@ public enum SuccessCode {
   NEWSLETTER_STATUS_SUCCESS(HttpStatus.OK, "NL2001", "요청에 성공하였습니다."),
   NEWSLETTER_TRANSLATION_SUCCESS(HttpStatus.OK, "NL2002", "번역 결과 조회에 성공하였습니다."),
   NEWSLETTER_SUMMARY_SUCCESS(HttpStatus.OK, "NL2003", "요약 결과 조회에 성공하였습니다."),
-  NEWSLETTER_CHECKLIST_SUCCESS(HttpStatus.OK, "NL2004", "체크리스트 조회에 성공하였습니다.");
+  NEWSLETTER_CHECKLIST_SUCCESS(HttpStatus.OK, "NL2004", "체크리스트 조회에 성공하였습니다."),
+  CALENDAR_PREVIEW_SUCCESS(HttpStatus.OK, "CAL2001", "캘린더 일정 미리보기 조회에 성공하였습니다."),
+  CALENDAR_DATES_UPDATED(HttpStatus.OK, "CAL2002", "일정 날짜 수정에 성공하였습니다."),
+  CALENDAR_REGISTER_SUCCESS(HttpStatus.CREATED, "CAL2011", "캘린더 일정 등록에 성공하였습니다."),
+  CALENDAR_MONTHLY_SUCCESS(HttpStatus.OK, "CAL2003", "월별 캘린더 마커 조회에 성공하였습니다."),
+  CALENDAR_WEEKLY_SUCCESS(HttpStatus.OK, "CAL2004", "주별 캘린더 조회에 성공하였습니다."),
+  CALENDAR_DAILY_SUCCESS(HttpStatus.OK, "CAL2005", "날짜별 캘린더 조회에 성공하였습니다."),
+  CALENDAR_EVENT_DELETED(HttpStatus.OK, "CAL2006", "일정 삭제에 성공하였습니다."),
+  CHECKLIST_TODAY_SUCCESS(HttpStatus.OK, "CL2001", "오늘 마감 체크리스트 조회에 성공하였습니다."),
+  CHECKLIST_COMPLETE_SUCCESS(HttpStatus.OK, "CL2002", "체크리스트 완료 처리에 성공하였습니다."),
+  CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;
