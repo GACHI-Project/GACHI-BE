@@ -1,5 +1,10 @@
 package com.gachi.be.domain.newsletter.api.controller;
 
+import com.gachi.be.domain.calendar.dto.request.CalendarDateUpdateRequest;
+import com.gachi.be.domain.calendar.dto.request.CalendarRegisterRequest;
+import com.gachi.be.domain.calendar.dto.response.CalendarPreviewResponse;
+import com.gachi.be.domain.calendar.dto.response.CalendarRegisterResponse;
+import com.gachi.be.domain.calendar.service.CalendarRegisterService;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
@@ -12,19 +17,13 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "Newsletter", description = "가정통신문 API")
@@ -35,8 +34,9 @@ import org.springframework.web.multipart.MultipartFile;
 public class NewsletterController {
 
   private final NewsletterService newsletterService;
+    private final CalendarRegisterService calendarRegisterService;
 
-  /**
+    /**
    * 가정통신문 업로드 API.
    *
    * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
@@ -105,4 +105,52 @@ public class NewsletterController {
     NewsletterTranslationResponse response = newsletterService.getTranslation(userId, newsletterId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_TRANSLATION_SUCCESS, response);
   }
+
+    /** 캘린더 일정 미리보기 조회. */
+    @Operation(summary = "캘린더 일정 미리보기 조회", description = """
+      저장하기 버튼 클릭 시 팝업에 표시할 AI 추출 일정 목록을 반환합니다.
+      Redis에 임시 저장된 데이터를 읽어 반환합니다.
+      데이터가 없거나 만료된 경우(1시간 TTL) 404를 반환합니다.
+      """)
+    @GetMapping("/{newsletterId}/calendar/preview")
+    public ApiResponse<CalendarPreviewResponse> getCalendarPreview(
+        @AuthenticationPrincipal Long userId,
+        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+
+        CalendarPreviewResponse response = calendarRegisterService.getPreview(userId, newsletterId);
+        return ApiResponse.success(SuccessCode.CALENDAR_PREVIEW_SUCCESS, response);
+    }
+
+    /**캘린더 일정 날짜 수정.*/
+    @Operation(summary = "캘린더 일정 날짜 수정", description = """
+      팝업에서 수정 버튼 클릭 시 잘못 추출된 날짜를 수정합니다.
+      tempEventId로 어떤 일정을 수정할지 식별합니다.
+      수정 결과는 Redis에 저장되며, POST /calendar 등록 시 반영됩니다.
+      """)
+    @PatchMapping("/{newsletterId}/calendar/dates")
+    public ApiResponse<Void> updateCalendarDates(
+        @AuthenticationPrincipal Long userId,
+        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
+        @Valid @RequestBody CalendarDateUpdateRequest request) {
+
+        calendarRegisterService.updateDates(userId, newsletterId, request);
+        return ApiResponse.success(SuccessCode.CALENDAR_DATES_UPDATED, null);
+    }
+
+    /** 캘린더 일정 등록*/
+    @Operation(summary = "캘린더 일정 등록 (저장하기)", description = """
+      팝업에서 "네, 등록할게요" 선택 시 calendar_events에 일정을 등록합니다.
+      등록 후 체크리스트·AI요약이 문서 목록에 노출됩니다.
+      external_key로 중복 등록이 방지됩니다.
+      """)
+    @PostMapping("/{newsletterId}/calendar")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<CalendarRegisterResponse> registerCalendar(
+        @AuthenticationPrincipal Long userId,
+        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
+        @Valid @RequestBody CalendarRegisterRequest request) {
+
+        CalendarRegisterResponse response = calendarRegisterService.register(userId, newsletterId, request);
+        return ApiResponse.success(SuccessCode.CALENDAR_REGISTER_SUCCESS, response);
+    }
 }
