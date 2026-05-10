@@ -48,6 +48,7 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
     private final ChecklistRepository checklistRepository;
     private final NewsletterRepository newsletterRepository;
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String DEFAULT_CHILD_COLOR = "#5B9BD5";
     private static final ZoneOffset KST_OFFSET = ZoneOffset.ofHours(9);
 
     /** 캘린더 일정 미리보기 조회.
@@ -153,7 +154,9 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                 .newsletterId(newsletterId)
                 // 가정통신문에 저장된 자녀 스냅샷 그대로 사용 (child_id FK 없음)
                 .childName(newsletter.getChildName())
-                .childColor(newsletter.getChildColor())
+                .childColor(newsletter.getChildColor() != null
+                    ? newsletter.getChildColor()
+                    : DEFAULT_CHILD_COLOR)
                 .title(eventReq.title())
                 .externalKey(externalKey)
                 .startAt(startAt)
