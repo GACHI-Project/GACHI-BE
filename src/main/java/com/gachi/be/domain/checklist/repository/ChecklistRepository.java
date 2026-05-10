@@ -5,6 +5,8 @@ import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
 
@@ -29,4 +31,17 @@ public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
 
   /** 특정 캘린더 일정에 연결된 모든 CHECKLIST 항목 삭제. */
   void deleteByCalendarEventId(Long calendarEventId);
+
+  /** 특정 캘린더에 연결된 미완료 Checklist 항목 조회*/
+  @Query("""
+     SELECT c FROM Checklist c
+     WHERE c.userId = :userId
+       AND c.type = com.gachi.be.domain.checklist.entity.enums.ChecklistType.CHECKLIST
+       AND c.completed = false
+       AND c.calendarEventId IN :calendarEventIds
+     ORDER BY c.id ASC
+     """)
+  List<Checklist> findIncompleteChecklistsByCalendarEventIds(
+      @Param("userId") Long userId,
+      @Param("calendarEventIds") List<Long> calendarEventIds);
 }
