@@ -1,7 +1,9 @@
 package com.gachi.be.domain.newsletter.api.controller;
 
 import com.gachi.be.domain.calendar.dto.request.CalendarDateUpdateRequest;
+import com.gachi.be.domain.calendar.dto.request.CalendarPreviewMockRequest;
 import com.gachi.be.domain.calendar.dto.request.CalendarRegisterRequest;
+import com.gachi.be.domain.calendar.service.CalendarPreviewMockService;
 import com.gachi.be.domain.calendar.dto.response.CalendarPreviewResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarRegisterResponse;
 import com.gachi.be.domain.calendar.service.CalendarRegisterService;
@@ -36,11 +38,12 @@ public class NewsletterController {
 
   private final NewsletterService newsletterService;
   private final CalendarRegisterService calendarRegisterService;
+  private final CalendarPreviewMockService calendarPreviewMockService;
 
   /**
    * 가정통신문 업로드 API.
    *
-   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -124,6 +127,25 @@ public class NewsletterController {
 
     NewsletterChecklistResponse response = newsletterService.getChecklist(userId, newsletterId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_CHECKLIST_SUCCESS, response);
+  }
+
+  /** 캘린더 preview 더미 데이터 Redis 주입 API TODO: 임시 API 임 */
+  @Operation(
+      summary = "[임시] 캘린더 preview 더미 데이터 주입",
+      description = """
+          AI 파이프라인 연결 전 테스트용 임시 API입니다.
+          호출하면 Redis에 preview 데이터가 저장되어 GET /preview가 정상 동작합니다.
+          checklistIds 생략 시 해당 newsletter의 CHECKLIST 항목을 자동 균등 배분합니다.
+          AI 파이프라인 완성 후 제거 예정입니다.
+          """)
+  @PostMapping("/{newsletterId}/calendar/preview/mock")
+  public ApiResponse<Void> injectMockPreview(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
+      @Valid @RequestBody CalendarPreviewMockRequest request) {
+
+      calendarPreviewMockService.injectMockPreview(userId, newsletterId, request);
+      return ApiResponse.success(SuccessCode.CALENDAR_PREVIEW_MOCK_SUCCESS, null);
   }
 
   /** 캘린더 일정 미리보기 조회. */

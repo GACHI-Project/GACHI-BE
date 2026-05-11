@@ -25,6 +25,7 @@ public enum SuccessCode {
   NEWSLETTER_SUMMARY_SUCCESS(HttpStatus.OK, "NL2003", "요약 결과 조회에 성공하였습니다."),
   NEWSLETTER_CHECKLIST_SUCCESS(HttpStatus.OK, "NL2004", "체크리스트 조회에 성공하였습니다."),
   CALENDAR_PREVIEW_SUCCESS(HttpStatus.OK, "CAL2001", "캘린더 일정 미리보기 조회에 성공하였습니다."),
+  CALENDAR_PREVIEW_MOCK_SUCCESS(HttpStatus.OK, "CAL2000", "캘린더 미리보기 더미 데이터가 Redis에 주입되었습니다."),
   CALENDAR_DATES_UPDATED(HttpStatus.OK, "CAL2002", "일정 날짜 수정에 성공하였습니다."),
   CALENDAR_REGISTER_SUCCESS(HttpStatus.CREATED, "CAL2011", "캘린더 일정 등록에 성공하였습니다."),
   CALENDAR_MONTHLY_SUCCESS(HttpStatus.OK, "CAL2003", "월별 캘린더 마커 조회에 성공하였습니다."),
