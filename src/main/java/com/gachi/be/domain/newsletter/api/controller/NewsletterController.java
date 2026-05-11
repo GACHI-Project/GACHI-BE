@@ -35,12 +35,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class NewsletterController {
 
   private final NewsletterService newsletterService;
-    private final CalendarRegisterService calendarRegisterService;
+  private final CalendarRegisterService calendarRegisterService;
 
-    /**
+  /**
    * 가정통신문 업로드 API.
    *
-   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -108,66 +108,79 @@ public class NewsletterController {
   }
 
   /** 체크리스트 탭 조회 */
-    @Operation(summary = "체크리스트 조회", description = """
+  @Operation(
+      summary = "체크리스트 조회",
+      description =
+          """
       스캔 결과 체크리스트 탭에 표시할 항목을 반환합니다.
       CHECKLIST 타입만 반환됩니다 (TODO는 AI요약 탭 전용).
       dueDate는 연결된 캘린더 일정의 날짜(YYYY-MM-DD)입니다.
       캘린더 등록 전이면 dueDate=null입니다.
       """)
-    @GetMapping("/{newsletterId}/checklist")
-    public ApiResponse<NewsletterChecklistResponse> getChecklist(
-        @AuthenticationPrincipal Long userId,
-        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+  @GetMapping("/{newsletterId}/checklist")
+  public ApiResponse<NewsletterChecklistResponse> getChecklist(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
 
-        NewsletterChecklistResponse response = newsletterService.getChecklist(userId, newsletterId);
-        return ApiResponse.success(SuccessCode.NEWSLETTER_CHECKLIST_SUCCESS, response);
-    }
+    NewsletterChecklistResponse response = newsletterService.getChecklist(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_CHECKLIST_SUCCESS, response);
+  }
 
-    /** 캘린더 일정 미리보기 조회. */
-    @Operation(summary = "캘린더 일정 미리보기 조회", description = """
+  /** 캘린더 일정 미리보기 조회. */
+  @Operation(
+      summary = "캘린더 일정 미리보기 조회",
+      description =
+          """
       저장하기 버튼 클릭 시 팝업에 표시할 AI 추출 일정 목록을 반환합니다.
       Redis에 임시 저장된 데이터를 읽어 반환합니다.
       데이터가 없거나 만료된 경우(1시간 TTL) 404를 반환합니다.
       """)
-    @GetMapping("/{newsletterId}/calendar/preview")
-    public ApiResponse<CalendarPreviewResponse> getCalendarPreview(
-        @AuthenticationPrincipal Long userId,
-        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+  @GetMapping("/{newsletterId}/calendar/preview")
+  public ApiResponse<CalendarPreviewResponse> getCalendarPreview(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
 
-        CalendarPreviewResponse response = calendarRegisterService.getPreview(userId, newsletterId);
-        return ApiResponse.success(SuccessCode.CALENDAR_PREVIEW_SUCCESS, response);
-    }
+    CalendarPreviewResponse response = calendarRegisterService.getPreview(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.CALENDAR_PREVIEW_SUCCESS, response);
+  }
 
-    /**캘린더 일정 날짜 수정.*/
-    @Operation(summary = "캘린더 일정 날짜 수정", description = """
+  /** 캘린더 일정 날짜 수정. */
+  @Operation(
+      summary = "캘린더 일정 날짜 수정",
+      description =
+          """
       팝업에서 수정 버튼 클릭 시 잘못 추출된 날짜를 수정합니다.
       tempEventId로 어떤 일정을 수정할지 식별합니다.
       수정 결과는 Redis에 저장되며, POST /calendar 등록 시 반영됩니다.
       """)
-    @PatchMapping("/{newsletterId}/calendar/dates")
-    public ApiResponse<Void> updateCalendarDates(
-        @AuthenticationPrincipal Long userId,
-        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
-        @Valid @RequestBody CalendarDateUpdateRequest request) {
+  @PatchMapping("/{newsletterId}/calendar/dates")
+  public ApiResponse<Void> updateCalendarDates(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
+      @Valid @RequestBody CalendarDateUpdateRequest request) {
 
-        calendarRegisterService.updateDates(userId, newsletterId, request);
-        return ApiResponse.success(SuccessCode.CALENDAR_DATES_UPDATED, null);
-    }
+    calendarRegisterService.updateDates(userId, newsletterId, request);
+    return ApiResponse.success(SuccessCode.CALENDAR_DATES_UPDATED, null);
+  }
 
-    /** 캘린더 일정 등록*/
-    @Operation(summary = "캘린더 일정 등록 (저장하기)", description = """
+  /** 캘린더 일정 등록 */
+  @Operation(
+      summary = "캘린더 일정 등록 (저장하기)",
+      description =
+          """
       팝업에서 "네, 등록할게요" 선택 시 calendar_events에 일정을 등록합니다.
       등록 후 체크리스트·AI요약이 문서 목록에 노출됩니다.
       external_key로 중복 등록이 방지됩니다.
       """)
-    @PostMapping("/{newsletterId}/calendar")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<CalendarRegisterResponse> registerCalendar(
-        @AuthenticationPrincipal Long userId,
-        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
-        @Valid @RequestBody CalendarRegisterRequest request) {
+  @PostMapping("/{newsletterId}/calendar")
+  @ResponseStatus(HttpStatus.CREATED)
+  public ApiResponse<CalendarRegisterResponse> registerCalendar(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
+      @Valid @RequestBody CalendarRegisterRequest request) {
 
-        CalendarRegisterResponse response = calendarRegisterService.register(userId, newsletterId, request);
-        return ApiResponse.success(SuccessCode.CALENDAR_REGISTER_SUCCESS, response);
-    }
+    CalendarRegisterResponse response =
+        calendarRegisterService.register(userId, newsletterId, request);
+    return ApiResponse.success(SuccessCode.CALENDAR_REGISTER_SUCCESS, response);
+  }
 }

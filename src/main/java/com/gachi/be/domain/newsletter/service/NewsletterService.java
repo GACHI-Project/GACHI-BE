@@ -32,6 +32,6 @@ public interface NewsletterService {
   /** 번역 결과 조회 */
   NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId);
 
-  /**체크리스트 탭 조회*/
+  /** 체크리스트 탭 조회 */
   NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId);
 }

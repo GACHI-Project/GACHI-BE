@@ -30,7 +30,6 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -60,7 +59,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
    *
-   * 처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
+   * <p>처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
    * file_key 획득 childId가 있으면 children 테이블에서 자녀 정보 조회 (스냅샷용) newsletter 레코드 DB 저장 (status=PENDING 으로
    * 변경) AI 분석 파이프라인 비동기 트리거 -> Asyncㅏ로 별도 스레드에서 실행하게 함.
    */
@@ -204,7 +203,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 파일 유효성 검사.
    *
-   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
    * 최대 크기: 10MB
    */
   private void validateFile(MultipartFile file) {
@@ -274,44 +273,52 @@ public class NewsletterServiceImpl implements NewsletterService {
     }
   }
 
-    /** 체크리스트 탭 조회. */
-    @Override
-    public NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId) {
-        Newsletter newsletter = findNewsletterById(newsletterId);
-        validateOwnership(newsletter, userId);
-        validateCompleted(newsletter);
+  /** 체크리스트 탭 조회. */
+  @Override
+  public NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId) {
+    Newsletter newsletter = findNewsletterById(newsletterId);
+    validateOwnership(newsletter, userId);
+    validateCompleted(newsletter);
 
-        // CHECKLIST 타입 항목만 조회
-        List<Checklist> checklists = checklistRepository
-            .findByNewsletterIdAndTypeOrderByIdAsc(newsletterId, ChecklistType.CHECKLIST);
+    // CHECKLIST 타입 항목만 조회
+    List<Checklist> checklists =
+        checklistRepository.findByNewsletterIdAndTypeOrderByIdAsc(
+            newsletterId, ChecklistType.CHECKLIST);
 
-        // calendarEventId 목록 수집 (null 제외)
-        List<Long> eventIds = checklists.stream()
+    // calendarEventId 목록 수집 (null 제외)
+    List<Long> eventIds =
+        checklists.stream()
             .map(Checklist::getCalendarEventId)
             .filter(id -> id != null)
             .distinct()
             .toList();
 
-        // eventId → start_at KST 날짜 문자열 맵
-        Map<Long, String> dueDateByEventId = calendarEventRepository.findAllById(eventIds).stream()
-            .collect(Collectors.toMap(
-                CalendarEvent::getId,
-                e -> e.getStartAt()
-                    .withOffsetSameInstant(ZoneOffset.ofHours(9))
-                    .format(DateTimeFormatter.ISO_LOCAL_DATE) // "YYYY-MM-DD"
-            ));
+    // eventId → start_at KST 날짜 문자열 맵
+    Map<Long, String> dueDateByEventId =
+        calendarEventRepository.findAllById(eventIds).stream()
+            .collect(
+                Collectors.toMap(
+                    CalendarEvent::getId,
+                    e ->
+                        e.getStartAt()
+                            .withOffsetSameInstant(ZoneOffset.ofHours(9))
+                            .format(DateTimeFormatter.ISO_LOCAL_DATE) // "YYYY-MM-DD"
+                    ));
 
-        List<ChecklistItem> items = checklists.stream()
-            .map(c -> {
-                String dueDate = c.getCalendarEventId() != null
-                    ? dueDateByEventId.get(c.getCalendarEventId())
-                    : null;
-                return ChecklistItem.of(c, dueDate);
-            })
+    List<ChecklistItem> items =
+        checklists.stream()
+            .map(
+                c -> {
+                  String dueDate =
+                      c.getCalendarEventId() != null
+                          ? dueDateByEventId.get(c.getCalendarEventId())
+                          : null;
+                  return ChecklistItem.of(c, dueDate);
+                })
             .toList();
 
-        return NewsletterChecklistResponse.of(items);
-    }
+    return NewsletterChecklistResponse.of(items);
+  }
 
   /** newsletterId로 newsletter 레코드 조회. */
   private Newsletter findNewsletterById(Long newsletterId) {

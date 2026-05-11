@@ -102,6 +102,6 @@ public class Checklist {
 
   /** 캘린더 일정 연결 시 사용 */
   public void linkToCalendarEvent(Long calendarEventId) {
-      this.calendarEventId = calendarEventId;
+    this.calendarEventId = calendarEventId;
   }
 }

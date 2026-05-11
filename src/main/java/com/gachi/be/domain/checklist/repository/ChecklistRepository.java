@@ -25,15 +25,16 @@ public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
   /** 특정 사용자의 미완료 CHECKLIST 항목 전체 조회. */
   List<Checklist> findByUserIdAndTypeAndCompletedFalse(Long userId, ChecklistType type);
 
-  /** 특정 캘린더 일정에 연결된 CHECKLIST 타입 항목 조회.*/
+  /** 특정 캘린더 일정에 연결된 CHECKLIST 타입 항목 조회. */
   List<Checklist> findByCalendarEventIdAndTypeOrderByIdAsc(
       Long calendarEventId, ChecklistType type);
 
   /** 특정 캘린더 일정에 연결된 모든 CHECKLIST 항목 삭제. */
   void deleteByCalendarEventId(Long calendarEventId);
 
-  /** 특정 캘린더에 연결된 미완료 Checklist 항목 조회*/
-  @Query("""
+  /** 특정 캘린더에 연결된 미완료 Checklist 항목 조회 */
+  @Query(
+      """
      SELECT c FROM Checklist c
      WHERE c.userId = :userId
        AND c.type = com.gachi.be.domain.checklist.entity.enums.ChecklistType.CHECKLIST
@@ -42,6 +43,5 @@ public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
      ORDER BY c.id ASC
      """)
   List<Checklist> findIncompleteChecklistsByCalendarEventIds(
-      @Param("userId") Long userId,
-      @Param("calendarEventIds") List<Long> calendarEventIds);
+      @Param("userId") Long userId, @Param("calendarEventIds") List<Long> calendarEventIds);
 }
