@@ -44,4 +44,7 @@ public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
      """)
   List<Checklist> findIncompleteChecklistsByCalendarEventIds(
       @Param("userId") Long userId, @Param("calendarEventIds") List<Long> calendarEventIds);
+
+  /**e ventId IN 절로 한 번에 조회하여 서비스에서 Map으로 그룹핑*/
+  List<Checklist> findByCalendarEventIdInAndType(List<Long> calendarEventIds, ChecklistType type);
 }

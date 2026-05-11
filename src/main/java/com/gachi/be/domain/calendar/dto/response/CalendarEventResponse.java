@@ -38,7 +38,7 @@ public record CalendarEventResponse(
     // dDay > 0: 미래(앞으로 N일), dDay == 0: 오늘, dDay < 0: 과거
     int dDay = (int) (eventDate.toEpochDay() - today.toEpochDay());
 
-    List<ChecklistItem> checklistItems = checklists.stream().map(ChecklistItem::from).toList();
+    List<ChecklistItem> checklistItems = checklists == null ? List.of() : checklists.stream().map(ChecklistItem::from).toList();
 
     return new CalendarEventResponse(
         event.getId(),

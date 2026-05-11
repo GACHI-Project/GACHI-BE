@@ -71,17 +71,28 @@ public class ChecklistServiceImpl implements ChecklistService {
     Map<Long, CalendarEvent> eventMap =
         todayEvents.stream().collect(Collectors.toMap(CalendarEvent::getId, e -> e));
 
-    // 체크리스트 → DTO 변환 (newsletter 제목 + 자녀 이름 조회)
+
+      List<Long> newsletterIds = checklists.stream()
+                  .map(Checklist::getNewsletterId)
+                  .distinct()
+                  .toList();
+
+              Map<Long, String> titleByNewsletterId =
+                  newsletterRepository.findAllById(newsletterIds).stream()
+                          .collect(
+                          Collectors.toMap(
+                                  n -> n.getId(),
+                                  n -> n.getTitle() != null ? n.getTitle() : "(제목 없음)"));
+
+
+      // 체크리스트 → DTO 변환 (newsletter 제목 + 자녀 이름 조회)
     List<ChecklistTodayItem> items =
         checklists.stream()
             .map(
                 c -> {
                   // 가정통신문 제목 조회
-                  String newsletterTitle =
-                      newsletterRepository
-                          .findById(c.getNewsletterId())
-                          .map(n -> n.getTitle() != null ? n.getTitle() : "(제목 없음)")
-                          .orElse("(삭제된 가정통신문)");
+                    String newsletterTitle =
+                        titleByNewsletterId.getOrDefault(c.getNewsletterId(), "(삭제된 가정통신문)");
 
                   // 자녀 이름: 연결된 일정에서 가져옴
                   CalendarEvent linkedEvent = eventMap.get(c.getCalendarEventId());

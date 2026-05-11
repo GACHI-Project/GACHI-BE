@@ -86,36 +86,40 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
     }
 
     // tempEventId → correctedDate 맵 구성
-    Map<String, String> correctionMap =
-        request.events().stream()
-            .collect(
-                Collectors.toMap(
-                    CalendarDateUpdateRequest.EventDateUpdate::tempEventId,
-                    CalendarDateUpdateRequest.EventDateUpdate::correctedDate));
+      Map<String, LocalDate> correctionMap =
+          request.events().stream()
+              .collect(
+                  Collectors.toMap(
+                      e -> e.tempEventId(),
+                      e -> e.correctedDate()));
 
     // 날짜 교체: 수정 요청에 포함된 항목만 extractedDate를 교체, isDateExtracted=true로 변경
-    List<CalendarPreviewEvent> updated =
-        events.stream()
-            .map(
-                event -> {
-                  String correctedDate = correctionMap.get(event.tempEventId());
-                  if (correctedDate != null) {
-                    // 날짜만 수정 (시간 정보 없음). 등록 시 KST 00:00:00으로 처리됨.
-                    log.debug(
-                        "[CalendarRegister] 날짜 수정. tempEventId={}, {} → {}",
-                        event.tempEventId(),
-                        event.extractedDate(),
-                        correctedDate);
-                    return new CalendarPreviewEvent(
-                        event.tempEventId(),
-                        event.title(),
-                        correctedDate,
-                        true,
-                        event.checklistIds());
-                  }
-                  return event;
-                })
-            .toList();
+      List<CalendarPreviewEvent> updated =
+          events.stream()
+              .map(
+                  event -> {
+                      // correctionMap에서 꺼낸 값이 LocalDate이므로 변수 타입 변경
+                      LocalDate correctedLocalDate = correctionMap.get(event.tempEventId());
+                      if (correctedLocalDate != null) {
+                          // LocalDate → "YYYY-MM-DD" String으로 변환 후 CalendarPreviewEvent에 저장
+                          // CalendarPreviewEvent.extractedDate는 String 타입이므로 변환 필요
+                          String correctedDate = correctedLocalDate.format(
+                              java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+                          log.debug(
+                              "[CalendarRegister] 날짜 수정. tempEventId={}, {} → {}",
+                              event.tempEventId(),
+                              event.extractedDate(),
+                              correctedDate);
+                          return new CalendarPreviewEvent(
+                              event.tempEventId(),
+                              event.title(),
+                              correctedDate,
+                              true,
+                              event.checklistIds());
+                      }
+                      return event;
+                  })
+              .toList();
 
     // 수정된 데이터를 Redis에 다시 저장 (TTL 갱신)
     previewRedisService.savePreview(newsletterId, updated);
@@ -257,9 +261,9 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
         return dateTime.atOffset(KST_OFFSET);
       }
     } catch (DateTimeParseException e) {
-      log.error("[CalendarRegister] 날짜 파싱 실패. value={}, error={}", dateStr, e.getMessage());
-      throw new BusinessException(
-          ErrorCode.INVALID_INPUT_VALUE, "날짜 형식이 올바르지 않습니다. 입력값: " + dateStr);
+        log.error("[CalendarRegister] 날짜 파싱 실패. value={}, error={}", dateStr, e.getMessage());
+        throw new BusinessException(
+            ErrorCode.INVALID_INPUT_VALUE, "날짜 형식이 올바르지 않습니다. 입력값: " + dateStr, e);
     }
   }
 

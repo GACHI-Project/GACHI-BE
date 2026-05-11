@@ -2,6 +2,7 @@ package com.gachi.be.domain.calendar.service;
 
 import com.gachi.be.domain.calendar.dto.CalendarPreviewEvent;
 import com.gachi.be.domain.calendar.dto.request.CalendarPreviewMockRequest;
+import com.gachi.be.domain.checklist.entity.Checklist;
 import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
@@ -54,7 +55,7 @@ public class CalendarPreviewMockService {
           checklistRepository
               .findByNewsletterIdAndTypeOrderByIdAsc(newsletterId, ChecklistType.CHECKLIST)
               .stream()
-              .map(c -> c.getId())
+              .map(Checklist::getId)
               .toList();
     }
 
