@@ -163,7 +163,8 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
     OffsetDateTime rangeEnd = targetDate.plusDays(1).atStartOfDay().atOffset(KST_OFFSET);
 
     List<CalendarEvent> events =
-        calendarEventRepository.findEventsInRange(userId, rangeStart, rangeEnd, normalizedChildName);
+        calendarEventRepository.findEventsInRange(
+            userId, rangeStart, rangeEnd, normalizedChildName);
 
     Map<Long, String> newsletterTitleMap = buildNewsletterTitleMap(events);
     Map<Long, List<Checklist>> checklistMap = buildChecklistMap(events);
@@ -250,7 +251,8 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
     } catch (DateTimeParseException e) {
       throw new BusinessException(
           ErrorCode.INVALID_INPUT_VALUE,
-          "날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요. 입력값: " + dateStr, e);
+          "날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요. 입력값: " + dateStr,
+          e);
     }
   }
 
