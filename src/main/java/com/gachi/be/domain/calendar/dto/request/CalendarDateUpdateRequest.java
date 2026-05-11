@@ -17,7 +17,6 @@ public record CalendarDateUpdateRequest(
       @NotBlank(message = "tempEventId는 필수입니다.") String tempEventId,
 
       // 사용자가 직접 입력한 날짜. -> 등록 시 KST 00:00:00으로 처리됨
-      @NotNull(message = "correctedDate는 필수입니다.")
-      @JsonFormat(pattern = "yyyy-MM-dd")
-      LocalDate correctedDate) {}
+      @NotNull(message = "correctedDate는 필수입니다.") @JsonFormat(pattern = "yyyy-MM-dd")
+          LocalDate correctedDate) {}
 }

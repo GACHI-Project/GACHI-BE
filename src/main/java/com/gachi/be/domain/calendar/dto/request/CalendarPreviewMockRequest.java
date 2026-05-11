@@ -5,7 +5,6 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
-
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -24,15 +23,15 @@ public record CalendarPreviewMockRequest(
 
       /** 이 일정에 연결할 체크리스트 ID 목록. null 또는 빈 리스트이면 해당 newsletter의 CHECKLIST 항목을 자동 균등 배분. */
       List<Long> checklistIds) {
-      @AssertTrue(message = "유효한 날짜가 아닙니다. YYYY-MM-DD 형식의 실존 날짜를 입력해주세요.")
-      public boolean isValidExtractedDate() {
-          if (extractedDate == null) return true;
-          try {
-              LocalDate.parse(extractedDate);
-              return true;
-          }catch (DateTimeParseException e) {
-              return false;
-          }
+    @AssertTrue(message = "유효한 날짜가 아닙니다. YYYY-MM-DD 형식의 실존 날짜를 입력해주세요.")
+    public boolean isValidExtractedDate() {
+      if (extractedDate == null) return true;
+      try {
+        LocalDate.parse(extractedDate);
+        return true;
+      } catch (DateTimeParseException e) {
+        return false;
       }
+    }
   }
 }

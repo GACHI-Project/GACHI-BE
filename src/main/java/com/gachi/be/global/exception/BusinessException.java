@@ -11,7 +11,7 @@ public class BusinessException extends AppException {
     super(errorCode, detailMessage);
   }
 
-    public BusinessException(ErrorCode errorCode, String detailMessage, Throwable cause) {
-        super(errorCode, detailMessage, cause);
-    }
+  public BusinessException(ErrorCode errorCode, String detailMessage, Throwable cause) {
+    super(errorCode, detailMessage, cause);
+  }
 }

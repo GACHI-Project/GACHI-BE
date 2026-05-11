@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
  * Redis에서 읽어 팝업에 표시 3. PATCH /calendar/dates → Redis에서 날짜 수정 후 다시 저장 4. POST /calendar → Redis 데이터
  * 기반으로 calendar_events insert → Redis 키 삭제
  *
- * Redis 키 형식: newsletter:preview:{newsletterId} - TTL: 1시간 (사용자가 팝업을 열고 이탈해도 자동 만료)
+ * <p>Redis 키 형식: newsletter:preview:{newsletterId} - TTL: 1시간 (사용자가 팝업을 열고 이탈해도 자동 만료)
  */
 @Slf4j
 @Service
@@ -52,8 +52,8 @@ public class CalendarPreviewRedisService {
           events.size());
       return events;
     } catch (Exception e) {
-        log.error("[CalendarPreview] Redis 데이터 파싱 실패. newsletterId={}", newsletterId, e);
-        throw new RuntimeException("캘린더 미리보기 데이터 파싱 실패", e);
+      log.error("[CalendarPreview] Redis 데이터 파싱 실패. newsletterId={}", newsletterId, e);
+      throw new RuntimeException("캘린더 미리보기 데이터 파싱 실패", e);
     }
   }
 
