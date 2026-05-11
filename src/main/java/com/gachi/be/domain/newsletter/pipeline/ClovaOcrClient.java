@@ -27,7 +27,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 /**
  * 클로바 OCR API 호출 클라이언트.
  *
- * 호출 방식: Presigned URL 방식 파일을 Base64로 인코딩하는 대신 S3 Presigned URL을 클로바에 전달하고 클로바가 직접 S3에서 파일을 가져가는
+ * <p>호출 방식: Presigned URL 방식 파일을 Base64로 인코딩하는 대신 S3 Presigned URL을 클로바에 전달하고 클로바가 직접 S3에서 파일을 가져가는
  * 방식. PDF 지원: 클로바 OCR은 PDF를 직접 지원하므로 여러 페이지 가정통신문도 1회 호출로 처리 가능. format 필드를 "jpeg"/"png"/"pdf" 중에서
  * ObjectMapper: Spring Boot가 자동으로 빈으로 등록하므로 @RequiredArgsConstructor로 주입받아 사용.
  */
