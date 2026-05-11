@@ -202,6 +202,19 @@ public enum ErrorCode {
       "체크리스트 항목을 찾을 수 없습니다.",
       "checklistId에 해당하는 레코드 없음",
       ErrorLogLevel.INFO),
+  // Calendar
+  CALENDAR_EVENT_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "CAL4041",
+      "캘린더 일정을 찾을 수 없습니다.",
+      "eventId에 해당하는 레코드 없음 또는 소유권 불일치",
+      ErrorLogLevel.INFO),
+  CALENDAR_PREVIEW_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "CAL4042",
+      "캘린더 미리보기 데이터가 없습니다. AI 분석 중이거나 데이터가 만료되었을 수 있습니다.",
+      "Redis에 newsletter:preview:{id} 키 없음 또는 TTL 만료",
+      ErrorLogLevel.WARN),
 
   EXTERNAL_API_ERROR(
       HttpStatus.BAD_GATEWAY,

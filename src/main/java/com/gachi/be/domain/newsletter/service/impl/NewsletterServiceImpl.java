@@ -1,7 +1,14 @@
 package com.gachi.be.domain.newsletter.service.impl;
 
+import com.gachi.be.domain.calendar.entity.CalendarEvent;
+import com.gachi.be.domain.calendar.repository.CalendarEventRepository;
+import com.gachi.be.domain.checklist.entity.Checklist;
+import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
+import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.child.entity.Child;
 import com.gachi.be.domain.child.repository.ChildRepository;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse.ChecklistItem;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
@@ -17,7 +24,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -40,6 +52,8 @@ public class NewsletterServiceImpl implements NewsletterService {
   private final NewsletterRepository newsletterRepository;
   private final ChildRepository childRepository;
   private final S3FileService s3FileService;
+  private final CalendarEventRepository calendarEventRepository;
+  private final ChecklistRepository checklistRepository;
   private final NewsletterPipelineService newsletterPipelineService;
 
   /**
@@ -121,7 +135,7 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     Newsletter saved;
     try {
-      // [리뷰 반영 #7] DataIntegrityViolationException → NEWSLETTER_DUPLICATE 변환
+      // DataIntegrityViolationException → NEWSLETTER_DUPLICATE 변환
       // checkDuplicate()를 통과했더라도 동시에 두 요청이 들어오면
       // 한쪽이 DB 유니크 인덱스 위반으로 예외를 받을 수 있음
       saved = newsletterRepository.save(newsletter);
@@ -145,7 +159,7 @@ public class NewsletterServiceImpl implements NewsletterService {
 
           @Override
           public void afterCompletion(int status) {
-            // [리뷰 반영 #6] 트랜잭션 롤백 시 S3 고아 파일 삭제
+            // 트랜잭션 롤백 시 S3 고아 파일 삭제
             if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
               log.warn("[Newsletter] 트랜잭션 롤백. S3 파일 정리. fileKey={}", savedFileKey);
               try {
@@ -257,6 +271,53 @@ public class NewsletterServiceImpl implements NewsletterService {
     if (isDuplicate) {
       throw new BusinessException(ErrorCode.NEWSLETTER_DUPLICATE);
     }
+  }
+
+  /** 체크리스트 탭 조회. */
+  @Override
+  public NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId) {
+    Newsletter newsletter = findNewsletterById(newsletterId);
+    validateOwnership(newsletter, userId);
+    validateCompleted(newsletter);
+
+    // CHECKLIST 타입 항목만 조회
+    List<Checklist> checklists =
+        checklistRepository.findByNewsletterIdAndTypeOrderByIdAsc(
+            newsletterId, ChecklistType.CHECKLIST);
+
+    // calendarEventId 목록 수집 (null 제외)
+    List<Long> eventIds =
+        checklists.stream()
+            .map(Checklist::getCalendarEventId)
+            .filter(id -> id != null)
+            .distinct()
+            .toList();
+
+    // eventId → start_at KST 날짜 문자열 맵
+    Map<Long, String> dueDateByEventId =
+        calendarEventRepository.findAllById(eventIds).stream()
+            .collect(
+                Collectors.toMap(
+                    CalendarEvent::getId,
+                    e ->
+                        e.getStartAt()
+                            .withOffsetSameInstant(ZoneOffset.ofHours(9))
+                            .format(DateTimeFormatter.ISO_LOCAL_DATE) // "YYYY-MM-DD"
+                    ));
+
+    List<ChecklistItem> items =
+        checklists.stream()
+            .map(
+                c -> {
+                  String dueDate =
+                      c.getCalendarEventId() != null
+                          ? dueDateByEventId.get(c.getCalendarEventId())
+                          : null;
+                  return ChecklistItem.of(c, dueDate);
+                })
+            .toList();
+
+    return NewsletterChecklistResponse.of(items);
   }
 
   /** newsletterId로 newsletter 레코드 조회. */

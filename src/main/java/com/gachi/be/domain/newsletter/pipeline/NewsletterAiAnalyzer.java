@@ -252,6 +252,7 @@ public class NewsletterAiAnalyzer {
                 dto ->
                     Checklist.builder()
                         .newsletterId(newsletterId)
+                        .calendarEventId(null)
                         .userId(userId)
                         .type(ChecklistType.CHECKLIST)
                         .content(dto.content().trim())
@@ -332,6 +333,7 @@ public class NewsletterAiAnalyzer {
                   }
                   return Checklist.builder()
                       .newsletterId(newsletterId)
+                      .calendarEventId(null)
                       .userId(userId)
                       .type(ChecklistType.TODO)
                       .content(dto.content().trim())
