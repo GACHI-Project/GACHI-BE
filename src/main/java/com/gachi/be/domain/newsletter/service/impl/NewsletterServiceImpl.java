@@ -197,7 +197,7 @@ public class NewsletterServiceImpl implements NewsletterService {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
     validateCompleted(newsletter);
-    return NewsletterTranslationResponse.from(newsletter);
+    return NewsletterTranslationResponse.from(newsletter, newsletter.getDateCandidates());
   }
 
   /**
