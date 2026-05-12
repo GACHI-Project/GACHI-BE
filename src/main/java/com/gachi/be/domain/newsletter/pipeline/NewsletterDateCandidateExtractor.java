@@ -1,6 +1,7 @@
 package com.gachi.be.domain.newsletter.pipeline;
 
 import com.gachi.be.domain.newsletter.entity.enums.DateCandidateExtractionType;
+import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -10,9 +11,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
-/** OCR 정제 이후 텍스트에서 명시적 단일 날짜 후보만 추출하고 표준 날짜로 정규화합니다. */
+/** OCR 정제 이후 텍스트에서 명시적 단일 날짜 후보를 추출하고 표준 날짜로 정규화합니다. */
 @Component
 public class NewsletterDateCandidateExtractor {
+
+  private final Clock clock;
 
   private static final Pattern FULL_DATE_PATTERN =
       Pattern.compile(
@@ -26,6 +29,10 @@ public class NewsletterDateCandidateExtractor {
   private static final Pattern SLASH_MONTH_DAY_PATTERN =
       Pattern.compile("(?<!\\d)(?<month>1[0-2]|0?[1-9])/(?<day>[12]\\d|3[01]|0?[1-9])(?![0-9/])");
 
+  public NewsletterDateCandidateExtractor(Clock clock) {
+    this.clock = clock;
+  }
+
   /**
    * 날짜 후보를 추출합니다.
    *
@@ -38,7 +45,7 @@ public class NewsletterDateCandidateExtractor {
       return List.of();
     }
 
-    LocalDate safeReferenceDate = referenceDate != null ? referenceDate : LocalDate.now();
+    LocalDate safeReferenceDate = referenceDate != null ? referenceDate : LocalDate.now(clock);
     List<ExtractedDateCandidate> candidates = new ArrayList<>();
 
     collectFullDateCandidates(text, candidates);
