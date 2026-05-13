@@ -49,6 +49,7 @@ public class NewsletterPipelineService {
   private final OcrTextRefiner ocrTextRefiner;
   private final PapagoTranslateClient papagoTranslateClient;
   private final NewsletterAiAnalyzer newsletterAiAnalyzer;
+  private final NewsletterDateCandidateService newsletterDateCandidateService;
   // PDF를 이미지로 변환할 때 사용하는 해상도 -> TODO: 현재는 150 DPI인데 더 부족하거나 과하다 싶으면 줄이거나 늘이기: 300DPI는 토큰 4배 증가 위험
   private static final float PDF_RENDER_DPI = 150f;
   // PDF 변환시 처리할 최대 페이지 수
@@ -125,6 +126,8 @@ public class NewsletterPipelineService {
       // 텍스트 정제
       log.debug("[Pipeline][STEP5] 텍스트 정제 시작.");
       String originalText = ocrTextRefiner.refineText(ocrText);
+      // 날짜 위치는 후속 매칭의 기준점이므로 번역문이 아니라 OCR 정제 원문 기준으로 저장한다.
+      newsletterDateCandidateService.extractAndReplace(newsletterId, originalText);
       log.debug("[Pipeline][STEP5] 정제 완료. length={}chars", originalText.length());
 
       // 파파고 번역
