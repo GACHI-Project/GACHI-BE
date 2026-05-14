@@ -7,11 +7,11 @@ import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.child.entity.Child;
 import com.gachi.be.domain.child.repository.ChildRepository;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse;
+import com.gachi.be.domain.newsletter.dto.response.*;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterRecentResponse.RecentItem;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterRecentResponse.DateGroup;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterListResponse.NewsletterItem;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse.ChecklistItem;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterPipelineService;
@@ -24,15 +24,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -55,7 +60,8 @@ public class NewsletterServiceImpl implements NewsletterService {
   private final CalendarEventRepository calendarEventRepository;
   private final ChecklistRepository checklistRepository;
   private final NewsletterPipelineService newsletterPipelineService;
-
+  private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+  private static final int PAGE_SIZE = 20;
   /**
    * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
    *
@@ -200,10 +206,226 @@ public class NewsletterServiceImpl implements NewsletterService {
     return NewsletterTranslationResponse.from(newsletter, newsletter.getDateCandidates());
   }
 
+
+    /** 요약 결과 조회. 스캔 결과 [AI요약] 탭 상단의 요약문을 반환합니다.*/
+    @Override
+    @Transactional(readOnly = true)
+    public NewsletterSummaryResponse getSummary(Long userId, Long newsletterId) {
+        Newsletter newsletter = findNewsletterById(newsletterId);
+        validateOwnership(newsletter, userId);
+        validateCompleted(newsletter);
+        return NewsletterSummaryResponse.from(newsletter);
+    }
+    /** 체크리스트/해야할일 조회.
+     * type 파라미터로 반환 항목을 필터링 진행 */
+    @Override
+    @Transactional(readOnly = true)
+    public NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId, String type) {
+        Newsletter newsletter = findNewsletterById(newsletterId);
+        validateOwnership(newsletter, userId);
+        validateCompleted(newsletter);
+
+        // type 파라미터를 ChecklistType enum으로 변환
+        // null이면 전체 조회, 잘못된 값이면 INVALID_INPUT_VALUE 에러
+        ChecklistType filterType = parseChecklistType(type);
+
+        // type에 따라 DB에서 항목 조회
+        List<Checklist> checklists = fetchChecklists(newsletterId, filterType);
+
+        // CHECKLIST 타입 항목의 dueDate 계산을 위해 연결된 CalendarEvent 조회
+        // TODO 타입은 calendarEventId가 없으므로 CHECKLIST 항목의 eventId만 수집
+        Map<Long, String> dueDateByEventId = buildDueDateMap(checklists);
+
+        // 타입에 따라 적절한 팩토리 메서드로 DTO 변환
+        List<ChecklistItem> items =
+            checklists.stream()
+                .map(c -> toChecklistItem(c, dueDateByEventId))
+                .toList();
+
+        return NewsletterChecklistResponse.of(items);
+    }
+
+    /** type 문자열을 ChecklistType enum으로 변환 */
+    private ChecklistType parseChecklistType(String type) {
+        if (type == null) return null;
+
+        try {
+            return ChecklistType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(
+                ErrorCode.INVALID_INPUT_VALUE,
+                "type은 CHECKLIST 또는 TODO만 허용됩니다. 입력값: " + type);
+        }
+    }
+
+    /** filterType에 따라 체크리스트를 DB에서 조회합니다.*/
+    private List<Checklist> fetchChecklists(Long newsletterId, ChecklistType filterType) {
+        if (filterType == null) {
+            // 타입 필터 없음: CHECKLIST + TODO 전체 반환
+            return checklistRepository.findByNewsletterIdOrderByIdAsc(newsletterId);
+        } else {
+            // 특정 타입만 반환
+            return checklistRepository.findByNewsletterIdAndTypeOrderByIdAsc(newsletterId, filterType);
+        }
+    }
+
+    /** CHECKLIST 타입 항목들의 calendarEventId → dueDate(KST YYYY-MM-DD) 맵을 생성*/
+    private Map<Long, String> buildDueDateMap(List<Checklist> checklists) {
+        // CHECKLIST 타입 중 calendarEventId가 있는 것만 수집 (중복 제거)
+        List<Long> eventIds =
+            checklists.stream()
+                .filter(c -> c.getType() == ChecklistType.CHECKLIST)
+                .map(Checklist::getCalendarEventId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+
+        if (eventIds.isEmpty()) return Map.of();
+
+        // 한 번의 DB 조회로 모든 CalendarEvent 조회 (N+1 방지)
+        return calendarEventRepository.findAllById(eventIds).stream()
+            .collect(
+                Collectors.toMap(
+                    CalendarEvent::getId,
+                    e ->
+                        e.getStartAt()
+                            .withOffsetSameInstant(ZoneOffset.ofHours(9))
+                            .format(DateTimeFormatter.ISO_LOCAL_DATE)
+                ));
+    }
+
+    /**Checklist 엔티티를 타입에 맞는 ChecklistItem DTO로 변환합니다. */
+    private ChecklistItem toChecklistItem(Checklist checklist, Map<Long, String> dueDateByEventId) {
+        if (checklist.getType() == ChecklistType.CHECKLIST) {
+            // CHECKLIST: dueDate를 eventId 맵에서 조회 (없으면 null = 캘린더 미등록)
+            String dueDate =
+                checklist.getCalendarEventId() != null
+                    ? dueDateByEventId.get(checklist.getCalendarEventId())
+                    : null;
+            return ChecklistItem.ofChecklist(checklist, dueDate);
+        } else {
+            return ChecklistItem.ofTodo(checklist);
+        }
+    }
+
+    /** 가정통신문 상세 조회. */
+    @Override
+    @Transactional(readOnly = true)
+    public NewsletterDetailResponse getDetail(Long userId, Long newsletterId) {
+        Newsletter newsletter = findNewsletterById(newsletterId);
+        validateOwnership(newsletter, userId);
+
+        // calendar_events에 해당 newsletter로 등록된 일정 존재 여부 확인
+        boolean calendarRegistered =
+            calendarEventRepository.existsByNewsletterIdAndUserId(newsletterId, userId);
+
+        return NewsletterDetailResponse.from(newsletter, calendarRegistered);
+    }
+
+    /**가정통신문 목록 조회. */
+    @Override
+    @Transactional(readOnly = true)
+    public NewsletterListResponse getList(
+        Long userId, String childName, String search, int page, String sort) {
+
+        // sort 파라미터 → Pageable 생성
+        // "recent" 또는 기타 값: createdAt 내림차순 (최신순)
+        // "oldest": createdAt 오름차순
+        Sort sortOrder =
+            "oldest".equalsIgnoreCase(sort)
+                ? Sort.by("createdAt").ascending()
+                : Sort.by("createdAt").descending();
+
+        Pageable pageable = PageRequest.of(page, PAGE_SIZE, sortOrder);
+
+        // 동적 조건 조회: childName=null이면 전체, search=null이면 전체
+        // 빈 문자열("")은 null로 변환해서 전체 조회로 처리
+        String childNameFilter = (childName != null && childName.isBlank()) ? null : childName;
+        String searchFilter = (search != null && search.isBlank()) ? null : search;
+
+        Page<Newsletter> newsletterPage =
+            newsletterRepository.findByUserIdWithFilters(userId, childNameFilter, searchFilter, pageable);
+
+        List<Newsletter> newsletters = newsletterPage.getContent();
+
+        // N+1 방지: 조회된 newsletter ID 목록으로 캘린더 등록 여부를 한 번에 확인
+        // → calendar_events에서 해당 newsletterId들 중 등록된 것들의 ID를 Set으로 조회
+        Set<Long> registeredNewsletterIds = getRegisteredNewsletterIds(userId, newsletters);
+
+        // DTO 변환
+        List<NewsletterItem> items =
+            newsletters.stream()
+                .map(n -> NewsletterItem.from(n, registeredNewsletterIds.contains(n.getId())))
+                .toList();
+
+        return new NewsletterListResponse(items, (int) newsletterPage.getTotalElements());
+    }
+    /**홈화면 최근 7일 가정통신문 조회.*/
+    @Override
+    @Transactional(readOnly = true)
+    public NewsletterRecentResponse getRecent(Long userId) {
+
+        // KST 기준 오늘 날짜
+        LocalDate todayKst = LocalDate.now(KST);
+
+        OffsetDateTime rangeStart =
+            todayKst.minusDays(6)
+                .atStartOfDay(KST)
+                .toOffsetDateTime();
+
+        OffsetDateTime rangeEnd =
+            todayKst.plusDays(1)
+                .atStartOfDay(KST)
+                .toOffsetDateTime();
+
+        List<Newsletter> newsletters =
+            newsletterRepository.findRecentByUserId(userId, rangeStart, rangeEnd);
+
+        Map<String, List<Newsletter>> grouped =
+            newsletters.stream()
+                .collect(
+                    Collectors.groupingBy(
+                        n ->
+                            n.getCreatedAt()
+                                .atZoneSameInstant(KST)
+                                .toLocalDate()
+                                .format(DateTimeFormatter.ISO_LOCAL_DATE),
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+
+        // Map → DateGroup 목록으로 변환
+        List<DateGroup> groups =
+            grouped.entrySet().stream()
+                .map(
+                    entry -> {
+                        List<RecentItem> items =
+                            entry.getValue().stream().map(RecentItem::from).toList();
+                        return new DateGroup(entry.getKey(), items);
+                    })
+                .toList();
+
+        return new NewsletterRecentResponse(groups);
+    }
+
+    /**조회된 newsletter 목록에서 캘린더 등록된 newsletterId 집합을 반환 */
+    private Set<Long> getRegisteredNewsletterIds(Long userId, List<Newsletter> newsletters) {
+        if (newsletters.isEmpty()) return Set.of();
+
+        // newsletter ID 목록 추출
+        List<Long> newsletterIds = newsletters.stream().map(Newsletter::getId).toList();
+
+        // calendar_events에서 해당 newsletterIds 중 등록된 것들 조회
+        return newsletters.stream()
+            .filter(
+                n -> calendarEventRepository.existsByNewsletterIdAndUserId(n.getId(), userId))
+            .map(Newsletter::getId)
+            .collect(Collectors.toSet());
+    }
+
   /**
    * 파일 유효성 검사.
    *
-   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
    * 최대 크기: 10MB
    */
   private void validateFile(MultipartFile file) {
@@ -271,53 +493,6 @@ public class NewsletterServiceImpl implements NewsletterService {
     if (isDuplicate) {
       throw new BusinessException(ErrorCode.NEWSLETTER_DUPLICATE);
     }
-  }
-
-  /** 체크리스트 탭 조회. */
-  @Override
-  public NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId) {
-    Newsletter newsletter = findNewsletterById(newsletterId);
-    validateOwnership(newsletter, userId);
-    validateCompleted(newsletter);
-
-    // CHECKLIST 타입 항목만 조회
-    List<Checklist> checklists =
-        checklistRepository.findByNewsletterIdAndTypeOrderByIdAsc(
-            newsletterId, ChecklistType.CHECKLIST);
-
-    // calendarEventId 목록 수집 (null 제외)
-    List<Long> eventIds =
-        checklists.stream()
-            .map(Checklist::getCalendarEventId)
-            .filter(id -> id != null)
-            .distinct()
-            .toList();
-
-    // eventId → start_at KST 날짜 문자열 맵
-    Map<Long, String> dueDateByEventId =
-        calendarEventRepository.findAllById(eventIds).stream()
-            .collect(
-                Collectors.toMap(
-                    CalendarEvent::getId,
-                    e ->
-                        e.getStartAt()
-                            .withOffsetSameInstant(ZoneOffset.ofHours(9))
-                            .format(DateTimeFormatter.ISO_LOCAL_DATE) // "YYYY-MM-DD"
-                    ));
-
-    List<ChecklistItem> items =
-        checklists.stream()
-            .map(
-                c -> {
-                  String dueDate =
-                      c.getCalendarEventId() != null
-                          ? dueDateByEventId.get(c.getCalendarEventId())
-                          : null;
-                  return ChecklistItem.of(c, dueDate);
-                })
-            .toList();
-
-    return NewsletterChecklistResponse.of(items);
   }
 
   /** newsletterId로 newsletter 레코드 조회. */
