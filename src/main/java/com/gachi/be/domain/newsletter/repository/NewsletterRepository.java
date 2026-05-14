@@ -36,16 +36,29 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
 
   /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션). */
   @Query(
-      """
-        SELECT n FROM Newsletter n
-        WHERE n.userId = :userId
-          AND (:childName IS NULL OR n.childName = :childName)
-          AND (:search IS NULL OR LOWER(n.title) LIKE LOWER(CONCAT('%', :search, '%')))
-        """)
+      value =
+          """
+        SELECT * FROM newsletter
+        WHERE user_id = :userId
+          AND (:childName IS NULL OR child_name = :childName)
+          AND (:search IS NULL OR title LIKE CONCAT('%', CAST(:search AS TEXT), '%'))
+        ORDER BY
+          CASE WHEN :sort = 'oldest' THEN created_at END ASC,
+          CASE WHEN :sort != 'oldest' THEN created_at END DESC
+        """,
+      countQuery =
+          """
+        SELECT COUNT(*) FROM newsletter
+        WHERE user_id = :userId
+          AND (:childName IS NULL OR child_name = :childName)
+          AND (:search IS NULL OR title LIKE CONCAT('%', CAST(:search AS TEXT), '%'))
+        """,
+      nativeQuery = true)
   Page<Newsletter> findByUserIdWithFilters(
       @Param("userId") Long userId,
       @Param("childName") String childName,
       @Param("search") String search,
+      @Param("sort") String sort,
       Pageable pageable);
 
   /** 홈화면용 최근 7일 가정통신문 조회. */

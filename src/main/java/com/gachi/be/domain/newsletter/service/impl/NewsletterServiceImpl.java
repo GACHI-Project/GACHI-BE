@@ -332,7 +332,7 @@ public class NewsletterServiceImpl implements NewsletterService {
             ? Sort.by("createdAt").ascending()
             : Sort.by("createdAt").descending();
 
-    Pageable pageable = PageRequest.of(page, PAGE_SIZE, sortOrder);
+    Pageable pageable = PageRequest.of(page, PAGE_SIZE);
 
     // 동적 조건 조회: childName=null이면 전체, search=null이면 전체
     // 빈 문자열("")은 null로 변환해서 전체 조회로 처리
@@ -341,7 +341,7 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     Page<Newsletter> newsletterPage =
         newsletterRepository.findByUserIdWithFilters(
-            userId, childNameFilter, searchFilter, pageable);
+            userId, childNameFilter, searchFilter, sort, pageable);
 
     List<Newsletter> newsletters = newsletterPage.getContent();
 
