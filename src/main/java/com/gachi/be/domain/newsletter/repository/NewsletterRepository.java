@@ -1,11 +1,9 @@
 package com.gachi.be.domain.newsletter.repository;
 
 import com.gachi.be.domain.newsletter.entity.Newsletter;
-
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -36,32 +34,31 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       @Param("childName") String childName,
       @Param("newColor") String newColor);
 
-    /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션). */
-    @Query(
-        """
+  /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션). */
+  @Query(
+      """
         SELECT n FROM Newsletter n
         WHERE n.userId = :userId
           AND (:childName IS NULL OR n.childName = :childName)
           AND (:search IS NULL OR LOWER(n.title) LIKE LOWER(CONCAT('%', :search, '%')))
         """)
-    Page<Newsletter> findByUserIdWithFilters(
-        @Param("userId") Long userId,
-        @Param("childName") String childName,
-        @Param("search") String search,
-        Pageable pageable);
+  Page<Newsletter> findByUserIdWithFilters(
+      @Param("userId") Long userId,
+      @Param("childName") String childName,
+      @Param("search") String search,
+      Pageable pageable);
 
-    /** 홈화면용 최근 7일 가정통신문 조회.*/
-    @Query(
-        """
+  /** 홈화면용 최근 7일 가정통신문 조회. */
+  @Query(
+      """
         SELECT n FROM Newsletter n
         WHERE n.userId = :userId
           AND n.createdAt >= :rangeStart
           AND n.createdAt < :rangeEnd
         ORDER BY n.createdAt DESC
         """)
-    List<Newsletter> findRecentByUserId(
-        @Param("userId") Long userId,
-        @Param("rangeStart") OffsetDateTime rangeStart,
-        @Param("rangeEnd") OffsetDateTime rangeEnd);
-
+  List<Newsletter> findRecentByUserId(
+      @Param("userId") Long userId,
+      @Param("rangeStart") OffsetDateTime rangeStart,
+      @Param("rangeEnd") OffsetDateTime rangeEnd);
 }

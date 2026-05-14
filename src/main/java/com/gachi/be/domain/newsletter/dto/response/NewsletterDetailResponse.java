@@ -17,24 +17,24 @@ public record NewsletterDetailResponse(
     String language,
     boolean isCalendarRegistered,
     String createdAt) {
-    public static NewsletterDetailResponse from(Newsletter newsletter, boolean calendarRegistered) {
-        String createdAtStr =
-            newsletter.getCreatedAt() == null
-                ? null
-                : newsletter
+  public static NewsletterDetailResponse from(Newsletter newsletter, boolean calendarRegistered) {
+    String createdAtStr =
+        newsletter.getCreatedAt() == null
+            ? null
+            : newsletter
                 .getCreatedAt()
                 .withOffsetSameInstant(ZoneOffset.ofHours(9))
                 .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
-        return new NewsletterDetailResponse(
-            newsletter.getId(),
-            newsletter.getTitle(),
-            newsletter.getChildName(),
-            newsletter.getSummary(),
-            newsletter.getTranslatedText(),
-            newsletter.getOriginalText(),
-            newsletter.getLanguage(),
-            calendarRegistered,
-            createdAtStr);
-    }
+    return new NewsletterDetailResponse(
+        newsletter.getId(),
+        newsletter.getTitle(),
+        newsletter.getChildName(),
+        newsletter.getSummary(),
+        newsletter.getTranslatedText(),
+        newsletter.getOriginalText(),
+        newsletter.getLanguage(),
+        calendarRegistered,
+        createdAtStr);
+  }
 }

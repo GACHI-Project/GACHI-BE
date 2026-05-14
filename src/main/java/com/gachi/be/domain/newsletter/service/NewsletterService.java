@@ -29,7 +29,7 @@ public interface NewsletterService {
   /** 번역 결과 조회 */
   NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId);
 
-  /**요약 결과 조회.*/
+  /** 요약 결과 조회. */
   NewsletterSummaryResponse getSummary(Long userId, Long newsletterId);
 
   /** 체크리스트 & 해야할 일 조회 */
@@ -38,11 +38,10 @@ public interface NewsletterService {
   /** 가정통신문 상세 조회 */
   NewsletterDetailResponse getDetail(Long userId, Long newsletterId);
 
-  /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션).*/
+  /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션). */
   NewsletterListResponse getList(
       Long userId, String childName, String search, int page, String sort);
 
-  /** 홈화면 최근 7일 가정통신문 조회.*/
+  /** 홈화면 최근 7일 가정통신문 조회. */
   NewsletterRecentResponse getRecent(Long userId);
-
 }

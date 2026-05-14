@@ -40,7 +40,7 @@ public class NewsletterController {
   /**
    * 가정통신문 업로드 API.
    *
-   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -107,7 +107,7 @@ public class NewsletterController {
     return ApiResponse.success(SuccessCode.NEWSLETTER_TRANSLATION_SUCCESS, response);
   }
 
-    /** 요약 결과 조회 API. */
+  /** 요약 결과 조회 API. */
   @Operation(
       summary = "요약 결과 조회",
       description =
@@ -121,8 +121,8 @@ public class NewsletterController {
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
 
-      NewsletterSummaryResponse response = newsletterService.getSummary(userId, newsletterId);
-      return ApiResponse.success(SuccessCode.NEWSLETTER_SUMMARY_SUCCESS, response);
+    NewsletterSummaryResponse response = newsletterService.getSummary(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_SUMMARY_SUCCESS, response);
   }
 
   /** 체크리스트 탭 조회 */
@@ -140,72 +140,72 @@ public class NewsletterController {
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
       @Parameter(description = "필터 타입 (CHECKLIST / TODO). 미전송 시 전체 반환.")
-      @RequestParam(required = false)
-      String type) {
+          @RequestParam(required = false)
+          String type) {
 
-      // type을 서비스로 그대로 넘김. 유효성 검사는 서비스에서 처리.
-      NewsletterChecklistResponse response =
-          newsletterService.getChecklist(userId, newsletterId, type);
-      return ApiResponse.success(SuccessCode.NEWSLETTER_CHECKLIST_SUCCESS, response);
+    // type을 서비스로 그대로 넘김. 유효성 검사는 서비스에서 처리.
+    NewsletterChecklistResponse response =
+        newsletterService.getChecklist(userId, newsletterId, type);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_CHECKLIST_SUCCESS, response);
   }
 
-    /** 가정통신문 상세 조회 */
-    @Operation(
-        summary = "가정통신문 상세 조회",
-        description =
-            """
+  /** 가정통신문 상세 조회 */
+  @Operation(
+      summary = "가정통신문 상세 조회",
+      description =
+          """
         문서 목록에서 특정 가정통신문 클릭 시 호출됩니다.
         isCalendarRegistered=true이면 전체문서+체크리스트+AI요약 탭 모두 표시.
         isCalendarRegistered=false이면 전체문서 탭만 표시.
         """)
-    @GetMapping("/{newsletterId}")
-    public ApiResponse<NewsletterDetailResponse> getDetail(
-        @AuthenticationPrincipal Long userId,
-        @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+  @GetMapping("/{newsletterId}")
+  public ApiResponse<NewsletterDetailResponse> getDetail(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
 
-        NewsletterDetailResponse response = newsletterService.getDetail(userId, newsletterId);
-        return ApiResponse.success(SuccessCode.NEWSLETTER_DETAIL_SUCCESS, response);
-    }
+    NewsletterDetailResponse response = newsletterService.getDetail(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_DETAIL_SUCCESS, response);
+  }
 
-    /** 가정통신문 목록 조회 */
-    @Operation(
-        summary = "가정통신문 목록 조회",
-        description =
-            """
+  /** 가정통신문 목록 조회 */
+  @Operation(
+      summary = "가정통신문 목록 조회",
+      description =
+          """
         문서 목록 화면. 자녀 필터, 제목 검색, 페이지네이션을 지원합니다.
         각 항목의 isCalendarRegistered로 상세보기 탭 구성을 결정합니다.
         """)
-    @GetMapping
-    public ApiResponse<NewsletterListResponse> getList(
-        @AuthenticationPrincipal Long userId,
-        @Parameter(description = "자녀 이름 필터 (미전송 시 전체)") @RequestParam(required = false)
-        String childName,
-        @Parameter(description = "제목 검색 키워드 (미전송 시 전체)") @RequestParam(required = false)
-        String search,
-        @Parameter(description = "페이지 번호 (0부터 시작)") @RequestParam(defaultValue = "0") int page,
-        @Parameter(description = "정렬: recent(최신순, 기본값) / oldest(오래된순)")
-        @RequestParam(defaultValue = "recent")
-        String sort) {
+  @GetMapping
+  public ApiResponse<NewsletterListResponse> getList(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "자녀 이름 필터 (미전송 시 전체)") @RequestParam(required = false)
+          String childName,
+      @Parameter(description = "제목 검색 키워드 (미전송 시 전체)") @RequestParam(required = false)
+          String search,
+      @Parameter(description = "페이지 번호 (0부터 시작)") @RequestParam(defaultValue = "0") int page,
+      @Parameter(description = "정렬: recent(최신순, 기본값) / oldest(오래된순)")
+          @RequestParam(defaultValue = "recent")
+          String sort) {
 
-        NewsletterListResponse response =
-            newsletterService.getList(userId, childName, search, page, sort);
-        return ApiResponse.success(SuccessCode.NEWSLETTER_LIST_SUCCESS, response);
-    }
+    NewsletterListResponse response =
+        newsletterService.getList(userId, childName, search, page, sort);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_LIST_SUCCESS, response);
+  }
 
-    /** 홈화면 가정통신문 조회 */
-    @Operation(
-        summary = "홈화면 최근 7일 가정통신문 조회",
-        description =
-            """
+  /** 홈화면 가정통신문 조회 */
+  @Operation(
+      summary = "홈화면 최근 7일 가정통신문 조회",
+      description =
+          """
         오늘 KST 기준 최근 7일 동안 스캔된 가정통신문을 날짜별로 그룹핑하여 반환합니다.
         해당 날짜에 스캔된 가정통신문이 없으면 그 날짜는 결과에 포함되지 않습니다.
         """)
-    @GetMapping("/recent")
-    public ApiResponse<NewsletterRecentResponse> getRecent(@AuthenticationPrincipal Long userId) {
+  @GetMapping("/recent")
+  public ApiResponse<NewsletterRecentResponse> getRecent(@AuthenticationPrincipal Long userId) {
 
-        NewsletterRecentResponse response = newsletterService.getRecent(userId);
-        return ApiResponse.success(SuccessCode.NEWSLETTER_RECENT_SUCCESS, response);
-    }
+    NewsletterRecentResponse response = newsletterService.getRecent(userId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_RECENT_SUCCESS, response);
+  }
 
   /** 캘린더 preview 더미 데이터 Redis 주입 API TODO: 임시 API 임 */
   @Operation(
