@@ -27,7 +27,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -404,13 +403,14 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     // newsletter ID 목록 추출
     List<Long> newsletterIds = newsletters.stream().map(Newsletter::getId).toList();
-    return new HashSet<>(calendarEventRepository.findRegisteredNewsletterIds(userId, newsletterIds));
+    return new HashSet<>(
+        calendarEventRepository.findRegisteredNewsletterIds(userId, newsletterIds));
   }
 
   /**
    * 파일 유효성 검사.
    *
-   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
    * 최대 크기: 10MB
    */
   private void validateFile(MultipartFile file) {

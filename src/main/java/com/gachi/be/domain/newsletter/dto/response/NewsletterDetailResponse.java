@@ -1,8 +1,8 @@
 package com.gachi.be.domain.newsletter.dto.response;
-import java.time.ZoneId;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /** 가정통신문 상세 조회 API 응답 DTO. */
@@ -17,7 +17,8 @@ public record NewsletterDetailResponse(
     String language,
     boolean isCalendarRegistered,
     String createdAt) {
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+  private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
   public static NewsletterDetailResponse from(Newsletter newsletter, boolean calendarRegistered) {
     String createdAtStr =
         newsletter.getCreatedAt() == null
