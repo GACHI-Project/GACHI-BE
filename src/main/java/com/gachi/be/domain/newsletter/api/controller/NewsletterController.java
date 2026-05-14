@@ -7,10 +7,7 @@ import com.gachi.be.domain.calendar.dto.response.CalendarPreviewResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarRegisterResponse;
 import com.gachi.be.domain.calendar.service.CalendarPreviewMockService;
 import com.gachi.be.domain.calendar.service.CalendarRegisterService;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
+import com.gachi.be.domain.newsletter.dto.response.*;
 import com.gachi.be.domain.newsletter.service.NewsletterService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
@@ -26,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequiredArgsConstructor
+@Validated
 @RequestMapping("/api/v1/newsletters")
 public class NewsletterController {
 
@@ -110,23 +109,104 @@ public class NewsletterController {
     return ApiResponse.success(SuccessCode.NEWSLETTER_TRANSLATION_SUCCESS, response);
   }
 
-  /** 체크리스트 탭 조회 */
+  /** 요약 결과 조회 API. */
   @Operation(
-      summary = "체크리스트 조회",
+      summary = "요약 결과 조회",
       description =
           """
-      스캔 결과 체크리스트 탭에 표시할 항목을 반환합니다.
-      CHECKLIST 타입만 반환됩니다 (TODO는 AI요약 탭 전용).
-      dueDate는 연결된 캘린더 일정의 날짜(YYYY-MM-DD)입니다.
-      캘린더 등록 전이면 dueDate=null입니다.
+       스캔 결과 [AI요약] 탭 상단의 AI 생성 요약문을 반환합니다.
+       스캔 직후와 문서 상세보기 모두에서 사용됩니다.
+       탭 노출 여부는 프론트엔드가 GET /newsletters/{id}의 isCalendarRegistered 값으로 제어합니다.
+       """)
+  @GetMapping("/{newsletterId}/summary")
+  public ApiResponse<NewsletterSummaryResponse> getSummary(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+
+    NewsletterSummaryResponse response = newsletterService.getSummary(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_SUMMARY_SUCCESS, response);
+  }
+
+  /** 체크리스트 탭 조회 */
+  @Operation(
+      summary = "체크리스트/해야할일 조회",
+      description =
+          """
+      type 파라미터로 반환 항목을 필터링합니다.
+      CHECKLIST: 체크리스트 탭 항목 (dueDate 포함)
+      TODO: AI요약 탭 해야할 일 (targetDate, targetDateLabel 포함)
+      미전송: 전체 반환
       """)
   @GetMapping("/{newsletterId}/checklist")
   public ApiResponse<NewsletterChecklistResponse> getChecklist(
       @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
+      @Pattern(regexp = "CHECKLIST|TODO", message = "type은 CHECKLIST 또는 TODO 여야 합니다.")
+          @RequestParam(required = false)
+          String type) {
+
+    // type을 서비스로 그대로 넘김. 유효성 검사는 서비스에서 처리.
+    NewsletterChecklistResponse response =
+        newsletterService.getChecklist(userId, newsletterId, type);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_CHECKLIST_SUCCESS, response);
+  }
+
+  /** 가정통신문 상세 조회 */
+  @Operation(
+      summary = "가정통신문 상세 조회",
+      description =
+          """
+        문서 목록에서 특정 가정통신문 클릭 시 호출됩니다.
+        isCalendarRegistered=true이면 전체문서+체크리스트+AI요약 탭 모두 표시.
+        isCalendarRegistered=false이면 전체문서 탭만 표시.
+        """)
+  @GetMapping("/{newsletterId}")
+  public ApiResponse<NewsletterDetailResponse> getDetail(
+      @AuthenticationPrincipal Long userId,
       @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
 
-    NewsletterChecklistResponse response = newsletterService.getChecklist(userId, newsletterId);
-    return ApiResponse.success(SuccessCode.NEWSLETTER_CHECKLIST_SUCCESS, response);
+    NewsletterDetailResponse response = newsletterService.getDetail(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_DETAIL_SUCCESS, response);
+  }
+
+  /** 가정통신문 목록 조회 */
+  @Operation(
+      summary = "가정통신문 목록 조회",
+      description =
+          """
+        문서 목록 화면. 자녀 필터, 제목 검색, 페이지네이션을 지원합니다.
+        각 항목의 isCalendarRegistered로 상세보기 탭 구성을 결정합니다.
+        """)
+  @GetMapping
+  public ApiResponse<NewsletterListResponse> getList(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "자녀 이름 필터 (미전송 시 전체)") @RequestParam(required = false)
+          String childName,
+      @Parameter(description = "제목 검색 키워드 (미전송 시 전체)") @RequestParam(required = false)
+          String search,
+      @Parameter(description = "페이지 번호 (0부터 시작)") @RequestParam(defaultValue = "0") int page,
+      @Parameter(description = "정렬: recent(최신순, 기본값) / oldest(오래된순)")
+          @RequestParam(defaultValue = "recent")
+          String sort) {
+
+    NewsletterListResponse response =
+        newsletterService.getList(userId, childName, search, page, sort);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_LIST_SUCCESS, response);
+  }
+
+  /** 홈화면 가정통신문 조회 */
+  @Operation(
+      summary = "홈화면 최근 7일 가정통신문 조회",
+      description =
+          """
+        오늘 KST 기준 최근 7일 동안 스캔된 가정통신문을 날짜별로 그룹핑하여 반환합니다.
+        해당 날짜에 스캔된 가정통신문이 없으면 그 날짜는 결과에 포함되지 않습니다.
+        """)
+  @GetMapping("/recent")
+  public ApiResponse<NewsletterRecentResponse> getRecent(@AuthenticationPrincipal Long userId) {
+
+    NewsletterRecentResponse response = newsletterService.getRecent(userId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_RECENT_SUCCESS, response);
   }
 
   /** 캘린더 preview 더미 데이터 Redis 주입 API TODO: 임시 API 임 */
