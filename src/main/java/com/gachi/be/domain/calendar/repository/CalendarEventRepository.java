@@ -56,4 +56,13 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
 
   /** 특정 가정통신문의 모든 일정 삭제. */
   void deleteByNewsletterIdAndUserId(Long newsletterId, Long userId);
+
+  @Query(
+      """
+        SELECT DISTINCT e.newsletterId FROM CalendarEvent e
+        WHERE e.userId = :userId
+          AND e.newsletterId IN :newsletterIds
+        """)
+  List<Long> findRegisteredNewsletterIds(
+      @Param("userId") Long userId, @Param("newsletterIds") List<Long> newsletterIds);
 }
