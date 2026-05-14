@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequiredArgsConstructor
+@Validated
 @RequestMapping("/api/v1/newsletters")
 public class NewsletterController {
 
@@ -139,7 +141,7 @@ public class NewsletterController {
   public ApiResponse<NewsletterChecklistResponse> getChecklist(
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
-      @Parameter(description = "필터 타입 (CHECKLIST / TODO). 미전송 시 전체 반환.")
+      @Pattern(regexp = "CHECKLIST|TODO", message = "type은 CHECKLIST 또는 TODO 여야 합니다.")
           @RequestParam(required = false)
           String type) {
 

@@ -1,5 +1,5 @@
 package com.gachi.be.domain.newsletter.dto.response;
-
+import java.time.ZoneId;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import java.time.ZoneOffset;
@@ -17,13 +17,14 @@ public record NewsletterDetailResponse(
     String language,
     boolean isCalendarRegistered,
     String createdAt) {
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   public static NewsletterDetailResponse from(Newsletter newsletter, boolean calendarRegistered) {
     String createdAtStr =
         newsletter.getCreatedAt() == null
             ? null
             : newsletter
                 .getCreatedAt()
-                .withOffsetSameInstant(ZoneOffset.ofHours(9))
+                .atZoneSameInstant(KST)
                 .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
     return new NewsletterDetailResponse(

@@ -251,7 +251,7 @@ public class NewsletterServiceImpl implements NewsletterService {
       return ChecklistType.valueOf(type.toUpperCase());
     } catch (IllegalArgumentException e) {
       throw new BusinessException(
-          ErrorCode.INVALID_INPUT_VALUE, "type은 CHECKLIST 또는 TODO만 허용됩니다. 입력값: " + type);
+          ErrorCode.INVALID_INPUT_VALUE, "type은 CHECKLIST 또는 TODO만 허용됩니다. 입력값: " + type, e);
     }
   }
 
@@ -286,7 +286,7 @@ public class NewsletterServiceImpl implements NewsletterService {
                 CalendarEvent::getId,
                 e ->
                     e.getStartAt()
-                        .withOffsetSameInstant(ZoneOffset.ofHours(9))
+                        .atZoneSameInstant(KST)
                         .format(DateTimeFormatter.ISO_LOCAL_DATE)));
   }
 
@@ -404,18 +404,13 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     // newsletter ID 목록 추출
     List<Long> newsletterIds = newsletters.stream().map(Newsletter::getId).toList();
-
-    // calendar_events에서 해당 newsletterIds 중 등록된 것들 조회
-    return newsletters.stream()
-        .filter(n -> calendarEventRepository.existsByNewsletterIdAndUserId(n.getId(), userId))
-        .map(Newsletter::getId)
-        .collect(Collectors.toSet());
+    return new HashSet<>(calendarEventRepository.findRegisteredNewsletterIds(userId, newsletterIds));
   }
 
   /**
    * 파일 유효성 검사.
    *
-   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
    * 최대 크기: 10MB
    */
   private void validateFile(MultipartFile file) {
