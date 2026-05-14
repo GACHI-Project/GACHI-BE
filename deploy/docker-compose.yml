@@ -31,6 +31,8 @@ services:
   db:
     image: postgres:16-alpine
     container_name: gachi-db
+    ports:
+      - "${DB_BIND_ADDRESS:-127.0.0.1}:${DB_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: gachi
       POSTGRES_USER: ${DB_USERNAME}
@@ -91,6 +93,13 @@ services:
       AUTH_EMAIL_SUBJECT: ${AUTH_EMAIL_SUBJECT:-[GACHI] Email verification code}
       AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET: ${AUTH_RATE_LIMIT_EMAIL_HMAC_SECRET}
       AUTH_RATE_LIMIT_TRUSTED_PROXIES: ${AUTH_RATE_LIMIT_TRUSTED_PROXIES:-127.0.0.1,::1}
+      CLOVA_OCR_API_URL: ${CLOVA_OCR_API_URL}
+      CLOVA_OCR_SECRET_KEY: ${CLOVA_OCR_SECRET_KEY}
+      PAPAGO_CLIENT_ID: ${PAPAGO_CLIENT_ID}
+      PAPAGO_CLIENT_SECRET: ${PAPAGO_CLIENT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-2000}
     secrets:
       - source: spring_mail_password
         target: spring_mail_password
