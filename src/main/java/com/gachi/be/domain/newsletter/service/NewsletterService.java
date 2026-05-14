@@ -1,9 +1,6 @@
 package com.gachi.be.domain.newsletter.service;
 
-import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterStatusResponse;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse;
-import com.gachi.be.domain.newsletter.dto.response.NewsletterUploadResponse;
+import com.gachi.be.domain.newsletter.dto.response.*;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface NewsletterService {
@@ -32,6 +29,19 @@ public interface NewsletterService {
   /** 번역 결과 조회 */
   NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId);
 
-  /** 체크리스트 탭 조회 */
-  NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId);
+  /** 요약 결과 조회. */
+  NewsletterSummaryResponse getSummary(Long userId, Long newsletterId);
+
+  /** 체크리스트 & 해야할 일 조회 */
+  NewsletterChecklistResponse getChecklist(Long userId, Long newsletterId, String type);
+
+  /** 가정통신문 상세 조회 */
+  NewsletterDetailResponse getDetail(Long userId, Long newsletterId);
+
+  /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션). */
+  NewsletterListResponse getList(
+      Long userId, String childName, String search, int page, String sort);
+
+  /** 홈화면 최근 7일 가정통신문 조회. */
+  NewsletterRecentResponse getRecent(Long userId);
 }
