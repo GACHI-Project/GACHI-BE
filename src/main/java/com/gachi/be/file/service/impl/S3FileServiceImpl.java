@@ -93,7 +93,7 @@ public class S3FileServiceImpl implements S3FileService {
       log.debug("[S3] Presigned URL 생성 완료. fileKey={}, expiresIn=1hour", fileKey);
       return presignedUrl;
     } catch (Exception e) {
-      log.error("[S3] Presigned URL 생성 실패. fileKey={}, error={}", fileKey, e.getMessage());
+        log.error("[S3] Presigned URL 생성 실패. fileKey={}", fileKey, e);
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "Presigned URL 생성 실패: " + e.getMessage());
     }
