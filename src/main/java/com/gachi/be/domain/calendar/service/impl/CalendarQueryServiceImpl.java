@@ -68,13 +68,13 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
         events.stream()
             .map(
                 e -> {
-                    String date =
-                        e.getStartAt()
-                            .withOffsetSameInstant(KST_OFFSET)
-                            .toLocalDate()
-                            .format(DateTimeFormatter.ISO_LOCAL_DATE);
-                    return new CalendarMonthlyResponse.MarkerItem(
-                        date, e.getChildName(), e.getChildColor());
+                  String date =
+                      e.getStartAt()
+                          .withOffsetSameInstant(KST_OFFSET)
+                          .toLocalDate()
+                          .format(DateTimeFormatter.ISO_LOCAL_DATE);
+                  return new CalendarMonthlyResponse.MarkerItem(
+                      date, e.getChildName(), e.getChildColor());
                 })
             // 같은 날짜+같은 자녀 조합은 마커 1개로 중복 제거
             .distinct()

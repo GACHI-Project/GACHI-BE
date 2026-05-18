@@ -77,29 +77,26 @@ public class S3FileServiceImpl implements S3FileService {
 
   @Override
   public String generatePresignedUrl(String fileKey) {
-      try {
-          GetObjectRequest getObjectRequest =
-              GetObjectRequest.builder()
-                  .bucket(s3Properties.getBucket())
-                  .key(fileKey)
-                  .build();
+    try {
+      GetObjectRequest getObjectRequest =
+          GetObjectRequest.builder().bucket(s3Properties.getBucket()).key(fileKey).build();
 
-          GetObjectPresignRequest presignRequest =
-              GetObjectPresignRequest.builder()
-                  .signatureDuration(PRESIGNED_URL_EXPIRY)
-                  .getObjectRequest(getObjectRequest)
-                  .build();
+      GetObjectPresignRequest presignRequest =
+          GetObjectPresignRequest.builder()
+              .signatureDuration(PRESIGNED_URL_EXPIRY)
+              .getObjectRequest(getObjectRequest)
+              .build();
 
-          PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
-          String presignedUrl = presignedRequest.url().toString();
+      PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
+      String presignedUrl = presignedRequest.url().toString();
 
-          log.debug("[S3] Presigned URL 생성 완료. fileKey={}, expiresIn=1hour", fileKey);
-          return presignedUrl;
-      } catch (Exception e) {
-          log.error("[S3] Presigned URL 생성 실패. fileKey={}, error={}", fileKey, e.getMessage());
-          throw new ExternalApiException(
-              ErrorCode.EXTERNAL_API_ERROR, "Presigned URL 생성 실패: " + e.getMessage());
-      }
+      log.debug("[S3] Presigned URL 생성 완료. fileKey={}, expiresIn=1hour", fileKey);
+      return presignedUrl;
+    } catch (Exception e) {
+      log.error("[S3] Presigned URL 생성 실패. fileKey={}, error={}", fileKey, e.getMessage());
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, "Presigned URL 생성 실패: " + e.getMessage());
+    }
   }
 
   private S3UploadResponse doUpload(MultipartFile file, String key) {
