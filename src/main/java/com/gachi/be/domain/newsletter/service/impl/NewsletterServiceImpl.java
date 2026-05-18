@@ -203,7 +203,10 @@ public class NewsletterServiceImpl implements NewsletterService {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
     validateCompleted(newsletter);
-    return NewsletterTranslationResponse.from(newsletter, newsletter.getDateCandidates());
+
+    String fileUrl = s3FileService.generatePresignedUrl(newsletter.getFileKey());
+    log.debug("[Newsletter] Presigned URL 생성. newsletterId={}", newsletterId);
+    return NewsletterTranslationResponse.from(newsletter, newsletter.getDateCandidates(), fileUrl);
   }
 
   /** 요약 결과 조회. 스캔 결과 [AI요약] 탭 상단의 요약문을 반환합니다. */
