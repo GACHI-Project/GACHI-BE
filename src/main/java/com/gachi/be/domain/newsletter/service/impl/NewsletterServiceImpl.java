@@ -19,8 +19,8 @@ import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.newsletter.service.NewsletterService;
 import com.gachi.be.file.service.S3FileService;
 import com.gachi.be.global.code.ErrorCode;
-import com.gachi.be.global.config.external.ExternalApiConfig;
 import com.gachi.be.global.exception.BusinessException;
+import com.gachi.be.global.exception.ExternalApiException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -31,8 +31,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import com.gachi.be.global.exception.ExternalApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -209,14 +207,14 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     String fileUrl = null;
     try {
-        fileUrl = s3FileService.generatePresignedUrl(newsletter.getFileKey());
-        log.debug("[Newsletter] Presigned URL 생성. newsletterId={}", newsletterId);
-    } catch (ExternalApiException e){
-        log.warn(
-                      "[Newsletter] Presigned URL 생성 실패. newsletterId={}, fileKey={}",
-                      newsletterId,
-                      newsletter.getFileKey(),
-                      e);
+      fileUrl = s3FileService.generatePresignedUrl(newsletter.getFileKey());
+      log.debug("[Newsletter] Presigned URL 생성. newsletterId={}", newsletterId);
+    } catch (ExternalApiException e) {
+      log.warn(
+          "[Newsletter] Presigned URL 생성 실패. newsletterId={}, fileKey={}",
+          newsletterId,
+          newsletter.getFileKey(),
+          e);
     }
     return NewsletterTranslationResponse.from(newsletter, newsletter.getDateCandidates(), fileUrl);
   }
