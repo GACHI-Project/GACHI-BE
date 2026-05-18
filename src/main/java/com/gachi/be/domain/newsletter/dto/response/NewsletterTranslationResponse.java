@@ -11,14 +11,16 @@ public record NewsletterTranslationResponse(
     String originalText,
     String translatedText,
     String language,
+    String fileUrl,
     List<NewsletterDateCandidateResponse> dateCandidates) {
 
   public static NewsletterTranslationResponse from(
-      Newsletter newsletter, List<NewsletterDateCandidate> dateCandidates) {
+      Newsletter newsletter, List<NewsletterDateCandidate> dateCandidates, String fileUrl) {
     return new NewsletterTranslationResponse(
         newsletter.getOriginalText(),
         newsletter.getTranslatedText(),
         newsletter.getLanguage(),
+        fileUrl,
         dateCandidates == null
             ? List.of()
             : dateCandidates.stream().map(NewsletterDateCandidateResponse::from).toList());
