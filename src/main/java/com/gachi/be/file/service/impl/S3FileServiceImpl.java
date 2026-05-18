@@ -8,6 +8,7 @@ import com.gachi.be.global.exception.BusinessException;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
@@ -20,8 +21,12 @@ import org.springframework.web.util.UriUtils;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 @Slf4j
 @Service
@@ -36,8 +41,10 @@ public class S3FileServiceImpl implements S3FileService {
 
   // 가정통신문 전용 S3 prefix
   private static final String NEWSLETTER_PREFIX = "newsletters";
+  private static final Duration PRESIGNED_URL_EXPIRY = Duration.ofHours(1);
   private final S3Client s3Client;
   private final S3Properties s3Properties;
+  private final S3Presigner s3Presigner;
   private static final long MAX_NEWSLETTER_SIZE_BYTES = 10 * 1024 * 1024L;
 
   @Override
@@ -65,6 +72,30 @@ public class S3FileServiceImpl implements S3FileService {
       log.error("[S3] 파일 삭제 실패. fileKey={}, error={}", fileKey, e.getMessage());
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "S3 파일 삭제 실패: " + e.awsErrorDetails().errorMessage());
+    }
+  }
+
+  @Override
+  public String generatePresignedUrl(String fileKey) {
+    try {
+      GetObjectRequest getObjectRequest =
+          GetObjectRequest.builder().bucket(s3Properties.getBucket()).key(fileKey).build();
+
+      GetObjectPresignRequest presignRequest =
+          GetObjectPresignRequest.builder()
+              .signatureDuration(PRESIGNED_URL_EXPIRY)
+              .getObjectRequest(getObjectRequest)
+              .build();
+
+      PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
+      String presignedUrl = presignedRequest.url().toString();
+
+      log.debug("[S3] Presigned URL 생성 완료. fileKey={}, expiresIn=1hour", fileKey);
+      return presignedUrl;
+    } catch (Exception e) {
+      log.error("[S3] Presigned URL 생성 실패. fileKey={}", fileKey, e);
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, "Presigned URL 생성 실패: " + e.getMessage());
     }
   }
 

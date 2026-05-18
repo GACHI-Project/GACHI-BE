@@ -11,4 +11,6 @@ public interface S3FileService {
   S3UploadResponse uploadNewsletter(MultipartFile file);
 
   void deleteFile(String fileKey);
+
+  String generatePresignedUrl(String fileKey);
 }

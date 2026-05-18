@@ -20,6 +20,7 @@ import com.gachi.be.domain.newsletter.service.NewsletterService;
 import com.gachi.be.file.service.S3FileService;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
+import com.gachi.be.global.exception.ExternalApiException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -203,7 +204,19 @@ public class NewsletterServiceImpl implements NewsletterService {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
     validateCompleted(newsletter);
-    return NewsletterTranslationResponse.from(newsletter, newsletter.getDateCandidates());
+
+    String fileUrl = null;
+    try {
+      fileUrl = s3FileService.generatePresignedUrl(newsletter.getFileKey());
+      log.debug("[Newsletter] Presigned URL 생성. newsletterId={}", newsletterId);
+    } catch (ExternalApiException e) {
+      log.warn(
+          "[Newsletter] Presigned URL 생성 실패. newsletterId={}, fileKey={}",
+          newsletterId,
+          newsletter.getFileKey(),
+          e);
+    }
+    return NewsletterTranslationResponse.from(newsletter, newsletter.getDateCandidates(), fileUrl);
   }
 
   /** 요약 결과 조회. 스캔 결과 [AI요약] 탭 상단의 요약문을 반환합니다. */
