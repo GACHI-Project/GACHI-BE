@@ -64,18 +64,23 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
             userId, rangeStart, rangeEnd, normalizedChildName);
 
     // 일정이 있는 날짜만 추출 (중복 제거, 정렬)
-    List<String> markedDates =
+    List<CalendarMonthlyResponse.MarkerItem> markedDates =
         events.stream()
             .map(
-                e ->
-                    e.getStartAt()
-                        .withOffsetSameInstant(KST_OFFSET)
-                        .toLocalDate()
-                        .format(DateTimeFormatter.ISO_LOCAL_DATE))
+                e -> {
+                  String date =
+                      e.getStartAt()
+                          .withOffsetSameInstant(KST_OFFSET)
+                          .toLocalDate()
+                          .format(DateTimeFormatter.ISO_LOCAL_DATE);
+                  return new CalendarMonthlyResponse.MarkerItem(
+                      date, e.getChildName(), e.getChildColor());
+                })
+            // 같은 날짜+같은 자녀 조합은 마커 1개로 중복 제거
             .distinct()
-            .sorted()
+            // 날짜 기준 오름차순 정렬
+            .sorted(Comparator.comparing(CalendarMonthlyResponse.MarkerItem::date))
             .toList();
-
     log.debug(
         "[CalendarQuery] 월별 마커 조회. userId={}, {}-{}, childName={}, count={}",
         userId,
