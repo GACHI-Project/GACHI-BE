@@ -97,9 +97,7 @@ services:
       CLOVA_OCR_SECRET_KEY: ${CLOVA_OCR_SECRET_KEY}
       PAPAGO_CLIENT_ID: ${PAPAGO_CLIENT_ID}
       PAPAGO_CLIENT_SECRET: ${PAPAGO_CLIENT_SECRET}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
-      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-2000}
+      AI_SERVER_BASE_URL: ${AI_SERVER_BASE_URL:-http://ai:8000}
     secrets:
       - source: spring_mail_password
         target: spring_mail_password
