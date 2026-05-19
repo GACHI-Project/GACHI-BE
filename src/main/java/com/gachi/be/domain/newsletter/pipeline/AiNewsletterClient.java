@@ -16,13 +16,11 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AiNewsletterClient {
 
   private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Seoul");
@@ -30,6 +28,16 @@ public class AiNewsletterClient {
 
   private final AiServerProperties aiServerProperties;
   private final ObjectMapper objectMapper;
+  private final HttpClient httpClient;
+
+  public AiNewsletterClient(AiServerProperties aiServerProperties, ObjectMapper objectMapper) {
+    this.aiServerProperties = aiServerProperties;
+    this.objectMapper = objectMapper;
+    this.httpClient =
+        HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(aiServerProperties.getConnectTimeoutSeconds()))
+            .build();
+  }
 
   public List<ExtractedItem> extractItems(
       String originalText,
@@ -55,11 +63,6 @@ public class AiNewsletterClient {
               .POST(HttpRequest.BodyPublishers.ofString(requestBody))
               .build();
 
-      HttpClient httpClient =
-          HttpClient.newBuilder()
-              .connectTimeout(Duration.ofSeconds(aiServerProperties.getConnectTimeoutSeconds()))
-              .build();
-
       HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
@@ -80,10 +83,10 @@ public class AiNewsletterClient {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 인터럽트: " + e.getMessage());
+          ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 인터럽트: " + e.getMessage(), e);
     } catch (IOException e) {
       throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 오류: " + e.getMessage());
+          ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 오류: " + e.getMessage(), e);
     }
   }
 
