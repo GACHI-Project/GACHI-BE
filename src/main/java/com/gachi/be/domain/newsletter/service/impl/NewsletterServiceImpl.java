@@ -204,14 +204,14 @@ public class NewsletterServiceImpl implements NewsletterService {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
 
-    if (newsletter.getStatus() != NewsletterStatus.FAILED) {
+    int updated = newsletterRepository.markRetryPendingIfFailed(newsletterId, userId);
+    if (updated == 0) {
       throw new BusinessException(ErrorCode.NEWSLETTER_RETRY_NOT_ALLOWED);
     }
 
     checklistRepository.deleteByNewsletterId(newsletterId);
     calendarEventRepository.deleteByNewsletterIdAndUserId(newsletterId, userId);
-    newsletter.prepareRetry();
-    Newsletter saved = newsletterRepository.save(newsletter);
+    Newsletter saved = findNewsletterById(newsletterId);
 
     TransactionSynchronizationManager.registerSynchronization(
         new TransactionSynchronization() {
