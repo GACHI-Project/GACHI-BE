@@ -5,6 +5,7 @@ import com.gachi.be.domain.newsletter.pipeline.ClovaOcrClient.OcrField;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisResult;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.file.config.S3Properties;
+import com.gachi.be.global.exception.ExternalApiException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,8 +50,13 @@ public class NewsletterPipelineService {
     log.debug("[Pipeline] PROCESSING 전환 완료. newsletterId={}", newsletterId);
 
     String tempFileKey = null;
+    String failureStage = "PIPELINE_START";
+    String ocrText = null;
+    String originalText = null;
+    String translatedText = null;
 
     try {
+      failureStage = "S3_DOWNLOAD";
       log.debug("[Pipeline][STEP1] S3 다운로드 시작. fileKey={}", newsletter.getFileKey());
       byte[] fileBytes = downloadFromS3(newsletter.getFileKey());
       log.debug("[Pipeline][STEP1] 다운로드 완료. size={}bytes", fileBytes.length);
@@ -58,6 +64,7 @@ public class NewsletterPipelineService {
       boolean isPdf = newsletter.getFileKey().toLowerCase().endsWith(".pdf");
       String ocrTargetKey;
 
+      failureStage = "IMAGE_PREPROCESS";
       if (isPdf) {
         log.debug("[Pipeline][STEP2] PDF 파일. Clova OCR에 원본 파일을 전달합니다.");
         ocrTargetKey = newsletter.getFileKey();
@@ -70,31 +77,49 @@ public class NewsletterPipelineService {
         log.debug("[Pipeline][STEP2] 전처리 파일 임시 업로드 완료. tempFileKey={}", tempFileKey);
       }
 
+      failureStage = "CLOVA_OCR";
       log.debug("[Pipeline][STEP3] Clova OCR 호출 시작. ocrTargetKey={}", ocrTargetKey);
       List<List<OcrField>> ocrPageFields =
           clovaOcrClient.callOcr(s3Properties.getBucket(), ocrTargetKey);
       log.debug("[Pipeline][STEP3] OCR 완료. totalFieldsCount={}", ocrPageFields.size());
 
+      failureStage = "OCR_TEXT_PARSE";
       log.debug("[Pipeline][STEP4] OCR 텍스트 파싱 시작.");
-      String ocrText = ocrTextRefiner.parseFields(ocrPageFields);
+      ocrText = ocrTextRefiner.parseFields(ocrPageFields);
       log.debug("[Pipeline][STEP4] 파싱 완료. length={}chars", ocrText.length());
 
+      failureStage = "TEXT_REFINE";
       log.debug("[Pipeline][STEP5] 텍스트 정제 및 날짜 후보 추출 시작.");
-      String originalText = ocrTextRefiner.refineText(ocrText);
+      originalText = ocrTextRefiner.refineText(ocrText);
       newsletterDateCandidateService.extractAndReplace(newsletterId, originalText);
       log.debug("[Pipeline][STEP5] 정제 완료. length={}chars", originalText.length());
 
+      failureStage = "PAPAGO_TRANSLATE";
       log.debug("[Pipeline][STEP6] Papago 번역 시작. language={}", newsletter.getLanguage());
-      String translatedText =
-          papagoTranslateClient.translate(originalText, newsletter.getLanguage());
+      translatedText = papagoTranslateClient.translate(originalText, newsletter.getLanguage());
       log.debug(
           "[Pipeline][STEP6] 번역 완료. translated={}",
           translatedText != null ? translatedText.length() + "chars" : "null(KO 스킵)");
 
+      failureStage = "AI_SERVER";
       log.debug("[Pipeline][STEP7] AI 서버 분석 시작.");
-      AiAnalysisResult aiResult =
-          newsletterAiAnalyzer.analyze(
-              newsletterId, originalText, translatedText, newsletter.getLanguage());
+      AiAnalysisResult aiResult;
+      try {
+        aiResult =
+            newsletterAiAnalyzer.analyze(
+                newsletterId, originalText, translatedText, newsletter.getLanguage());
+      } catch (ExternalApiException e) {
+        log.error(
+            "[Pipeline][STEP7] AI 서버 분석 실패. newsletterId={}, stage={}, exceptionType={}, error={}",
+            newsletterId,
+            failureStage,
+            e.getClass().getSimpleName(),
+            e.getMessage(),
+            e);
+        markFailedWithSnapshot(
+            newsletterId, ocrText, originalText, translatedText, failureStage, failureReason(e));
+        return;
+      }
       log.debug("[Pipeline][STEP7] AI 서버 분석 완료. title={}", aiResult.title());
 
       markCompleted(
@@ -107,8 +132,15 @@ public class NewsletterPipelineService {
 
       log.info("[Pipeline] 파이프라인 완료. newsletterId={}", newsletterId);
     } catch (Exception e) {
-      log.error("[Pipeline] 파이프라인 실패. newsletterId={}, error={}", newsletterId, e.getMessage(), e);
-      markFailed(newsletterId);
+      log.error(
+          "[Pipeline] 파이프라인 실패. newsletterId={}, stage={}, exceptionType={}, error={}",
+          newsletterId,
+          failureStage,
+          e.getClass().getSimpleName(),
+          e.getMessage(),
+          e);
+      markFailedWithSnapshot(
+          newsletterId, ocrText, originalText, translatedText, failureStage, failureReason(e));
     } finally {
       if (tempFileKey != null) {
         try {
@@ -152,14 +184,29 @@ public class NewsletterPipelineService {
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markFailed(Long newsletterId) {
+  public void markFailedWithSnapshot(
+      Long newsletterId,
+      String ocrText,
+      String originalText,
+      String translatedText,
+      String failureStage,
+      String failureReason) {
     newsletterRepository
         .findById(newsletterId)
         .ifPresent(
             n -> {
-              n.fail();
+              n.failWithSnapshot(
+                  ocrText, originalText, translatedText, failureStage, failureReason);
               newsletterRepository.save(n);
             });
+  }
+
+  private String failureReason(Exception e) {
+    String message = e.getMessage();
+    if (message == null || message.isBlank()) {
+      return e.getClass().getSimpleName();
+    }
+    return e.getClass().getSimpleName() + ": " + message;
   }
 
   private byte[] downloadFromS3(String fileKey) {
