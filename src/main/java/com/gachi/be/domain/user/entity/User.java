@@ -1,5 +1,6 @@
 package com.gachi.be.domain.user.entity;
 
+import com.gachi.be.domain.user.entity.enums.UserStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -47,6 +48,9 @@ public class User {
   @Column(nullable = false, length = 20)
   private UserStatus status;
 
+  @Column(name = "language_code", nullable = false, length = 10)
+  private String languageCode;
+
   @Column(name = "deleted_at")
   private OffsetDateTime deletedAt;
 
@@ -79,6 +83,7 @@ public class User {
       String name,
       String phoneNumber,
       UserStatus status,
+      String languageCode,
       OffsetDateTime emailVerifiedAt,
       OffsetDateTime consentAgreedAt,
       String consentVersion,
@@ -90,6 +95,7 @@ public class User {
     this.name = name;
     this.phoneNumber = phoneNumber;
     this.status = status;
+    this.languageCode = languageCode != null ? languageCode : "KO";
     this.emailVerifiedAt = emailVerifiedAt;
     this.consentAgreedAt = consentAgreedAt;
     this.consentVersion = consentVersion;
@@ -102,6 +108,10 @@ public class User {
     return status == UserStatus.ACTIVE;
   }
 
+  public void updateLanguage(String languageCode) {
+      this.languageCode = languageCode;
+  }
+
   @PrePersist
   protected void onCreate() {
     LocalDateTime now = LocalDateTime.now();
@@ -112,6 +122,9 @@ public class User {
     if (status == null) {
       status = UserStatus.ACTIVE;
     }
+      if (languageCode == null) {
+          languageCode = "KO";
+      }
   }
 
   @PreUpdate

@@ -1,7 +1,7 @@
 package com.gachi.be.domain.user.repository;
 
 import com.gachi.be.domain.user.entity.User;
-import com.gachi.be.domain.user.entity.UserStatus;
+import com.gachi.be.domain.user.entity.enums.UserStatus;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 

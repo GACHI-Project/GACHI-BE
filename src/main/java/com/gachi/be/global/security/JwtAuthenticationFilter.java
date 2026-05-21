@@ -2,7 +2,7 @@ package com.gachi.be.global.security;
 
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
 import com.gachi.be.domain.user.entity.User;
-import com.gachi.be.domain.user.entity.UserStatus;
+import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;

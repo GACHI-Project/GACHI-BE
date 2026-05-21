@@ -1,4 +1,4 @@
-package com.gachi.be.domain.user.entity;
+package com.gachi.be.domain.user.entity.enums;
 
 public enum UserStatus {
   ACTIVE,
