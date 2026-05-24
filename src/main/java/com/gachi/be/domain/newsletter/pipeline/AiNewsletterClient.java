@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -24,7 +25,7 @@ import org.springframework.stereotype.Component;
 public class AiNewsletterClient {
 
   private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Seoul");
-  private static final String EXTRACT_ITEMS_PATH = "/ai/newsletters/extract-items";
+  private static final String ANALYZE_PATH = "/ai/newsletters/analyze";
 
   private final AiServerProperties aiServerProperties;
   private final ObjectMapper objectMapper;
@@ -39,7 +40,7 @@ public class AiNewsletterClient {
             .build();
   }
 
-  public List<ExtractedItem> extractItems(
+  public AnalysisResponse analyze(
       String originalText,
       String translatedText,
       String language,
@@ -47,7 +48,7 @@ public class AiNewsletterClient {
     try {
       String requestBody =
           objectMapper.writeValueAsString(
-              new ExtractionRequest(
+              new AnalysisRequest(
                   originalText,
                   translatedText,
                   language != null ? language : "KO",
@@ -57,7 +58,7 @@ public class AiNewsletterClient {
 
       HttpRequest request =
           HttpRequest.newBuilder()
-              .uri(URI.create(normalizedBaseUrl() + EXTRACT_ITEMS_PATH))
+              .uri(URI.create(normalizedBaseUrl() + ANALYZE_PATH))
               .header("Content-Type", "application/json")
               .timeout(Duration.ofSeconds(aiServerProperties.getReadTimeoutSeconds()))
               .POST(HttpRequest.BodyPublishers.ofString(requestBody))
@@ -68,16 +69,14 @@ public class AiNewsletterClient {
 
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         log.error(
-            "[AiNewsletterClient] AI 서버 항목 추출 실패. status={}, body={}",
+            "[AiNewsletterClient] AI 서버 분석 실패. status={}, bodyLength={}",
             response.statusCode(),
-            response.body());
+            response.body() != null ? response.body().length() : 0);
         throw new ExternalApiException(
-            ErrorCode.EXTERNAL_API_ERROR, "AI 서버 항목 추출 실패. status=" + response.statusCode());
+            ErrorCode.EXTERNAL_API_ERROR, "AI 서버 분석 실패. status=" + response.statusCode());
       }
 
-      ExtractionResponse extractionResponse =
-          objectMapper.readValue(response.body(), ExtractionResponse.class);
-      return extractionResponse.items() != null ? extractionResponse.items() : List.of();
+      return objectMapper.readValue(response.body(), AnalysisResponse.class).normalized();
     } catch (ExternalApiException e) {
       throw e;
     } catch (InterruptedException e) {
@@ -119,7 +118,7 @@ public class AiNewsletterClient {
     return requests;
   }
 
-  record ExtractionRequest(
+  record AnalysisRequest(
       String originalText,
       String translatedText,
       String language,
@@ -136,12 +135,23 @@ public class AiNewsletterClient {
       String extractionType) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
-  record ExtractionResponse(List<ExtractedItem> items) {}
+  public record AnalysisResponse(
+      String title, String summary, List<ExtractedItem> items, Map<String, Object> meta) {
+
+    AnalysisResponse normalized() {
+      return new AnalysisResponse(title, summary, items != null ? items : List.of(), meta);
+    }
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record SelectedDateCandidate(
+      Integer index, String candidateId, String originalText, LocalDate normalizedDate) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record ExtractedItem(
       String type,
       String title,
+      SelectedDateCandidate selectedDateCandidate,
       String datetime,
       String timezone,
       String evidenceText,

@@ -4,6 +4,7 @@ import com.gachi.be.domain.checklist.entity.Checklist;
 import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.AnalysisResponse;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import java.time.LocalDate;
@@ -39,14 +40,16 @@ public class NewsletterAiAnalyzer {
                     new IllegalStateException(
                         "[AiAnalyzer] newsletter를 찾을 수 없습니다. newsletterId=" + newsletterId));
 
-    List<ExtractedItem> items =
-        aiNewsletterClient.extractItems(
+    AnalysisResponse analysisResponse =
+        aiNewsletterClient.analyze(
             originalText, translatedText, language, newsletter.getDateCandidates());
+    List<ExtractedItem> items =
+        analysisResponse.items() != null ? analysisResponse.items() : List.of();
 
     saveExtractedItems(newsletterId, newsletter.getUserId(), items);
 
-    String title = inferTitle(originalText);
-    String summary = buildBaselineSummary(translatedText != null ? translatedText : originalText);
+    String title = normalizeTitle(analysisResponse.title(), originalText);
+    String summary = normalizeSummary(analysisResponse.summary(), translatedText, originalText);
 
     log.info(
         "[AiAnalyzer] AI 서버 분석 완료. newsletterId={}, extractedItems={}", newsletterId, items.size());
@@ -109,6 +112,20 @@ public class NewsletterAiAnalyzer {
     }
   }
 
+  private String normalizeTitle(String aiTitle, String originalText) {
+    if (aiTitle != null && !aiTitle.isBlank()) {
+      return trimToMax(compact(aiTitle), TITLE_MAX_LENGTH);
+    }
+    return inferTitle(originalText);
+  }
+
+  private String normalizeSummary(String aiSummary, String translatedText, String originalText) {
+    if (aiSummary != null && !aiSummary.isBlank()) {
+      return trimToMax(compact(aiSummary), SUMMARY_MAX_LENGTH);
+    }
+    return buildBaselineSummary(firstNonBlank(translatedText, originalText));
+  }
+
   private String inferTitle(String originalText) {
     if (originalText == null || originalText.isBlank()) {
       return DEFAULT_TITLE;
@@ -132,6 +149,10 @@ public class NewsletterAiAnalyzer {
 
   private String compact(String text) {
     return text == null ? "" : text.replaceAll("\\s+", " ").trim();
+  }
+
+  private String firstNonBlank(String primary, String fallback) {
+    return primary != null && !primary.isBlank() ? primary : fallback;
   }
 
   private String trimNullable(String value, int maxLength) {
