@@ -43,8 +43,7 @@ public class NewsletterAiAnalyzer {
     AnalysisResponse analysisResponse =
         aiNewsletterClient.analyze(
             originalText, translatedText, language, newsletter.getDateCandidates());
-    List<ExtractedItem> items =
-        analysisResponse.items() != null ? analysisResponse.items() : List.of();
+    List<ExtractedItem> items = analysisResponse.items();
 
     saveExtractedItems(newsletterId, newsletter.getUserId(), items);
 
