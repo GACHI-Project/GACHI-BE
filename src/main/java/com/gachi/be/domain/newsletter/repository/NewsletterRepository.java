@@ -4,6 +4,8 @@ import com.gachi.be.domain.newsletter.entity.Newsletter;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -74,4 +76,20 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       @Param("userId") Long userId,
       @Param("rangeStart") OffsetDateTime rangeStart,
       @Param("rangeEnd") OffsetDateTime rangeEnd);
+
+
+  /** 언어 변경 시 진행중인 파이프라인 중단 처리용 쿼리*/
+    @Modifying
+    @Query(
+        """
+        UPDATE Newsletter n
+        SET n.status = :failedStatus
+        WHERE n.userId = :userId
+          AND n.status IN :targetStatuses
+        """)
+    int cancelInProgressByUserId(
+        @Param("userId") Long userId,
+        @Param("targetStatuses") List<NewsletterStatus> targetStatuses,
+        @Param("failedStatus") NewsletterStatus failedStatus);
+
 }
