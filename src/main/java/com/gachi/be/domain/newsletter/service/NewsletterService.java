@@ -26,6 +26,9 @@ public interface NewsletterService {
    */
   NewsletterStatusResponse getStatus(Long userId, Long newsletterId);
 
+  /** 실패한 가정통신문 분석을 다시 대기 상태로 되돌리고 파이프라인을 재실행합니다. */
+  NewsletterUploadResponse retryAnalysis(Long userId, Long newsletterId);
+
   /** 번역 결과 조회 */
   NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId);
 

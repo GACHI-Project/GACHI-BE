@@ -195,6 +195,12 @@ public enum ErrorCode {
       "아직 분석이 완료되지 않은 가정통신문입니다.",
       "COMPLETED 상태가 아닌 newsletter 조회 시도",
       ErrorLogLevel.WARN),
+  NEWSLETTER_RETRY_NOT_ALLOWED(
+      HttpStatus.BAD_REQUEST,
+      "NL4005",
+      "실패한 가정통신문만 다시 분석할 수 있습니다.",
+      "FAILED 상태가 아닌 newsletter 분석 재시도 요청",
+      ErrorLogLevel.WARN),
 
   CHECKLIST_NOT_FOUND(
       HttpStatus.NOT_FOUND,

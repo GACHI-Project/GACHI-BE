@@ -36,6 +36,27 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       @Param("childName") String childName,
       @Param("newColor") String newColor);
 
+  /**
+   * FAILED 상태인 가정통신문만 PENDING으로 원자적으로 전환합니다.
+   *
+   * <p>동시 재시도 요청이 들어와도 첫 요청만 update count 1을 받고, 나머지는 0을 받아 중복 파이프라인 실행을 막습니다.
+   */
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      """
+      UPDATE Newsletter n
+      SET n.status = com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus.PENDING,
+          n.failureStage = null,
+          n.failureReason = null,
+          n.title = null,
+          n.summary = null
+      WHERE n.id = :newsletterId
+        AND n.userId = :userId
+        AND n.status = com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus.FAILED
+      """)
+  int markRetryPendingIfFailed(
+      @Param("newsletterId") Long newsletterId, @Param("userId") Long userId);
+
   /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션). */
   @Query(
       value =

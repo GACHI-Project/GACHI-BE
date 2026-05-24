@@ -194,7 +194,35 @@ public class NewsletterServiceImpl implements NewsletterService {
   public NewsletterStatusResponse getStatus(Long userId, Long newsletterId) {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
-    return NewsletterStatusResponse.of(newsletter.getStatus());
+    return NewsletterStatusResponse.of(newsletter);
+  }
+
+  /** 실패한 분석을 사용자가 다시 시도할 수 있도록 파생 데이터를 비우고 파이프라인을 재실행합니다. */
+  @Override
+  @Transactional
+  public NewsletterUploadResponse retryAnalysis(Long userId, Long newsletterId) {
+    Newsletter newsletter = findNewsletterById(newsletterId);
+    validateOwnership(newsletter, userId);
+
+    int updated = newsletterRepository.markRetryPendingIfFailed(newsletterId, userId);
+    if (updated == 0) {
+      throw new BusinessException(ErrorCode.NEWSLETTER_RETRY_NOT_ALLOWED);
+    }
+
+    checklistRepository.deleteByNewsletterId(newsletterId);
+    calendarEventRepository.deleteByNewsletterIdAndUserId(newsletterId, userId);
+    Newsletter saved = findNewsletterById(newsletterId);
+
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            log.info("[Newsletter] 분석 재시도 파이프라인 트리거. newsletterId={}", newsletterId);
+            newsletterPipelineService.runPipeline(newsletterId);
+          }
+        });
+
+    return new NewsletterUploadResponse(saved.getId(), saved.getStatus());
   }
 
   /** 번역 결과 조회 */
@@ -203,7 +231,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   public NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId) {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
-    validateCompleted(newsletter);
+    validateTextReadable(newsletter);
 
     String fileUrl = null;
     try {
@@ -512,5 +540,17 @@ public class NewsletterServiceImpl implements NewsletterService {
     if (newsletter.getStatus() != NewsletterStatus.COMPLETED) {
       throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
     }
+  }
+
+  private void validateTextReadable(Newsletter newsletter) {
+    if (newsletter.getStatus() == NewsletterStatus.COMPLETED) {
+      return;
+    }
+    if (newsletter.getStatus() == NewsletterStatus.FAILED
+        && newsletter.getOriginalText() != null
+        && !newsletter.getOriginalText().isBlank()) {
+      return;
+    }
+    throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
   }
 }
