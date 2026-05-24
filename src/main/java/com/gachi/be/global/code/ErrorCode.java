@@ -216,6 +216,13 @@ public enum ErrorCode {
       "Redis에 newsletter:preview:{id} 키 없음 또는 TTL 만료",
       ErrorLogLevel.WARN),
 
+  USER_LANGUAGE_CODE_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "USER4001",
+      "지원하지 않는 언어 코드입니다. (KO, US, ZH, VI 중 하나여야 합니다.)",
+      "언어 코드 유효성 검사 실패",
+      ErrorLogLevel.WARN),
+
   EXTERNAL_API_ERROR(
       HttpStatus.BAD_GATEWAY,
       "EXT5021",
