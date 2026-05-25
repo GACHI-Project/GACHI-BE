@@ -117,9 +117,9 @@ public class User {
       this.languageCode = languageCode;
   }
 
-    public void updateNotificationEnabled(boolean notificationEnabled) {
-        this.notificationEnabled = notificationEnabled;
-    }
+  public void updateNotificationEnabled(boolean notificationEnabled) {
+      this.notificationEnabled = notificationEnabled;
+  }
 
   @PrePersist
   protected void onCreate() {
