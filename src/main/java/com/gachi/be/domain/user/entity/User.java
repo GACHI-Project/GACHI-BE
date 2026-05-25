@@ -51,6 +51,9 @@ public class User {
   @Column(name = "language_code", nullable = false, length = 10)
   private String languageCode;
 
+  @Column(name = "notification_enabled", nullable = false)
+  private boolean notificationEnabled;
+
   @Column(name = "deleted_at")
   private OffsetDateTime deletedAt;
 
@@ -84,6 +87,7 @@ public class User {
       String phoneNumber,
       UserStatus status,
       String languageCode,
+      Boolean notificationEnabled,
       OffsetDateTime emailVerifiedAt,
       OffsetDateTime consentAgreedAt,
       String consentVersion,
@@ -96,6 +100,7 @@ public class User {
     this.phoneNumber = phoneNumber;
     this.status = status;
     this.languageCode = languageCode != null ? languageCode : "KO";
+    this.notificationEnabled = notificationEnabled != null ? notificationEnabled : true;
     this.emailVerifiedAt = emailVerifiedAt;
     this.consentAgreedAt = consentAgreedAt;
     this.consentVersion = consentVersion;
@@ -111,6 +116,10 @@ public class User {
   public void updateLanguage(String languageCode) {
       this.languageCode = languageCode;
   }
+
+    public void updateNotificationEnabled(boolean notificationEnabled) {
+        this.notificationEnabled = notificationEnabled;
+    }
 
   @PrePersist
   protected void onCreate() {
