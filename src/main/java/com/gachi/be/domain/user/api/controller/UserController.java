@@ -9,6 +9,7 @@ import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,12 @@ public class UserController {
   }
 
     /** 언어 설정 변경 API */
+    @Operation(
+        summary = "사용자 언어 설정 변경",
+        description =
+            """
+        마이페이지에서 내가 회원가입 시에 설정했떤 언어를 변경할 수 있습니다. 해당 언어를 변경한 뒤에 스캔된 문서들은 전부 해당 언어로 번역됩니다.
+        """)
     @PatchMapping("/me/language")
     @Transactional
     public ApiResponse<Void> changeLanguage(
