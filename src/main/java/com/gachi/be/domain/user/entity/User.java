@@ -114,7 +114,10 @@ public class User {
   }
 
   public void updateLanguage(String languageCode) {
-    this.languageCode = languageCode;
+      if (languageCode == null || languageCode.isBlank()) {
+             throw new IllegalArgumentException("languageCode는 비어 있을 수 없습니다.");
+           }
+      this.languageCode = languageCode.trim().toUpperCase();
   }
 
   public void updateNotificationEnabled(boolean notificationEnabled) {

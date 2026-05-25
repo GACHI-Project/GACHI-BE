@@ -12,6 +12,8 @@ import com.gachi.be.global.code.SuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Objects;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,6 +71,10 @@ public class UserController {
     String previousLanguage = user.getLanguageCode();
     String newLanguage = request.languageCode();
 
+      if (Objects.equals(previousLanguage, newLanguage)) {
+                return ApiResponse.success(SuccessCode.USER_LANGUAGE_UPDATED, null);
+              }
+
     user.updateLanguage(newLanguage);
     userRepository.save(user);
 
@@ -77,7 +83,7 @@ public class UserController {
         newsletterRepository.cancelInProgressByUserId(
             user.getId(),
             List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING),
-            NewsletterStatus.FAILED);
+            NewsletterStatus.FAILED, request.languageCode());
 
     log.info(
         "[Language] 언어 설정 변경. userId={}, {} -> {}, cancelledPipelines={}",

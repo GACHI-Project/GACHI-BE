@@ -102,12 +102,14 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
   @Query(
       """
         UPDATE Newsletter n
-        SET n.status = :failedStatus
+        SET n.status = :failedStatus,
+                n.language = :newLanguage
         WHERE n.userId = :userId
           AND n.status IN :targetStatuses
         """)
   int cancelInProgressByUserId(
       @Param("userId") Long userId,
       @Param("targetStatuses") List<NewsletterStatus> targetStatuses,
-      @Param("failedStatus") NewsletterStatus failedStatus);
+      @Param("failedStatus") NewsletterStatus failedStatus,
+      @Param("newLanguage") String newLanguage);
 }

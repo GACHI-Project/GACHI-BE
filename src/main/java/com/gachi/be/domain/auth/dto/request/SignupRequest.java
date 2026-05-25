@@ -18,5 +18,6 @@ public record SignupRequest(
         @Pattern(regexp = PhoneNumberValidation.REGEXP, message = PhoneNumberValidation.MESSAGE)
         String phoneNumber,
     @NotNull Boolean consentAgreed,
+    @NotNull(message = "languageCode는 필수입니다.")
     @Pattern(regexp = "^(KO|US|ZH|VI)$", message = "지원하지 않는 언어 코드입니다. KO, US, ZH, VI 중 하나여야 합니다.")
         String languageCode) {}
