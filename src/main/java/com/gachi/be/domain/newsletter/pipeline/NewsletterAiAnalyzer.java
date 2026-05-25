@@ -1,5 +1,7 @@
 package com.gachi.be.domain.newsletter.pipeline;
 
+import com.gachi.be.domain.calendar.dto.CalendarPreviewEvent;
+import com.gachi.be.domain.calendar.service.CalendarPreviewRedisService;
 import com.gachi.be.domain.checklist.entity.Checklist;
 import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
@@ -9,6 +11,7 @@ import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +29,7 @@ public class NewsletterAiAnalyzer {
 
   private final AiNewsletterClient aiNewsletterClient;
   private final ChecklistRepository checklistRepository;
+  private final CalendarPreviewRedisService calendarPreviewRedisService;
   private final NewsletterRepository newsletterRepository;
 
   public AiAnalysisResult analyze(
@@ -45,7 +49,14 @@ public class NewsletterAiAnalyzer {
             originalText, translatedText, language, newsletter.getDateCandidates());
     List<ExtractedItem> items = analysisResponse.items();
 
-    saveExtractedItems(newsletterId, newsletter.getUserId(), items);
+    List<SavedExtractedItem> savedItems =
+        saveExtractedItems(newsletterId, newsletter.getUserId(), items);
+    try {
+      saveCalendarPreview(newsletterId, savedItems);
+    } catch (RuntimeException e) {
+      log.warn(
+          "[AiAnalyzer] 캘린더 preview 저장 실패. 분석 결과 저장은 계속 진행합니다. newsletterId={}", newsletterId, e);
+    }
 
     String title = normalizeTitle(analysisResponse.title(), originalText);
     String summary = normalizeSummary(analysisResponse.summary(), translatedText, originalText);
@@ -55,25 +66,31 @@ public class NewsletterAiAnalyzer {
     return new AiAnalysisResult(title, summary);
   }
 
-  private void saveExtractedItems(Long newsletterId, Long userId, List<ExtractedItem> items) {
+  private List<SavedExtractedItem> saveExtractedItems(
+      Long newsletterId, Long userId, List<ExtractedItem> items) {
     if (items == null || items.isEmpty()) {
       log.warn("[AiAnalyzer] AI 서버 항목 추출 결과 없음. newsletterId={}", newsletterId);
-      return;
+      return List.of();
     }
 
+    List<ExtractedItem> validItems =
+        items.stream().filter(item -> item.title() != null && !item.title().isBlank()).toList();
     List<Checklist> entities =
-        items.stream()
-            .filter(item -> item.title() != null && !item.title().isBlank())
-            .map(item -> toChecklist(newsletterId, userId, item))
-            .toList();
+        validItems.stream().map(item -> toChecklist(newsletterId, userId, item)).toList();
 
     if (entities.isEmpty()) {
       log.warn("[AiAnalyzer] 저장 가능한 항목 없음. newsletterId={}", newsletterId);
-      return;
+      return List.of();
     }
 
-    checklistRepository.saveAll(entities);
+    List<Checklist> savedEntities = checklistRepository.saveAll(entities);
     log.debug("[AiAnalyzer] AI 서버 추출 항목 {}개 저장 완료.", entities.size());
+
+    List<SavedExtractedItem> savedItems = new ArrayList<>();
+    for (int i = 0; i < validItems.size(); i++) {
+      savedItems.add(new SavedExtractedItem(validItems.get(i), savedEntities.get(i)));
+    }
+    return savedItems;
   }
 
   private Checklist toChecklist(Long newsletterId, Long userId, ExtractedItem item) {
@@ -109,6 +126,46 @@ public class NewsletterAiAnalyzer {
       log.warn("[AiAnalyzer] AI 서버 날짜 파싱 실패. value={}", value);
       return null;
     }
+  }
+
+  private void saveCalendarPreview(Long newsletterId, List<SavedExtractedItem> savedItems) {
+    List<CalendarPreviewEvent> previewEvents = new ArrayList<>();
+
+    for (SavedExtractedItem savedItem : savedItems) {
+      ExtractedItem item = savedItem.item();
+      String extractedDate = normalizePreviewDate(item.datetime());
+      if (!"confirmed".equalsIgnoreCase(item.dateStatus()) || extractedDate == null) {
+        continue;
+      }
+
+      previewEvents.add(
+          new CalendarPreviewEvent(
+              "ai_evt_" + (previewEvents.size() + 1),
+              trimToMax(item.title().trim(), CHECKLIST_TEXT_MAX_LENGTH),
+              extractedDate,
+              true,
+              checklistIdList(savedItem.checklist())));
+    }
+
+    if (previewEvents.isEmpty()) {
+      // 재분석 결과에 확정 날짜가 없으면 이전 미리보기 데이터가 남아 잘못 등록될 수 있어 비운다.
+      calendarPreviewRedisService.deletePreview(newsletterId);
+      log.debug("[AiAnalyzer] 캘린더 preview 생성 대상 없음. newsletterId={}", newsletterId);
+      return;
+    }
+
+    calendarPreviewRedisService.savePreview(newsletterId, previewEvents);
+    log.debug(
+        "[AiAnalyzer] 캘린더 preview {}개 저장 완료. newsletterId={}", previewEvents.size(), newsletterId);
+  }
+
+  private String normalizePreviewDate(String value) {
+    LocalDate targetDate = parseTargetDate(value);
+    return targetDate != null ? targetDate.toString() : null;
+  }
+
+  private List<Long> checklistIdList(Checklist checklist) {
+    return checklist.getId() != null ? List.of(checklist.getId()) : List.of();
   }
 
   private String normalizeTitle(String aiTitle, String originalText) {
@@ -167,6 +224,8 @@ public class NewsletterAiAnalyzer {
     }
     return value.substring(0, maxLength - 3).stripTrailing() + "...";
   }
+
+  private record SavedExtractedItem(ExtractedItem item, Checklist checklist) {}
 
   public record AiAnalysisResult(String title, String summary) {}
 }
