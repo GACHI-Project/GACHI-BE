@@ -1,5 +1,6 @@
 package com.gachi.be.domain.user.entity;
 
+import com.gachi.be.domain.user.entity.enums.UserStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -47,6 +48,12 @@ public class User {
   @Column(nullable = false, length = 20)
   private UserStatus status;
 
+  @Column(name = "language_code", nullable = false, length = 10)
+  private String languageCode;
+
+  @Column(name = "notification_enabled", nullable = false)
+  private boolean notificationEnabled;
+
   @Column(name = "deleted_at")
   private OffsetDateTime deletedAt;
 
@@ -79,6 +86,8 @@ public class User {
       String name,
       String phoneNumber,
       UserStatus status,
+      String languageCode,
+      Boolean notificationEnabled,
       OffsetDateTime emailVerifiedAt,
       OffsetDateTime consentAgreedAt,
       String consentVersion,
@@ -90,6 +99,8 @@ public class User {
     this.name = name;
     this.phoneNumber = phoneNumber;
     this.status = status;
+    this.languageCode = languageCode != null ? languageCode : "KO";
+    this.notificationEnabled = notificationEnabled != null ? notificationEnabled : true;
     this.emailVerifiedAt = emailVerifiedAt;
     this.consentAgreedAt = consentAgreedAt;
     this.consentVersion = consentVersion;
@@ -102,6 +113,17 @@ public class User {
     return status == UserStatus.ACTIVE;
   }
 
+  public void updateLanguage(String languageCode) {
+    if (languageCode == null || languageCode.isBlank()) {
+      throw new IllegalArgumentException("languageCode는 비어 있을 수 없습니다.");
+    }
+    this.languageCode = languageCode.trim().toUpperCase();
+  }
+
+  public void updateNotificationEnabled(boolean notificationEnabled) {
+    this.notificationEnabled = notificationEnabled;
+  }
+
   @PrePersist
   protected void onCreate() {
     LocalDateTime now = LocalDateTime.now();
@@ -111,6 +133,9 @@ public class User {
     updatedAt = now;
     if (status == null) {
       status = UserStatus.ACTIVE;
+    }
+    if (languageCode == null) {
+      languageCode = "KO";
     }
   }
 

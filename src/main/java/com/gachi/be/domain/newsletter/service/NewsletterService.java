@@ -11,11 +11,9 @@ public interface NewsletterService {
    * @param userId 현재 로그인한 사용자 ID
    * @param file 업로드할 파일 (jpg/png/pdf, 최대 10MB)
    * @param childId 연결할 자녀 ID (미선택 시 null)
-   * @param userLanguage 사용자 언어 코드 (KO/US/ZH/VI)
    * @return newsletterId + status(PENDING)
    */
-  NewsletterUploadResponse upload(
-      Long userId, MultipartFile file, Long childId, String userLanguage);
+  NewsletterUploadResponse upload(Long userId, MultipartFile file, Long childId);
 
   /**
    * 가정통신문의 현재 분석 상태와 진행률을 조회.

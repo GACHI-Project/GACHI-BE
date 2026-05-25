@@ -37,7 +37,8 @@ public enum SuccessCode {
   CALENDAR_DAILY_SUCCESS(HttpStatus.OK, "CAL2005", "날짜별 캘린더 조회에 성공하였습니다."),
   CHECKLIST_TODAY_SUCCESS(HttpStatus.OK, "CL2001", "오늘 마감 체크리스트 조회에 성공하였습니다."),
   CHECKLIST_COMPLETE_SUCCESS(HttpStatus.OK, "CL2002", "체크리스트 완료 처리에 성공하였습니다."),
-  CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다.");
+  CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다."),
+  USER_LANGUAGE_UPDATED(HttpStatus.OK, "USER2001", "언어 설정이 변경되었습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;

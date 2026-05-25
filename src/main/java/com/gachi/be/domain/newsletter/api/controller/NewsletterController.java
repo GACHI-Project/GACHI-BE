@@ -65,13 +65,10 @@ public class NewsletterController {
                       schema = @Schema(type = "string", format = "binary")))
           @RequestPart("file")
           MultipartFile file,
-      @Parameter(description = "연결할 자녀 ID. 미선택 시 생략") @RequestParam(required = false) Long childId,
-      @Parameter(description = "언어 코드 (KO/US/ZH/VI). 기본값 KO")
-          @RequestParam(defaultValue = "KO")
-          @Pattern(regexp = "KO|US|ZH|VI", message = "language는 KO/US/ZH/VI 중 하나여야 합니다.")
-          String language) {
+      @Parameter(description = "연결할 자녀 ID. 미선택 시 생략") @RequestParam(required = false)
+          Long childId) {
 
-    NewsletterUploadResponse response = newsletterService.upload(userId, file, childId, language);
+    NewsletterUploadResponse response = newsletterService.upload(userId, file, childId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_UPLOAD_SUCCESS, response);
   }
 

@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
 import com.gachi.be.domain.user.entity.User;
-import com.gachi.be.domain.user.entity.UserStatus;
+import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import java.time.OffsetDateTime;
 import java.util.Map;

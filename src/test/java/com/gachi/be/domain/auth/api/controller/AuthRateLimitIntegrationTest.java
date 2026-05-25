@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.user.entity.User;
-import com.gachi.be.domain.user.entity.UserStatus;
+import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import java.time.OffsetDateTime;
 import java.util.Map;
