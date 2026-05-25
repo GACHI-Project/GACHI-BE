@@ -11,6 +11,6 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
   ClovaOcrProperties.class,
   PapagoProperties.class,
-  OpenAiProperties.class
+  AiServerProperties.class
 })
 public class ExternalApiConfig {}

@@ -17,6 +17,8 @@ import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterPipelineService;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.newsletter.service.NewsletterService;
+import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.file.service.S3FileService;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
@@ -60,6 +62,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   private final CalendarEventRepository calendarEventRepository;
   private final ChecklistRepository checklistRepository;
   private final NewsletterPipelineService newsletterPipelineService;
+  private final UserRepository userRepository;
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final int PAGE_SIZE = 20;
 
@@ -72,8 +75,7 @@ public class NewsletterServiceImpl implements NewsletterService {
    */
   @Override
   @Transactional
-  public NewsletterUploadResponse upload(
-      Long userId, MultipartFile file, Long childId, String userLanguage) {
+  public NewsletterUploadResponse upload(Long userId, MultipartFile file, Long childId) {
 
     // 파일 유효성 검사
     validateFile(file);
@@ -110,12 +112,30 @@ public class NewsletterServiceImpl implements NewsletterService {
     // 자녀 미선택 시: (user_id + file_hash) 조합으로 확인
     checkDuplicate(userId, childName, fileHash);
 
+    // 프론트 언어처리로만 이루어지지 않고 설정한 언어를 자동으로 사용하게 변경
+    String userLanguage = resolveUserLanguage(userId);
+    log.debug("[Newsletter] 사용자 언어 설정 조회 완료. userId={}, language={}", userId, userLanguage);
+
     // S3 업로드 - 가정통신문 전용 경로에 저장 + 디버깅 로그 추가해서 체크
     String fileKey = s3FileService.uploadNewsletter(file).key();
     log.debug("[Newsletter] S3 업로드 완료. userId={}, fileKey={}", userId, fileKey);
 
     return saveAndTriggerPipeline(
         userId, childName, childGrade, childColor, fileKey, fileHash, userLanguage);
+  }
+
+  // userId로 users 테이블에서 language_code를 조회하는 내부 메서드.
+  // 사용자를 찾지 못하면 기본값 'KO'를 반환한다 (방어 코드).
+  private String resolveUserLanguage(Long userId) {
+    return userRepository
+        .findById(userId)
+        .map(User::getLanguageCode)
+        .filter(lang -> lang != null && !lang.isBlank())
+        .orElseGet(
+            () -> {
+              log.warn("[Newsletter] 사용자 언어 조회 실패. userId={}. 기본값 KO 사용.", userId);
+              return "KO";
+            });
   }
 
   @Transactional
@@ -194,7 +214,35 @@ public class NewsletterServiceImpl implements NewsletterService {
   public NewsletterStatusResponse getStatus(Long userId, Long newsletterId) {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
-    return NewsletterStatusResponse.of(newsletter.getStatus());
+    return NewsletterStatusResponse.of(newsletter);
+  }
+
+  /** 실패한 분석을 사용자가 다시 시도할 수 있도록 파생 데이터를 비우고 파이프라인을 재실행합니다. */
+  @Override
+  @Transactional
+  public NewsletterUploadResponse retryAnalysis(Long userId, Long newsletterId) {
+    Newsletter newsletter = findNewsletterById(newsletterId);
+    validateOwnership(newsletter, userId);
+
+    int updated = newsletterRepository.markRetryPendingIfFailed(newsletterId, userId);
+    if (updated == 0) {
+      throw new BusinessException(ErrorCode.NEWSLETTER_RETRY_NOT_ALLOWED);
+    }
+
+    checklistRepository.deleteByNewsletterId(newsletterId);
+    calendarEventRepository.deleteByNewsletterIdAndUserId(newsletterId, userId);
+    Newsletter saved = findNewsletterById(newsletterId);
+
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            log.info("[Newsletter] 분석 재시도 파이프라인 트리거. newsletterId={}", newsletterId);
+            newsletterPipelineService.runPipeline(newsletterId);
+          }
+        });
+
+    return new NewsletterUploadResponse(saved.getId(), saved.getStatus());
   }
 
   /** 번역 결과 조회 */
@@ -203,7 +251,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   public NewsletterTranslationResponse getTranslation(Long userId, Long newsletterId) {
     Newsletter newsletter = findNewsletterById(newsletterId);
     validateOwnership(newsletter, userId);
-    validateCompleted(newsletter);
+    validateTextReadable(newsletter);
 
     String fileUrl = null;
     try {
@@ -512,5 +560,17 @@ public class NewsletterServiceImpl implements NewsletterService {
     if (newsletter.getStatus() != NewsletterStatus.COMPLETED) {
       throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
     }
+  }
+
+  private void validateTextReadable(Newsletter newsletter) {
+    if (newsletter.getStatus() == NewsletterStatus.COMPLETED) {
+      return;
+    }
+    if (newsletter.getStatus() == NewsletterStatus.FAILED
+        && newsletter.getOriginalText() != null
+        && !newsletter.getOriginalText().isBlank()) {
+      return;
+    }
+    throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
   }
 }

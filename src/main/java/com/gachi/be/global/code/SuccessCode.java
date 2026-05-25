@@ -20,6 +20,7 @@ public enum SuccessCode {
   CHILD_CREATE_SUCCESS(HttpStatus.CREATED, "CHILD2011", "자녀 정보 등록에 성공하였습니다."),
   CHILD_GET_LIST_SUCCESS(HttpStatus.OK, "CHILD2001", "내 자녀 목록 조회에 성공하였습니다."),
   NEWSLETTER_UPLOAD_SUCCESS(HttpStatus.CREATED, "NL2011", "업로드가 시작되었습니다."),
+  NEWSLETTER_RETRY_ACCEPTED(HttpStatus.ACCEPTED, "NL2021", "가정통신문 분석 재시도가 시작되었습니다."),
   NEWSLETTER_STATUS_SUCCESS(HttpStatus.OK, "NL2001", "요청에 성공하였습니다."),
   NEWSLETTER_TRANSLATION_SUCCESS(HttpStatus.OK, "NL2002", "번역 결과 조회에 성공하였습니다."),
   NEWSLETTER_SUMMARY_SUCCESS(HttpStatus.OK, "NL2003", "요약 결과 조회에 성공하였습니다."),
@@ -36,7 +37,8 @@ public enum SuccessCode {
   CALENDAR_DAILY_SUCCESS(HttpStatus.OK, "CAL2005", "날짜별 캘린더 조회에 성공하였습니다."),
   CHECKLIST_TODAY_SUCCESS(HttpStatus.OK, "CL2001", "오늘 마감 체크리스트 조회에 성공하였습니다."),
   CHECKLIST_COMPLETE_SUCCESS(HttpStatus.OK, "CL2002", "체크리스트 완료 처리에 성공하였습니다."),
-  CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다.");
+  CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다."),
+  USER_LANGUAGE_UPDATED(HttpStatus.OK, "USER2001", "언어 설정이 변경되었습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;

@@ -97,9 +97,7 @@ services:
       CLOVA_OCR_SECRET_KEY: ${CLOVA_OCR_SECRET_KEY}
       PAPAGO_CLIENT_ID: ${PAPAGO_CLIENT_ID}
       PAPAGO_CLIENT_SECRET: ${PAPAGO_CLIENT_SECRET}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
-      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-2000}
+      AI_SERVER_BASE_URL: ${AI_SERVER_BASE_URL:-http://ai:8000}
     secrets:
       - source: spring_mail_password
         target: spring_mail_password
@@ -107,6 +105,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      ai:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
@@ -120,7 +120,11 @@ services:
     image: ${AI_IMAGE:-gachi-ai:latest}
     container_name: gachi-ai
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_ENABLED: ${OPENAI_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-60}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ai/health || exit 1"]
       interval: 30s

@@ -1,6 +1,7 @@
 package com.gachi.be.domain.newsletter.repository;
 
 import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +34,27 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       @Param("userId") Long userId,
       @Param("childName") String childName,
       @Param("newColor") String newColor);
+
+  /**
+   * FAILED 상태인 가정통신문만 PENDING으로 원자적으로 전환합니다.
+   *
+   * <p>동시 재시도 요청이 들어와도 첫 요청만 update count 1을 받고, 나머지는 0을 받아 중복 파이프라인 실행을 막습니다.
+   */
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      """
+      UPDATE Newsletter n
+      SET n.status = com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus.PENDING,
+          n.failureStage = null,
+          n.failureReason = null,
+          n.title = null,
+          n.summary = null
+      WHERE n.id = :newsletterId
+        AND n.userId = :userId
+        AND n.status = com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus.FAILED
+      """)
+  int markRetryPendingIfFailed(
+      @Param("newsletterId") Long newsletterId, @Param("userId") Long userId);
 
   /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션). */
   @Query(
@@ -74,4 +96,20 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       @Param("userId") Long userId,
       @Param("rangeStart") OffsetDateTime rangeStart,
       @Param("rangeEnd") OffsetDateTime rangeEnd);
+
+  /** 언어 변경 시 진행중인 파이프라인 중단 처리용 쿼리 */
+  @Modifying
+  @Query(
+      """
+        UPDATE Newsletter n
+        SET n.status = :failedStatus,
+                n.language = :newLanguage
+        WHERE n.userId = :userId
+          AND n.status IN :targetStatuses
+        """)
+  int cancelInProgressByUserId(
+      @Param("userId") Long userId,
+      @Param("targetStatuses") List<NewsletterStatus> targetStatuses,
+      @Param("failedStatus") NewsletterStatus failedStatus,
+      @Param("newLanguage") String newLanguage);
 }

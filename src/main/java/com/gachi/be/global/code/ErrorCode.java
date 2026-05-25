@@ -195,6 +195,12 @@ public enum ErrorCode {
       "아직 분석이 완료되지 않은 가정통신문입니다.",
       "COMPLETED 상태가 아닌 newsletter 조회 시도",
       ErrorLogLevel.WARN),
+  NEWSLETTER_RETRY_NOT_ALLOWED(
+      HttpStatus.BAD_REQUEST,
+      "NL4005",
+      "실패한 가정통신문만 다시 분석할 수 있습니다.",
+      "FAILED 상태가 아닌 newsletter 분석 재시도 요청",
+      ErrorLogLevel.WARN),
 
   CHECKLIST_NOT_FOUND(
       HttpStatus.NOT_FOUND,
@@ -214,6 +220,13 @@ public enum ErrorCode {
       "CAL4042",
       "캘린더 미리보기 데이터가 없습니다. AI 분석 중이거나 데이터가 만료되었을 수 있습니다.",
       "Redis에 newsletter:preview:{id} 키 없음 또는 TTL 만료",
+      ErrorLogLevel.WARN),
+
+  USER_LANGUAGE_CODE_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "USER4001",
+      "지원하지 않는 언어 코드입니다. (KO, US, ZH, VI 중 하나여야 합니다.)",
+      "언어 코드 유효성 검사 실패",
       ErrorLogLevel.WARN),
 
   EXTERNAL_API_ERROR(

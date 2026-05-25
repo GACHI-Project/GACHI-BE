@@ -65,13 +65,10 @@ public class NewsletterController {
                       schema = @Schema(type = "string", format = "binary")))
           @RequestPart("file")
           MultipartFile file,
-      @Parameter(description = "연결할 자녀 ID. 미선택 시 생략") @RequestParam(required = false) Long childId,
-      @Parameter(description = "언어 코드 (KO/US/ZH/VI). 기본값 KO")
-          @RequestParam(defaultValue = "KO")
-          @Pattern(regexp = "KO|US|ZH|VI", message = "language는 KO/US/ZH/VI 중 하나여야 합니다.")
-          String language) {
+      @Parameter(description = "연결할 자녀 ID. 미선택 시 생략") @RequestParam(required = false)
+          Long childId) {
 
-    NewsletterUploadResponse response = newsletterService.upload(userId, file, childId, language);
+    NewsletterUploadResponse response = newsletterService.upload(userId, file, childId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_UPLOAD_SUCCESS, response);
   }
 
@@ -90,6 +87,24 @@ public class NewsletterController {
 
     NewsletterStatusResponse response = newsletterService.getStatus(userId, newsletterId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_STATUS_SUCCESS, response);
+  }
+
+  /** 실패한 가정통신문 분석 재시도 API */
+  @Operation(
+      summary = "가정통신문 분석 재시도",
+      description =
+          """
+      FAILED 상태의 가정통신문 분석을 다시 시작합니다.
+      AI 서버 장애로 실패한 경우 기존 OCR/번역 결과는 보존되어 있고, 재시도 시 파이프라인이 다시 실행됩니다.
+      """)
+  @PostMapping("/{newsletterId}/analysis/retry")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public ApiResponse<NewsletterUploadResponse> retryAnalysis(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+
+    NewsletterUploadResponse response = newsletterService.retryAnalysis(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_RETRY_ACCEPTED, response);
   }
 
   /** 번역 결과 조회 API. */

@@ -113,7 +113,8 @@ class AuthControllerIntegrationTest {
               "password":"password123",
               "passwordConfirm":"password123",
               "phoneNumber":"01012345678",
-              "consentAgreed":true
+              "consentAgreed":true,
+              "languageCode":"KO"
             }
             """)
         .andExpect(status().isCreated())
@@ -677,7 +678,8 @@ class AuthControllerIntegrationTest {
             "password", password,
             "passwordConfirm", passwordConfirm,
             "phoneNumber", phoneNumber,
-            "consentAgreed", consentAgreed));
+            "consentAgreed", consentAgreed,
+            "languageCode", "KO"));
   }
 
   private org.springframework.test.web.servlet.ResultActions login(String payload)

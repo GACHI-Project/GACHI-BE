@@ -72,6 +72,12 @@ public class Newsletter {
   @Column(name = "summary", columnDefinition = "TEXT")
   private String summary;
 
+  @Column(name = "failure_stage", length = 50)
+  private String failureStage;
+
+  @Column(name = "failure_reason", columnDefinition = "TEXT")
+  private String failureReason;
+
   /** 날짜 후보는 최종 일정이 아니라 후속 AI 매칭을 위한 중간 재료이므로 JSON으로 보관합니다. */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "date_candidates", columnDefinition = "jsonb")
@@ -125,6 +131,8 @@ public class Newsletter {
   /** AI 분석 시작 시 PROCESSING 상태로 전환합니다. */
   public void startProcessing() {
     this.status = NewsletterStatus.PROCESSING;
+    this.failureStage = null;
+    this.failureReason = null;
   }
 
   /** AI 분석 결과를 저장하고 COMPLETED 상태로 전환합니다. */
@@ -136,11 +144,37 @@ public class Newsletter {
     this.title = title;
     this.summary = summary;
     this.status = NewsletterStatus.COMPLETED;
+    this.failureStage = null;
+    this.failureReason = null;
   }
 
-  /** AI 분석 실패 시 FAILED 상태로 전환합니다. */
-  public void fail() {
+  /** 분석 실패 시 원인 추적을 위해 실패 단계와 사유를 함께 저장합니다. */
+  public void fail(String failureStage, String failureReason) {
     this.status = NewsletterStatus.FAILED;
+    this.failureStage = normalizeFailureStage(failureStage);
+    this.failureReason = normalizeFailureReason(failureReason);
+  }
+
+  /** OCR/번역 이후 AI 서버 장애가 나도 사용자가 원문 결과를 확인할 수 있도록 중간 산출물을 보존합니다. */
+  public void failWithSnapshot(
+      String ocrText,
+      String originalText,
+      String translatedText,
+      String failureStage,
+      String failureReason) {
+    this.ocrText = ocrText;
+    this.originalText = originalText;
+    this.translatedText = translatedText;
+    fail(failureStage, failureReason);
+  }
+
+  /** 실패한 분석을 사용자가 다시 시도할 때 이전 실패 사유를 비우고 대기 상태로 되돌립니다. */
+  public void prepareRetry() {
+    this.status = NewsletterStatus.PENDING;
+    this.failureStage = null;
+    this.failureReason = null;
+    this.title = null;
+    this.summary = null;
   }
 
   /** 날짜 후보 목록을 교체합니다. 후보가 없으면 빈 목록으로 저장합니다. */
@@ -152,5 +186,19 @@ public class Newsletter {
   /** 자녀 색상 변경 시 가정통신문에 복사된 색상도 함께 갱신합니다. */
   public void updateChildColor(String newColor) {
     this.childColor = newColor;
+  }
+
+  private String normalizeFailureStage(String failureStage) {
+    if (failureStage == null || failureStage.isBlank()) {
+      return "UNKNOWN";
+    }
+    return failureStage.length() <= 50 ? failureStage : failureStage.substring(0, 50);
+  }
+
+  private String normalizeFailureReason(String failureReason) {
+    if (failureReason == null || failureReason.isBlank()) {
+      return null;
+    }
+    return failureReason.length() <= 1000 ? failureReason : failureReason.substring(0, 1000);
   }
 }
