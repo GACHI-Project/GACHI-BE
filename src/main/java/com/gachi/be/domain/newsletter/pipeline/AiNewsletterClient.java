@@ -37,6 +37,7 @@ public class AiNewsletterClient {
     this.httpClient =
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(aiServerProperties.getConnectTimeoutSeconds()))
+            .version(HttpClient.Version.HTTP_1_1)
             .build();
   }
 
@@ -61,6 +62,7 @@ public class AiNewsletterClient {
           HttpRequest.newBuilder()
               .uri(URI.create(normalizedBaseUrl() + ANALYZE_PATH))
               .header("Content-Type", "application/json")
+              .header("Accept", "application/json")
               .timeout(Duration.ofSeconds(aiServerProperties.getReadTimeoutSeconds()))
               .POST(HttpRequest.BodyPublishers.ofString(requestBody))
               .build();
@@ -73,7 +75,7 @@ public class AiNewsletterClient {
             "[AiNewsletterClient] AI 서버 분석 실패. status={}, body={}",
             response.statusCode(),
             response.body());
-            //response.body() != null ? response.body().length() : 0);
+        // response.body() != null ? response.body().length() : 0);
         throw new ExternalApiException(
             ErrorCode.EXTERNAL_API_ERROR, "AI 서버 분석 실패. status=" + response.statusCode());
       }
