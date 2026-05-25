@@ -51,7 +51,12 @@ public class NewsletterAiAnalyzer {
 
     List<SavedExtractedItem> savedItems =
         saveExtractedItems(newsletterId, newsletter.getUserId(), items);
-    saveCalendarPreview(newsletterId, savedItems);
+    try {
+      saveCalendarPreview(newsletterId, savedItems);
+    } catch (RuntimeException e) {
+      log.warn(
+          "[AiAnalyzer] 캘린더 preview 저장 실패. 분석 결과 저장은 계속 진행합니다. newsletterId={}", newsletterId, e);
+    }
 
     String title = normalizeTitle(analysisResponse.title(), originalText);
     String summary = normalizeSummary(analysisResponse.summary(), translatedText, originalText);

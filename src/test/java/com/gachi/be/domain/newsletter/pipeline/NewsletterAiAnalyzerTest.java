@@ -3,6 +3,7 @@ package com.gachi.be.domain.newsletter.pipeline;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -139,6 +140,52 @@ class NewsletterAiAnalyzerTest {
     newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO");
 
     verify(calendarPreviewRedisService).deletePreview(newsletterId);
+  }
+
+  @Test
+  void analyzeContinuesWhenCalendarPreviewSaveFails() {
+    Long newsletterId = 15L;
+    Newsletter newsletter =
+        Newsletter.builder()
+            .userId(25L)
+            .fileKey("newsletter.pdf")
+            .fileHash("hash")
+            .status(NewsletterStatus.PROCESSING)
+            .language("KO")
+            .build();
+
+    ExtractedItem item =
+        new ExtractedItem(
+            "schedule",
+            "현장학습 참석",
+            null,
+            "2026-05-25",
+            "Asia/Seoul",
+            "5월 25일 현장학습에 참석합니다.",
+            "confirmed",
+            0.9,
+            false,
+            null);
+
+    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
+    when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
+        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), Map.of()));
+    when(checklistRepository.saveAll(anyList()))
+        .thenAnswer(
+            invocation -> {
+              List<Checklist> checklists = invocation.getArgument(0);
+              ReflectionTestUtils.setField(checklists.get(0), "id", 502L);
+              return checklists;
+            });
+    doThrow(new RuntimeException("Redis down"))
+        .when(calendarPreviewRedisService)
+        .savePreview(eq(newsletterId), anyList());
+
+    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO");
+
+    assertThat(result.title()).isEqualTo("AI 제목");
+    assertThat(result.summary()).isEqualTo("AI 요약");
+    verify(checklistRepository).saveAll(anyList());
   }
 
   @Test
