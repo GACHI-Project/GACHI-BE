@@ -39,7 +39,9 @@ public class UserController {
             user.getLoginId(),
             user.getEmail(),
             user.getName(),
-            user.getPhoneNumber()));
+            user.getLanguageCode(),
+            user.isNotificationEnabled(),
+            user.getCreatedAt()));
   }
 
     /** 언어 설정 변경 API */
