@@ -13,8 +13,7 @@ public interface NewsletterService {
    * @param childId 연결할 자녀 ID (미선택 시 null)
    * @return newsletterId + status(PENDING)
    */
-  NewsletterUploadResponse upload(
-      Long userId, MultipartFile file, Long childId);
+  NewsletterUploadResponse upload(Long userId, MultipartFile file, Long childId);
 
   /**
    * 가정통신문의 현재 분석 상태와 진행률을 조회.

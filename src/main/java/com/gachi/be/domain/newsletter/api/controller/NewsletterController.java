@@ -65,7 +65,8 @@ public class NewsletterController {
                       schema = @Schema(type = "string", format = "binary")))
           @RequestPart("file")
           MultipartFile file,
-      @Parameter(description = "연결할 자녀 ID. 미선택 시 생략") @RequestParam(required = false) Long childId) {
+      @Parameter(description = "연결할 자녀 ID. 미선택 시 생략") @RequestParam(required = false)
+          Long childId) {
 
     NewsletterUploadResponse response = newsletterService.upload(userId, file, childId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_UPLOAD_SUCCESS, response);

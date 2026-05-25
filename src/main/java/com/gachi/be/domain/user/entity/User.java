@@ -114,11 +114,11 @@ public class User {
   }
 
   public void updateLanguage(String languageCode) {
-      this.languageCode = languageCode;
+    this.languageCode = languageCode;
   }
 
   public void updateNotificationEnabled(boolean notificationEnabled) {
-      this.notificationEnabled = notificationEnabled;
+    this.notificationEnabled = notificationEnabled;
   }
 
   @PrePersist
@@ -131,9 +131,9 @@ public class User {
     if (status == null) {
       status = UserStatus.ACTIVE;
     }
-      if (languageCode == null) {
-          languageCode = "KO";
-      }
+    if (languageCode == null) {
+      languageCode = "KO";
+    }
   }
 
   @PreUpdate

@@ -69,14 +69,13 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
    *
-   * 처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
+   * <p>처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
    * file_key 획득 childId가 있으면 children 테이블에서 자녀 정보 조회 (스냅샷용) newsletter 레코드 DB 저장 (status=PENDING 으로
    * 변경) AI 분석 파이프라인 비동기 트리거 -> Asyncㅏ로 별도 스레드에서 실행하게 함.
    */
   @Override
   @Transactional
-  public NewsletterUploadResponse upload(
-      Long userId, MultipartFile file, Long childId) {
+  public NewsletterUploadResponse upload(Long userId, MultipartFile file, Long childId) {
 
     // 파일 유효성 검사
     validateFile(file);
@@ -128,15 +127,15 @@ public class NewsletterServiceImpl implements NewsletterService {
   // userId로 users 테이블에서 language_code를 조회하는 내부 메서드.
   // 사용자를 찾지 못하면 기본값 'KO'를 반환한다 (방어 코드).
   private String resolveUserLanguage(Long userId) {
-      return userRepository
-          .findById(userId)
-          .map(User::getLanguageCode)
-          .filter(lang -> lang != null && !lang.isBlank())
-          .orElseGet(
-              () -> {
-                  log.warn("[Newsletter] 사용자 언어 조회 실패. userId={}. 기본값 KO 사용.", userId);
-                  return "KO";
-              });
+    return userRepository
+        .findById(userId)
+        .map(User::getLanguageCode)
+        .filter(lang -> lang != null && !lang.isBlank())
+        .orElseGet(
+            () -> {
+              log.warn("[Newsletter] 사용자 언어 조회 실패. userId={}. 기본값 KO 사용.", userId);
+              return "KO";
+            });
   }
 
   @Transactional
@@ -472,7 +471,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 파일 유효성 검사.
    *
-   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
    * 최대 크기: 10MB
    */
   private void validateFile(MultipartFile file) {
