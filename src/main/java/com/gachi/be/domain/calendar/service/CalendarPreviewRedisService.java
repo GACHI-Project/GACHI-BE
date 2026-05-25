@@ -13,9 +13,9 @@ import org.springframework.stereotype.Service;
 /**
  * 캘린더 일정 등록 플로우에서 사용하는 Redis 임시 데이터 관리 서비스.
  *
- * <p>흐름 요약: 1. 가정통신문 AI 분석 완료 → AI 파이프라인에서 Redis에 preview 데이터 저장 (추후 연결) 2. GET /calendar/preview →
- * Redis에서 읽어 팝업에 표시 3. PATCH /calendar/dates → Redis에서 날짜 수정 후 다시 저장 4. POST /calendar → Redis 데이터
- * 기반으로 calendar_events insert → Redis 키 삭제
+ * <p>흐름 요약: 1. 가정통신문 AI 분석 완료 → AI 파이프라인에서 Redis에 preview 데이터 저장 2. GET /calendar/preview → Redis에서
+ * 읽어 팝업에 표시 3. PATCH /calendar/dates → Redis에서 날짜 수정 후 다시 저장 4. POST /calendar → Redis 데이터 기반으로
+ * calendar_events insert → Redis 키 삭제
  *
  * <p>Redis 키 형식: newsletter:preview:{newsletterId} - TTL: 1시간 (사용자가 팝업을 열고 이탈해도 자동 만료)
  */
