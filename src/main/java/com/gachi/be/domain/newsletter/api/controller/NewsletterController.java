@@ -71,7 +71,7 @@ public class NewsletterController {
           @Pattern(regexp = "KO|US|ZH|VI", message = "language는 KO/US/ZH/VI 중 하나여야 합니다.")
           String language) {
 
-    NewsletterUploadResponse response = newsletterService.upload(userId, file, childId, language);
+    NewsletterUploadResponse response = newsletterService.upload(userId, file, childId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_UPLOAD_SUCCESS, response);
   }
 
