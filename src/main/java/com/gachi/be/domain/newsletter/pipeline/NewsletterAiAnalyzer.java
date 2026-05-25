@@ -31,6 +31,7 @@ public class NewsletterAiAnalyzer {
   private final ChecklistRepository checklistRepository;
   private final CalendarPreviewRedisService calendarPreviewRedisService;
   private final NewsletterRepository newsletterRepository;
+  private final PapagoTranslateClient papagoTranslateClient;
 
   public AiAnalysisResult analyze(
       Long newsletterId, String originalText, String translatedText, String language) {
@@ -50,15 +51,17 @@ public class NewsletterAiAnalyzer {
     List<ExtractedItem> items = analysisResponse.items();
 
     List<SavedExtractedItem> savedItems =
-        saveExtractedItems(newsletterId, newsletter.getUserId(), items);
+        saveExtractedItems(newsletterId, newsletter.getUserId(), items, language);
+
     try {
-      saveCalendarPreview(newsletterId, savedItems);
+        saveCalendarPreview(newsletterId, savedItems);
     } catch (RuntimeException e) {
-      log.warn(
-          "[AiAnalyzer] 캘린더 preview 저장 실패. 분석 결과 저장은 계속 진행합니다. newsletterId={}", newsletterId, e);
+        log.warn(
+            "[AiAnalyzer] 캘린더 preview 저장 실패. 분석 결과 저장은 계속 진행합니다. newsletterId={}", newsletterId, e);
     }
 
-    String title = normalizeTitle(analysisResponse.title(), originalText);
+    String rawTitle = normalizeTitle(analysisResponse.title(), originalText);
+    String title = translateIfNeeded(rawTitle, language, "title", newsletterId);
     String summary = normalizeSummary(analysisResponse.summary(), translatedText, originalText);
 
     log.info(
@@ -67,7 +70,7 @@ public class NewsletterAiAnalyzer {
   }
 
   private List<SavedExtractedItem> saveExtractedItems(
-      Long newsletterId, Long userId, List<ExtractedItem> items) {
+      Long newsletterId, Long userId, List<ExtractedItem> items, String language) {
     if (items == null || items.isEmpty()) {
       log.warn("[AiAnalyzer] AI 서버 항목 추출 결과 없음. newsletterId={}", newsletterId);
       return List.of();
@@ -76,11 +79,13 @@ public class NewsletterAiAnalyzer {
     List<ExtractedItem> validItems =
         items.stream().filter(item -> item.title() != null && !item.title().isBlank()).toList();
     List<Checklist> entities =
-        validItems.stream().map(item -> toChecklist(newsletterId, userId, item)).toList();
+        validItems.stream()
+            .map(item -> toChecklist(newsletterId, userId, item, language))
+            .toList();
 
     if (entities.isEmpty()) {
-      log.warn("[AiAnalyzer] 저장 가능한 항목 없음. newsletterId={}", newsletterId);
-      return List.of();
+        log.warn("[AiAnalyzer] 저장 가능한 항목 없음. newsletterId={}", newsletterId);
+        return List.of();
     }
 
     List<Checklist> savedEntities = checklistRepository.saveAll(entities);
@@ -88,31 +93,78 @@ public class NewsletterAiAnalyzer {
 
     List<SavedExtractedItem> savedItems = new ArrayList<>();
     for (int i = 0; i < validItems.size(); i++) {
-      savedItems.add(new SavedExtractedItem(validItems.get(i), savedEntities.get(i)));
+        savedItems.add(new SavedExtractedItem(validItems.get(i), savedEntities.get(i)));
     }
-    return savedItems;
-  }
+    return savedItems;}
 
-  private Checklist toChecklist(Long newsletterId, Long userId, ExtractedItem item) {
+  private Checklist toChecklist(Long newsletterId, Long userId, ExtractedItem item, String language) {
     ChecklistType checklistType =
         "checklist".equalsIgnoreCase(item.type()) ? ChecklistType.CHECKLIST : ChecklistType.TODO;
 
     LocalDate targetDate = parseTargetDate(item.datetime());
-    String targetDateLabel =
-        targetDate != null
-            ? targetDate.getMonthValue() + "월 " + targetDate.getDayOfMonth() + "일"
-            : null;
+
+    String targetDateLabel = null;
+    if (targetDate != null) {
+        String koreanLabel =
+            targetDate.getMonthValue() + "월 " + targetDate.getDayOfMonth() + "일";
+        targetDateLabel =
+            translateIfNeeded(koreanLabel, language, "targetDateLabel", newsletterId);
+    }
+
+    // content: AI 서버가 한국어로 추출한 항목명을 파파고로 번역
+    String content =
+        translateIfNeeded(
+            trimToMax(item.title().trim(), CHECKLIST_TEXT_MAX_LENGTH),
+            language,
+            "content",
+            newsletterId);
+
+    // detail: AI 서버가 한국어로 추출한 상세 설명을 파파고로 번역
+    String detail = null;
+    if (item.evidenceText() != null && !item.evidenceText().isBlank()) {
+        String trimmedDetail = trimNullable(item.evidenceText(), CHECKLIST_TEXT_MAX_LENGTH);
+        detail = translateIfNeeded(trimmedDetail, language, "detail", newsletterId);
+    }
 
     return Checklist.builder()
         .newsletterId(newsletterId)
         .calendarEventId(null)
         .userId(userId)
         .type(checklistType)
-        .content(trimToMax(item.title().trim(), CHECKLIST_TEXT_MAX_LENGTH))
-        .detail(trimNullable(item.evidenceText(), CHECKLIST_TEXT_MAX_LENGTH))
+        .content(content)
+        .detail(detail)
         .targetDate(checklistType == ChecklistType.TODO ? targetDate : null)
         .targetDateLabel(checklistType == ChecklistType.TODO ? targetDateLabel : null)
         .build();
+  }
+
+  /**KO가 아닌 경우 파파고로 번역. KO이거나 번역 실패 시 원문 그대로 반환.*/
+  private String translateIfNeeded(
+      String text, String language, String fieldName, Long newsletterId) {
+      if (text == null || text.isBlank()) {
+          return text;
+      }
+      if ("KO".equals(language)) {
+          // KO는 번역 스킵, 원문 그대로 반환
+          return text;
+      }
+      try {
+          String translated = papagoTranslateClient.translate(text, language);
+          if (translated != null && !translated.isBlank()) {
+              log.debug(
+                  "[AiAnalyzer] {} 번역 완료. newsletterId={}, language={}", fieldName, newsletterId, language);
+              return translated;
+          }
+      } catch (Exception e) {
+          // 번역 실패 시 원문 유지 (파이프라인 전체를 중단하지 않음)
+          log.warn(
+              "[AiAnalyzer] {} 번역 실패. 원문 유지. newsletterId={}, language={}, error={}",
+              fieldName,
+              newsletterId,
+              language,
+              e.getMessage());
+      }
+      return text;
   }
 
   private LocalDate parseTargetDate(String value) {
