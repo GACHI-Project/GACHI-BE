@@ -38,7 +38,12 @@ public enum SuccessCode {
   CHECKLIST_TODAY_SUCCESS(HttpStatus.OK, "CL2001", "오늘 마감 체크리스트 조회에 성공하였습니다."),
   CHECKLIST_COMPLETE_SUCCESS(HttpStatus.OK, "CL2002", "체크리스트 완료 처리에 성공하였습니다."),
   CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다."),
-  USER_LANGUAGE_UPDATED(HttpStatus.OK, "USER2001", "언어 설정이 변경되었습니다.");
+  USER_LANGUAGE_UPDATED(HttpStatus.OK, "USER2001", "언어 설정이 변경되었습니다."),
+  NOTIFICATION_LIST_SUCCESS(HttpStatus.OK, "NOTI2001", "알림 목록 조회에 성공하였습니다."),
+  NOTIFICATION_UNREAD_COUNT_SUCCESS(HttpStatus.OK, "NOTI2002", "미읽음 알림 수 조회에 성공하였습니다."),
+  NOTIFICATION_READ_SUCCESS(HttpStatus.OK, "NOTI2003", "알림 읽음 처리에 성공하였습니다."),
+  NOTIFICATION_PUSH_TOKEN_REGISTERED(HttpStatus.OK, "NOTI2004", "푸시 토큰 등록에 성공하였습니다."),
+  NOTIFICATION_PUSH_TOKEN_DELETED(HttpStatus.OK, "NOTI2005", "푸시 토큰 삭제에 성공하였습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;
