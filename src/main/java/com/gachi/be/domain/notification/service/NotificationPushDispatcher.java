@@ -16,6 +16,7 @@ import com.gachi.be.global.config.external.NotificationPushProperties;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -52,7 +53,16 @@ public class NotificationPushDispatcher {
       return;
     }
 
-    User user = userRepository.findById(event.userId()).orElse(null);
+    Long targetUserId = notification.getUserId();
+    if (!Objects.equals(event.userId(), targetUserId)) {
+      log.warn(
+          "[NotificationPush] 이벤트 userId와 알림 소유자 userId가 다릅니다. notificationId={}, eventUserId={}, notificationUserId={}",
+          event.notificationId(),
+          event.userId(),
+          targetUserId);
+    }
+
+    User user = userRepository.findById(targetUserId).orElse(null);
     if (user == null) {
       saveSkipped(notification, null, "사용자를 찾을 수 없어 푸시 발송을 건너뜁니다.");
       return;
@@ -71,7 +81,7 @@ public class NotificationPushDispatcher {
     }
 
     List<PushDeviceToken> tokens =
-        pushDeviceTokenRepository.findAllByUserIdAndEnabledTrueAndDeletedAtIsNull(event.userId());
+        pushDeviceTokenRepository.findAllByUserIdAndEnabledTrueAndDeletedAtIsNull(targetUserId);
     if (tokens.isEmpty()) {
       saveSkipped(notification, null, "활성 푸시 토큰이 없습니다.");
       return;
@@ -93,7 +103,12 @@ public class NotificationPushDispatcher {
     PushSendResult result = pushNotificationClient.send(notification, token, payload);
     if (result.success()) {
       saveDeliveryLog(
-          notification, token, NotificationDeliveryStatus.SENT, result.providerMessageId(), null);
+          notification,
+          token,
+          NotificationDeliveryStatus.SENT,
+          pushNotificationClient.providerName(),
+          result.providerMessageId(),
+          null);
       return;
     }
 
@@ -101,17 +116,29 @@ public class NotificationPushDispatcher {
       token.softDelete();
     }
     saveDeliveryLog(
-        notification, token, NotificationDeliveryStatus.FAILED, null, result.failureReason());
+        notification,
+        token,
+        NotificationDeliveryStatus.FAILED,
+        pushNotificationClient.providerName(),
+        null,
+        result.failureReason());
   }
 
   private void saveSkipped(Notification notification, PushDeviceToken token, String failureReason) {
-    saveDeliveryLog(notification, token, NotificationDeliveryStatus.SKIPPED, null, failureReason);
+    saveDeliveryLog(
+        notification,
+        token,
+        NotificationDeliveryStatus.SKIPPED,
+        resolveConfiguredProvider(),
+        null,
+        failureReason);
   }
 
   private void saveDeliveryLog(
       Notification notification,
       PushDeviceToken token,
       NotificationDeliveryStatus status,
+      String provider,
       String providerMessageId,
       String failureReason) {
     deliveryLogRepository.save(
@@ -119,10 +146,16 @@ public class NotificationPushDispatcher {
             .notification(notification)
             .pushDeviceToken(token)
             .status(status)
-            .provider(pushNotificationClient.providerName())
+            .provider(provider)
             .providerMessageId(providerMessageId)
             .failureReason(failureReason)
             .build());
+  }
+
+  private String resolveConfiguredProvider() {
+    return StringUtils.hasText(properties.getProvider())
+        ? properties.getProvider().trim().toUpperCase()
+        : "UNKNOWN";
   }
 
   private Map<String, Object> deserializePayload(String payloadJson) {

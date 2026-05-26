@@ -54,6 +54,7 @@ class NotificationPushDispatcherIntegrationTest {
     assertThat(logs.get(0).getStatus()).isEqualTo(NotificationDeliveryStatus.SENT);
     assertThat(logs.get(0).getProvider()).isEqualTo("TEST");
     assertThat(logs.get(0).getProviderMessageId()).isEqualTo("ticket-1");
+    assertThat(pushNotificationClient.sendCount).isEqualTo(1);
   }
 
   @Test
@@ -68,6 +69,7 @@ class NotificationPushDispatcherIntegrationTest {
         deliveryLogRepository.findAllByNotificationIdOrderByAttemptedAtAsc(notification.getId());
     assertThat(logs).hasSize(1);
     assertThat(logs.get(0).getStatus()).isEqualTo(NotificationDeliveryStatus.SKIPPED);
+    assertThat(logs.get(0).getProvider()).isEqualTo("EXPO");
     assertThat(pushNotificationClient.sendCount).isZero();
   }
 
@@ -100,9 +102,10 @@ class NotificationPushDispatcherIntegrationTest {
         user.getId(),
         new com.gachi.be.domain.notification.dto.request.PushTokenRegisterRequest(
             PushPlatform.EXPO, token, "device-" + user.getId(), "1.0.0"));
-    return pushDeviceTokenRepository
-        .findAllByUserIdAndEnabledTrueAndDeletedAtIsNull(user.getId())
-        .get(0);
+    var tokens =
+        pushDeviceTokenRepository.findAllByUserIdAndEnabledTrueAndDeletedAtIsNull(user.getId());
+    assertThat(tokens).hasSize(1);
+    return tokens.get(0);
   }
 
   private User createActiveUser(String postfix) {
