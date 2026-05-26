@@ -69,3 +69,12 @@ app:
     base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
     connect-timeout-seconds: ${AI_SERVER_CONNECT_TIMEOUT_SECONDS:10}
     read-timeout-seconds: ${AI_SERVER_READ_TIMEOUT_SECONDS:120}
+  notification:
+    push:
+      enabled: ${NOTIFICATION_PUSH_ENABLED:false}
+      provider: ${NOTIFICATION_PUSH_PROVIDER:expo}
+      connect-timeout-seconds: ${NOTIFICATION_PUSH_CONNECT_TIMEOUT_SECONDS:5}
+      read-timeout-seconds: ${NOTIFICATION_PUSH_READ_TIMEOUT_SECONDS:10}
+      expo:
+        api-url: ${EXPO_PUSH_API_URL:https://exp.host/--/api/v2/push/send}
+        access-token: ${EXPO_PUSH_ACCESS_TOKEN:}

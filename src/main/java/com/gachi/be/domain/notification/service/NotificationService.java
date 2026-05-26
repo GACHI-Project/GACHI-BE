@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,7 @@ public class NotificationService {
   private final PushDeviceTokenRepository pushDeviceTokenRepository;
   private final NotificationDeliveryLogRepository notificationDeliveryLogRepository;
   private final ObjectMapper objectMapper;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Transactional(readOnly = true)
   public NotificationListResponse getNotifications(
@@ -171,7 +173,9 @@ public class NotificationService {
             .build();
 
     try {
-      return notificationRepository.save(notification);
+      Notification saved = notificationRepository.save(notification);
+      eventPublisher.publishEvent(new NotificationCreatedEvent(saved.getId(), saved.getUserId()));
+      return saved;
     } catch (DataIntegrityViolationException e) {
       // 동시에 같은 알림을 생성해도 사용자에게 중복 노출되지 않도록 DB unique 제약을 한 번 더 신뢰한다.
       if (StringUtils.hasText(dedupeKey)) {
@@ -199,6 +203,7 @@ public class NotificationService {
         NotificationDeliveryLog.builder()
             .notification(notification)
             .pushDeviceToken(pushDeviceToken)
+            .provider("MANUAL")
             .status(
                 command.status() != null ? command.status() : NotificationDeliveryStatus.PENDING)
             .providerMessageId(normalizeOptional(command.providerMessageId()))
