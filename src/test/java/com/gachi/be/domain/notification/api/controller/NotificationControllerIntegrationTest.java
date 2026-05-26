@@ -198,7 +198,65 @@ class NotificationControllerIntegrationTest {
                 .content(objectMapper.writeValueAsString(registerBody)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.result.id").value(tokenId))
-        .andExpect(jsonPath("$.result.enabled").value(true));
+        .andExpect(jsonPath("$.result.enabled").value(true))
+        .andExpect(jsonPath("$.result.deviceId").value("device-1"));
+  }
+
+  @Test
+  void pushTokenReRegistrationKeepsExistingDeviceIdWhenDeviceIdIsMissing() throws Exception {
+    User user = createActiveUser("push_token_keep_device");
+    String bearerToken = issueBearerToken(user);
+
+    mockMvc
+        .perform(
+            post("/api/v1/notifications/tokens")
+                .header("Authorization", bearerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        Map.of(
+                            "platform",
+                            "EXPO",
+                            "token",
+                            "ExpoPushToken[keep-device]",
+                            "deviceId",
+                            "device-keep",
+                            "appVersion",
+                            "1.0.0"))))
+        .andExpect(status().isOk());
+
+    mockMvc
+        .perform(
+            post("/api/v1/notifications/tokens")
+                .header("Authorization", bearerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        Map.of(
+                            "platform",
+                            "EXPO",
+                            "token",
+                            "ExpoPushToken[keep-device]",
+                            "appVersion",
+                            "1.0.1"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.deviceId").value("device-keep"))
+        .andExpect(jsonPath("$.result.appVersion").value("1.0.1"));
+  }
+
+  @Test
+  void pushTokenRegistrationRejectsBlankToken() throws Exception {
+    User user = createActiveUser("push_token_blank");
+    String bearerToken = issueBearerToken(user);
+
+    mockMvc
+        .perform(
+            post("/api/v1/notifications/tokens")
+                .header("Authorization", bearerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("platform", "EXPO", "token", " "))))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("COMMON4001"));
   }
 
   @Test

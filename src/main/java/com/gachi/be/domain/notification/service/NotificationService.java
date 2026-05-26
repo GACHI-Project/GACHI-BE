@@ -102,18 +102,21 @@ public class NotificationService {
 
   @Transactional
   public PushTokenResponse registerPushToken(Long userId, PushTokenRegisterRequest request) {
-    String token = normalizeRequired(request.token());
+    if (request == null || request.platform() == null) {
+      throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+    }
+    String token = requireToken(request.token());
     String tokenHash = sha256Hex(token);
     PushDeviceToken tokenEntity =
         pushDeviceTokenRepository
             .findByUserIdAndTokenHash(userId, tokenHash)
             .map(
                 existing -> {
-                  existing.refresh(
-                      request.platform(),
-                      token,
-                      normalizeOptional(request.deviceId()),
-                      normalizeOptional(request.appVersion()));
+                  String deviceId =
+                      preserveExistingIfBlank(request.deviceId(), existing.getDeviceId());
+                  String appVersion =
+                      preserveExistingIfBlank(request.appVersion(), existing.getAppVersion());
+                  existing.refresh(request.platform(), token, tokenHash, deviceId, appVersion);
                   return existing;
                 })
             .orElseGet(
@@ -132,7 +135,10 @@ public class NotificationService {
 
   @Transactional
   public void deletePushToken(Long userId, PushTokenDeleteRequest request) {
-    String tokenHash = sha256Hex(normalizeRequired(request.token()));
+    if (request == null) {
+      throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+    }
+    String tokenHash = sha256Hex(requireToken(request.token()));
     pushDeviceTokenRepository
         .findByUserIdAndTokenHash(userId, tokenHash)
         .ifPresent(PushDeviceToken::softDelete);
@@ -263,6 +269,19 @@ public class NotificationService {
   private String normalizeOptional(String value) {
     String normalized = normalizeRequired(value);
     return StringUtils.hasText(normalized) ? normalized : null;
+  }
+
+  private String requireToken(String token) {
+    String normalized = normalizeRequired(token);
+    if (!StringUtils.hasText(normalized)) {
+      throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+    }
+    return normalized;
+  }
+
+  private String preserveExistingIfBlank(String requestedValue, String existingValue) {
+    String normalized = normalizeOptional(requestedValue);
+    return normalized != null ? normalized : existingValue;
   }
 
   private String sha256Hex(String value) {

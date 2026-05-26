@@ -79,9 +79,11 @@ public class PushDeviceToken {
     this.enabled = true;
   }
 
-  public void refresh(PushPlatform platform, String token, String deviceId, String appVersion) {
+  public void refresh(
+      PushPlatform platform, String token, String tokenHash, String deviceId, String appVersion) {
     this.platform = platform;
     this.token = token;
+    this.tokenHash = tokenHash;
     this.deviceId = deviceId;
     this.appVersion = appVersion;
     this.enabled = true;

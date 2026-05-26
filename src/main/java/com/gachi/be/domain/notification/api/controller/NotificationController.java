@@ -54,7 +54,7 @@ public class NotificationController {
       @Parameter(description = "다음 페이지 조회용 커서. 이전 응답의 nextCursor") @RequestParam(required = false)
           Long cursor,
       @Parameter(description = "조회 크기. 기본 20, 최대 100")
-          @RequestParam(required = false)
+          @RequestParam(defaultValue = "20")
           @Min(1)
           @Max(100)
           Integer size,
