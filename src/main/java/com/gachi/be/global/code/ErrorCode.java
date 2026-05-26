@@ -229,6 +229,13 @@ public enum ErrorCode {
       "언어 코드 유효성 검사 실패",
       ErrorLogLevel.WARN),
 
+  NOTIFICATION_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "NOTI4041",
+      "알림을 찾을 수 없습니다.",
+      "notificationId에 해당하는 알림이 없거나 소유권이 일치하지 않음",
+      ErrorLogLevel.INFO),
+
   EXTERNAL_API_ERROR(
       HttpStatus.BAD_GATEWAY,
       "EXT5021",
