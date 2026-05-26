@@ -57,6 +57,15 @@
 - `AUTH_RATE_LIMIT_LOGIN_LIMIT`: `/api/v1/auth/login` 윈도우 내 허용 횟수 (기본값: `5`)
 - `AUTH_RATE_LIMIT_LOGIN_WINDOW_SECONDS`: `/api/v1/auth/login` 윈도우 길이(초) (기본값: `60`)
 
+## Push Notification
+
+- `NOTIFICATION_PUSH_ENABLED`: 실제 외부 푸시 발송 여부. 기본값은 `false`이며, 서버 보관함 알림 생성은 이 값과 무관하게 유지됩니다.
+- `NOTIFICATION_PUSH_PROVIDER`: 푸시 발송 provider. 현재 지원값은 `expo`입니다.
+- `NOTIFICATION_PUSH_CONNECT_TIMEOUT_SECONDS`: Expo Push API 연결 타임아웃(초)
+- `NOTIFICATION_PUSH_READ_TIMEOUT_SECONDS`: Expo Push API 응답 타임아웃(초)
+- `EXPO_PUSH_API_URL`: Expo Push API 발송 엔드포인트. 기본값은 `https://exp.host/--/api/v2/push/send`
+- `EXPO_PUSH_ACCESS_TOKEN`: Expo push security가 활성화된 프로젝트에서 사용하는 access token. 비어 있으면 Authorization 헤더를 보내지 않습니다.
+
 ## AWS Credential
 
 - Local/dev: AWS CLI profile 또는 환경변수 자격증명 사용
