@@ -43,6 +43,9 @@ public class NotificationDeliveryLog {
   @Column(nullable = false, length = 20)
   private NotificationDeliveryStatus status;
 
+  @Column(nullable = false, length = 20)
+  private String provider;
+
   @Column(name = "provider_message_id", length = 255)
   private String providerMessageId;
 
@@ -63,11 +66,13 @@ public class NotificationDeliveryLog {
       Notification notification,
       PushDeviceToken pushDeviceToken,
       NotificationDeliveryStatus status,
+      String provider,
       String providerMessageId,
       String failureReason) {
     this.notification = notification;
     this.pushDeviceToken = pushDeviceToken;
     this.status = status;
+    this.provider = provider != null ? provider : "UNKNOWN";
     this.providerMessageId = providerMessageId;
     this.failureReason = failureReason;
   }
