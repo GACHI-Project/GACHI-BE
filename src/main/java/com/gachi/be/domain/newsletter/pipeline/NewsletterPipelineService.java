@@ -188,7 +188,15 @@ public class NewsletterPipelineService {
             n -> {
               n.complete(ocrText, originalText, translatedText, title, summary);
               Newsletter saved = newsletterRepository.save(n);
-              createAnalysisCompletedNotification(saved);
+              try {
+                createAnalysisCompletedNotification(saved);
+              } catch (Exception ex) {
+                log.warn(
+                    "[Pipeline] 분석 완료 알림 생성 실패. newsletterId={}, error={}",
+                    saved.getId(),
+                    ex.getMessage(),
+                    ex);
+              }
             });
   }
 

@@ -19,7 +19,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
       WHERE n.userId = :userId
         AND (:cursorId IS NULL OR n.id < :cursorId)
         AND (:unreadOnly = false OR n.readAt IS NULL)
-        AND (:childId IS NULL OR n.childId = :childId OR n.childName = :childName)
+        AND (
+          :childId IS NULL
+          OR n.childId = :childId
+          OR (n.childId IS NULL AND n.childName = :childName)
+        )
       ORDER BY n.id DESC
       """)
   List<Notification> findInbox(

@@ -70,7 +70,7 @@ public class NotificationScheduler {
       payload.put("targetDate", targetDate.toString());
       putIfPresent(payload, "childName", event.getChildName());
 
-      notificationService.createNotification(
+      createNotificationSafely(
           event.getUserId(),
           new NotificationCreateCommand(
               NotificationType.DEADLINE_REMINDER,
@@ -80,7 +80,8 @@ public class NotificationScheduler {
               "deadline:" + event.getId() + ":" + targetDate,
               NotificationLevel.URGENT,
               childId,
-              event.getChildName()));
+              event.getChildName()),
+          "deadline:" + event.getId());
     }
   }
 
@@ -104,7 +105,7 @@ public class NotificationScheduler {
       payload.put("targetDate", targetDate.toString());
       putIfPresent(payload, "childName", childName);
 
-      notificationService.createNotification(
+      createNotificationSafely(
           checklist.getUserId(),
           new NotificationCreateCommand(
               NotificationType.CHECKLIST_DUE,
@@ -114,7 +115,8 @@ public class NotificationScheduler {
               "todo:" + checklist.getId() + ":d-" + daysBefore + ":" + targetDate,
               NotificationLevel.IMPORTANT,
               childId,
-              childName));
+              childName),
+          "todo:" + checklist.getId());
     }
   }
 
@@ -147,7 +149,7 @@ public class NotificationScheduler {
       payload.put("targetDate", targetDate.toString());
       putIfPresent(payload, "childName", event.getChildName());
 
-      notificationService.createNotification(
+      createNotificationSafely(
           checklist.getUserId(),
           new NotificationCreateCommand(
               NotificationType.CHECKLIST_DUE,
@@ -157,7 +159,8 @@ public class NotificationScheduler {
               "checklist:" + checklist.getId() + ":d-" + daysBefore + ":" + targetDate,
               NotificationLevel.IMPORTANT,
               childId,
-              event.getChildName()));
+              event.getChildName()),
+          "checklist:" + checklist.getId());
     }
   }
 
@@ -170,7 +173,9 @@ public class NotificationScheduler {
       long newsletterCount =
           newsletterRepository.countByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
               user.getId(), rangeStart, rangeEnd);
-      long incompleteCount = checklistRepository.countByUserIdAndCompletedFalse(user.getId());
+      long incompleteCount =
+          checklistRepository.countByUserIdAndTypeAndCompletedFalse(
+              user.getId(), ChecklistType.CHECKLIST);
 
       Map<String, Object> payload = payload();
       payload.put("rangeStart", rangeStartDate.toString());
@@ -178,7 +183,7 @@ public class NotificationScheduler {
       payload.put("newsletterCount", newsletterCount);
       payload.put("incompleteChecklistCount", incompleteCount);
 
-      notificationService.createNotification(
+      createNotificationSafely(
           user.getId(),
           new NotificationCreateCommand(
               NotificationType.WEEKLY_SUMMARY,
@@ -188,7 +193,8 @@ public class NotificationScheduler {
               "weekly-summary:" + user.getId() + ":" + rangeStartDate,
               NotificationLevel.NORMAL,
               null,
-              null));
+              null),
+          "weekly-summary:" + user.getId());
     }
   }
 
@@ -222,6 +228,20 @@ public class NotificationScheduler {
   private void putIfPresent(Map<String, Object> payload, String key, Object value) {
     if (value != null) {
       payload.put(key, value);
+    }
+  }
+
+  private void createNotificationSafely(
+      Long userId, NotificationCreateCommand command, String context) {
+    try {
+      notificationService.createNotification(userId, command);
+    } catch (Exception e) {
+      log.warn(
+          "[Scheduler] 알림 생성 실패. context={}, userId={}, error={}",
+          context,
+          userId,
+          e.getMessage(),
+          e);
     }
   }
 

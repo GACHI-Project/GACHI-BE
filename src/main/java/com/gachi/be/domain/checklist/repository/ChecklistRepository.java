@@ -26,7 +26,7 @@ public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
   /** 특정 사용자의 미완료 CHECKLIST 항목 전체 조회. */
   List<Checklist> findByUserIdAndTypeAndCompletedFalse(Long userId, ChecklistType type);
 
-  long countByUserIdAndCompletedFalse(Long userId);
+  long countByUserIdAndTypeAndCompletedFalse(Long userId, ChecklistType type);
 
   List<Checklist> findByTypeAndCompletedFalseAndTargetDate(
       ChecklistType type, LocalDate targetDate);
