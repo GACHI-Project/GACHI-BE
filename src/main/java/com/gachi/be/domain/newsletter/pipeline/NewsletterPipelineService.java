@@ -19,6 +19,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -188,15 +190,7 @@ public class NewsletterPipelineService {
             n -> {
               n.complete(ocrText, originalText, translatedText, title, summary);
               Newsletter saved = newsletterRepository.save(n);
-              try {
-                createAnalysisCompletedNotification(saved);
-              } catch (Exception ex) {
-                log.warn(
-                    "[Pipeline] 분석 완료 알림 생성 실패. newsletterId={}, error={}",
-                    saved.getId(),
-                    ex.getMessage(),
-                    ex);
-              }
+              scheduleAnalysisCompletedNotification(saved);
             });
   }
 
@@ -224,6 +218,32 @@ public class NewsletterPipelineService {
       return e.getClass().getSimpleName();
     }
     return e.getClass().getSimpleName() + ": " + message;
+  }
+
+  private void scheduleAnalysisCompletedNotification(Newsletter newsletter) {
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              createAnalysisCompletedNotificationSafely(newsletter);
+            }
+          });
+      return;
+    }
+    createAnalysisCompletedNotificationSafely(newsletter);
+  }
+
+  private void createAnalysisCompletedNotificationSafely(Newsletter newsletter) {
+    try {
+      createAnalysisCompletedNotification(newsletter);
+    } catch (Exception ex) {
+      log.warn(
+          "[Pipeline] 분석 완료 알림 생성 실패. newsletterId={}, error={}",
+          newsletter.getId(),
+          ex.getMessage(),
+          ex);
+    }
   }
 
   private void createAnalysisCompletedNotification(Newsletter newsletter) {
