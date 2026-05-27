@@ -1,26 +1,17 @@
 package com.gachi.be.domain.newsletter.pipeline;
 
-import com.gachi.be.domain.child.repository.ChildRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.pipeline.ClovaOcrClient.OcrField;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisResult;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
-import com.gachi.be.domain.notification.entity.enums.NotificationLevel;
-import com.gachi.be.domain.notification.entity.enums.NotificationType;
-import com.gachi.be.domain.notification.service.NotificationCreateCommand;
-import com.gachi.be.domain.notification.service.NotificationService;
 import com.gachi.be.file.config.S3Properties;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -42,8 +33,7 @@ public class NewsletterPipelineService {
   private final PapagoTranslateClient papagoTranslateClient;
   private final NewsletterAiAnalyzer newsletterAiAnalyzer;
   private final NewsletterDateCandidateService newsletterDateCandidateService;
-  private final NotificationService notificationService;
-  private final ChildRepository childRepository;
+  private final NewsletterPipelineStatusService newsletterPipelineStatusService;
 
   @Async
   @Transactional
@@ -56,7 +46,7 @@ public class NewsletterPipelineService {
       return;
     }
 
-    markProcessing(newsletterId);
+    newsletterPipelineStatusService.markProcessing(newsletterId);
     log.debug("[Pipeline] PROCESSING 전환 완료. newsletterId={}", newsletterId);
 
     String tempFileKey = null;
@@ -126,13 +116,13 @@ public class NewsletterPipelineService {
             e.getClass().getSimpleName(),
             e.getMessage(),
             e);
-        markFailedWithSnapshot(
+        newsletterPipelineStatusService.markFailedWithSnapshot(
             newsletterId, ocrText, originalText, translatedText, failureStage, failureReason(e));
         return;
       }
       log.debug("[Pipeline][STEP7] AI 서버 분석 완료. title={}", aiResult.title());
 
-      markCompleted(
+      newsletterPipelineStatusService.markCompleted(
           newsletterId,
           ocrText,
           originalText,
@@ -149,7 +139,7 @@ public class NewsletterPipelineService {
           e.getClass().getSimpleName(),
           e.getMessage(),
           e);
-      markFailedWithSnapshot(
+      newsletterPipelineStatusService.markFailedWithSnapshot(
           newsletterId, ocrText, originalText, translatedText, failureStage, failureReason(e));
     } finally {
       if (tempFileKey != null) {
@@ -157,59 +147,11 @@ public class NewsletterPipelineService {
           deleteFromS3(tempFileKey);
           log.debug("[Pipeline] 임시 파일 삭제 완료. tempFileKey={}", tempFileKey);
         } catch (Exception ex) {
-          // 임시 파일 정리는 후처리라서 실패해도 분석 결과는 되돌리지 않는다.
           log.warn(
               "[Pipeline] 임시 파일 삭제 실패. tempFileKey={}, error={}", tempFileKey, ex.getMessage());
         }
       }
     }
-  }
-
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markProcessing(Long newsletterId) {
-    newsletterRepository
-        .findById(newsletterId)
-        .ifPresent(
-            n -> {
-              n.startProcessing();
-              newsletterRepository.save(n);
-            });
-  }
-
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markCompleted(
-      Long newsletterId,
-      String ocrText,
-      String originalText,
-      String translatedText,
-      String title,
-      String summary) {
-    newsletterRepository
-        .findById(newsletterId)
-        .ifPresent(
-            n -> {
-              n.complete(ocrText, originalText, translatedText, title, summary);
-              Newsletter saved = newsletterRepository.save(n);
-              scheduleAnalysisCompletedNotification(saved);
-            });
-  }
-
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markFailedWithSnapshot(
-      Long newsletterId,
-      String ocrText,
-      String originalText,
-      String translatedText,
-      String failureStage,
-      String failureReason) {
-    newsletterRepository
-        .findById(newsletterId)
-        .ifPresent(
-            n -> {
-              n.failWithSnapshot(
-                  ocrText, originalText, translatedText, failureStage, failureReason);
-              newsletterRepository.save(n);
-            });
   }
 
   private String failureReason(Exception e) {
@@ -218,64 +160,6 @@ public class NewsletterPipelineService {
       return e.getClass().getSimpleName();
     }
     return e.getClass().getSimpleName() + ": " + message;
-  }
-
-  private void scheduleAnalysisCompletedNotification(Newsletter newsletter) {
-    if (TransactionSynchronizationManager.isSynchronizationActive()) {
-      TransactionSynchronizationManager.registerSynchronization(
-          new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-              createAnalysisCompletedNotificationSafely(newsletter);
-            }
-          });
-      return;
-    }
-    createAnalysisCompletedNotificationSafely(newsletter);
-  }
-
-  private void createAnalysisCompletedNotificationSafely(Newsletter newsletter) {
-    try {
-      createAnalysisCompletedNotification(newsletter);
-    } catch (Exception ex) {
-      log.warn(
-          "[Pipeline] 분석 완료 알림 생성 실패. newsletterId={}, error={}",
-          newsletter.getId(),
-          ex.getMessage(),
-          ex);
-    }
-  }
-
-  private void createAnalysisCompletedNotification(Newsletter newsletter) {
-    Long childId = resolveChildId(newsletter);
-    notificationService.createNotification(
-        newsletter.getUserId(),
-        new NotificationCreateCommand(
-            NotificationType.NEWSLETTER_ANALYSIS,
-            "새 가정통신문 분석 완료",
-            newsletter.getTitle() != null && !newsletter.getTitle().isBlank()
-                ? newsletter.getTitle() + " 분석이 완료되었어요"
-                : "가정통신문 분석이 완료되었어요",
-            Map.of(
-                "newsletterId",
-                newsletter.getId(),
-                "childName",
-                newsletter.getChildName() != null ? newsletter.getChildName() : ""),
-            "newsletter-analysis:" + newsletter.getId(),
-            NotificationLevel.IMPORTANT,
-            childId,
-            newsletter.getChildName()));
-  }
-
-  private Long resolveChildId(Newsletter newsletter) {
-    if (newsletter.getChildName() == null || newsletter.getChildName().isBlank()) {
-      return null;
-    }
-    return childRepository
-        .findFirstByUserIdAndNameAndDeletedAtIsNull(
-            newsletter.getUserId(), newsletter.getChildName())
-        .map(child -> child.getId())
-        .orElse(null);
   }
 
   private byte[] downloadFromS3(String fileKey) {
