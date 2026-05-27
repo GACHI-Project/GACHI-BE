@@ -139,6 +139,7 @@ public class AuthServiceImpl implements AuthService {
             .phoneNumber(phoneNumber)
             .status(UserStatus.ACTIVE)
             .languageCode(request.languageCode())
+            .notificationPreference(request.notificationPreference())
             .emailVerifiedAt(now)
             .consentAgreedAt(now)
             .consentVersion(authProperties.getConsentVersion())

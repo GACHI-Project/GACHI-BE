@@ -10,9 +10,9 @@ public interface ChildRepository extends JpaRepository<Child, Long> {
 
   long countByUserId(Long userId);
 
-  /** 특정 사용자의 활성 자녀 목록 조회 */
   List<Child> findByUserIdAndDeletedAtIsNull(Long userId);
 
-  /** 특정 사용자의 특정 자녀 조회 */
   Optional<Child> findByIdAndUserIdAndDeletedAtIsNull(Long id, Long userId);
+
+  Optional<Child> findFirstByUserIdAndNameAndDeletedAtIsNull(Long userId, String name);
 }

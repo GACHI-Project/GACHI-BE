@@ -1,12 +1,18 @@
 package com.gachi.be.domain.newsletter.pipeline;
 
+import com.gachi.be.domain.child.repository.ChildRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.pipeline.ClovaOcrClient.OcrField;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisResult;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
+import com.gachi.be.domain.notification.entity.enums.NotificationLevel;
+import com.gachi.be.domain.notification.entity.enums.NotificationType;
+import com.gachi.be.domain.notification.service.NotificationCreateCommand;
+import com.gachi.be.domain.notification.service.NotificationService;
 import com.gachi.be.file.config.S3Properties;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -34,6 +40,8 @@ public class NewsletterPipelineService {
   private final PapagoTranslateClient papagoTranslateClient;
   private final NewsletterAiAnalyzer newsletterAiAnalyzer;
   private final NewsletterDateCandidateService newsletterDateCandidateService;
+  private final NotificationService notificationService;
+  private final ChildRepository childRepository;
 
   @Async
   @Transactional
@@ -179,7 +187,8 @@ public class NewsletterPipelineService {
         .ifPresent(
             n -> {
               n.complete(ocrText, originalText, translatedText, title, summary);
-              newsletterRepository.save(n);
+              Newsletter saved = newsletterRepository.save(n);
+              createAnalysisCompletedNotification(saved);
             });
   }
 
@@ -207,6 +216,38 @@ public class NewsletterPipelineService {
       return e.getClass().getSimpleName();
     }
     return e.getClass().getSimpleName() + ": " + message;
+  }
+
+  private void createAnalysisCompletedNotification(Newsletter newsletter) {
+    Long childId = resolveChildId(newsletter);
+    notificationService.createNotification(
+        newsletter.getUserId(),
+        new NotificationCreateCommand(
+            NotificationType.NEWSLETTER_ANALYSIS,
+            "새 가정통신문 분석 완료",
+            newsletter.getTitle() != null && !newsletter.getTitle().isBlank()
+                ? newsletter.getTitle() + " 분석이 완료되었어요"
+                : "가정통신문 분석이 완료되었어요",
+            Map.of(
+                "newsletterId",
+                newsletter.getId(),
+                "childName",
+                newsletter.getChildName() != null ? newsletter.getChildName() : ""),
+            "newsletter-analysis:" + newsletter.getId(),
+            NotificationLevel.IMPORTANT,
+            childId,
+            newsletter.getChildName()));
+  }
+
+  private Long resolveChildId(Newsletter newsletter) {
+    if (newsletter.getChildName() == null || newsletter.getChildName().isBlank()) {
+      return null;
+    }
+    return childRepository
+        .findFirstByUserIdAndNameAndDeletedAtIsNull(
+            newsletter.getUserId(), newsletter.getChildName())
+        .map(child -> child.getId())
+        .orElse(null);
   }
 
   private byte[] downloadFromS3(String fileKey) {

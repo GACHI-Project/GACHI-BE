@@ -1,5 +1,6 @@
 package com.gachi.be.domain.notification.entity;
 
+import com.gachi.be.domain.notification.entity.enums.NotificationLevel;
 import com.gachi.be.domain.notification.entity.enums.NotificationType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,6 +36,16 @@ public class Notification {
   @Column(nullable = false, length = 40)
   private NotificationType type;
 
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private NotificationLevel level;
+
+  @Column(name = "child_id")
+  private Long childId;
+
+  @Column(name = "child_name", length = 50)
+  private String childName;
+
   @Column(nullable = false, length = 120)
   private String title;
 
@@ -60,12 +71,18 @@ public class Notification {
   public Notification(
       Long userId,
       NotificationType type,
+      NotificationLevel level,
+      Long childId,
+      String childName,
       String title,
       String body,
       String payloadJson,
       String dedupeKey) {
     this.userId = userId;
     this.type = type;
+    this.level = level != null ? level : NotificationLevel.IMPORTANT;
+    this.childId = childId;
+    this.childName = childName;
     this.title = title;
     this.body = body;
     this.payloadJson = payloadJson;
@@ -87,6 +104,9 @@ public class Notification {
     OffsetDateTime now = OffsetDateTime.now();
     if (createdAt == null) {
       createdAt = now;
+    }
+    if (level == null) {
+      level = NotificationLevel.IMPORTANT;
     }
     updatedAt = now;
   }

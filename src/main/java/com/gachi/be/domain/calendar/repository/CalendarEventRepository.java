@@ -54,6 +54,9 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
   /** 소유권 검증 포함 단건 조회. */
   Optional<CalendarEvent> findByIdAndUserId(Long id, Long userId);
 
+  List<CalendarEvent> findByStartAtGreaterThanEqualAndStartAtLessThan(
+      OffsetDateTime rangeStart, OffsetDateTime rangeEnd);
+
   /** 특정 가정통신문의 모든 일정 삭제. */
   void deleteByNewsletterIdAndUserId(Long newsletterId, Long userId);
 
