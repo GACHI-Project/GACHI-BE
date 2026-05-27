@@ -67,8 +67,8 @@ public class NotificationPushDispatcher {
       saveSkipped(notification, null, "사용자를 찾을 수 없어 푸시 발송을 건너뜁니다.");
       return;
     }
-    if (!user.isNotificationEnabled()) {
-      saveSkipped(notification, null, "사용자 알림 수신 설정이 꺼져 있습니다.");
+    if (!user.getNotificationPreference().allows(notification.getLevel())) {
+      saveSkipped(notification, null, "사용자 알림 단계에서 제외된 알림입니다.");
       return;
     }
     if (!properties.isEnabled()) {

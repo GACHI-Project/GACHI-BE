@@ -2,6 +2,7 @@ package com.gachi.be.domain.checklist.repository;
 
 import com.gachi.be.domain.checklist.entity.Checklist;
 import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,6 +26,11 @@ public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
   /** 특정 사용자의 미완료 CHECKLIST 항목 전체 조회. */
   List<Checklist> findByUserIdAndTypeAndCompletedFalse(Long userId, ChecklistType type);
 
+  long countByUserIdAndTypeAndCompletedFalse(Long userId, ChecklistType type);
+
+  List<Checklist> findByTypeAndCompletedFalseAndTargetDate(
+      ChecklistType type, LocalDate targetDate);
+
   /** 특정 캘린더 일정에 연결된 CHECKLIST 타입 항목 조회. */
   List<Checklist> findByCalendarEventIdAndTypeOrderByIdAsc(
       Long calendarEventId, ChecklistType type);
@@ -47,4 +53,14 @@ public interface ChecklistRepository extends JpaRepository<Checklist, Long> {
 
   /** e ventId IN 절로 한 번에 조회하여 서비스에서 Map으로 그룹핑 */
   List<Checklist> findByCalendarEventIdInAndType(List<Long> calendarEventIds, ChecklistType type);
+
+  @Query(
+      """
+      SELECT c FROM Checklist c
+      WHERE c.calendarEventId IN :calendarEventIds
+        AND c.type = com.gachi.be.domain.checklist.entity.enums.ChecklistType.CHECKLIST
+        AND c.completed = false
+      """)
+  List<Checklist> findIncompleteChecklistItemsByCalendarEventIds(
+      @Param("calendarEventIds") List<Long> calendarEventIds);
 }

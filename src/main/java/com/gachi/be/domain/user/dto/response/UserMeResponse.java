@@ -1,5 +1,6 @@
 package com.gachi.be.domain.user.dto.response;
 
+import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import java.time.LocalDateTime;
 
 /** 내 정보 조회 응답 DTO. */
@@ -10,4 +11,5 @@ public record UserMeResponse(
     String name,
     String languageCode,
     Boolean notificationEnabled,
+    NotificationPreference notificationPreference,
     LocalDateTime createdAt) {}
