@@ -57,6 +57,7 @@ class NeisSchoolClientTest {
                         "ATPT_OFCDC_SC_NM": "서울특별시교육청",
                         "SD_SCHUL_CODE": "7130118",
                         "SCHUL_NM": "서울까치초등학교",
+                        "ENG_SCHUL_NM": "Seoul Kkachi Elementary School",
                         "SCHUL_KND_SC_NM": "초등학교",
                         "LCTN_SC_NM": "서울특별시",
                         "ORG_RDNMA": "서울특별시 노원구 덕릉로79길 23"
@@ -82,6 +83,8 @@ class NeisSchoolClientTest {
     assertThat(response.schools()).hasSize(1);
     assertThat(response.schools().get(0).schoolCode()).isEqualTo("7130118");
     assertThat(response.schools().get(0).schoolName()).isEqualTo("서울까치초등학교");
+    assertThat(response.schools().get(0).englishSchoolName())
+        .isEqualTo("Seoul Kkachi Elementary School");
     assertThat(response.schools().get(0).schoolKind()).isEqualTo("초등학교");
     assertThat(response.schools().get(0).officeName()).isEqualTo("서울특별시교육청");
   }
@@ -134,6 +137,7 @@ class NeisSchoolClientTest {
                           "ATPT_OFCDC_SC_NM": "서울특별시교육청",
                           "SD_SCHUL_CODE": "7130118",
                           "SCHUL_NM": "서울까치초등학교",
+                          "ENG_SCHUL_NM": "Seoul Kkachi Elementary School",
                           "SCHUL_KND_SC_NM": "초등학교",
                           "LCTN_SC_NM": "서울특별시",
                           "ORG_RDNMA": "서울특별시 노원구 덕릉로79길 23"

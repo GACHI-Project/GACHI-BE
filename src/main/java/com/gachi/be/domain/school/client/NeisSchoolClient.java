@@ -195,6 +195,7 @@ public class NeisSchoolClient {
         new SchoolSearchItem(
             schoolCode,
             schoolName,
+            text(row, "ENG_SCHUL_NM"),
             schoolKind,
             text(row, "ATPT_OFCDC_SC_CODE"),
             text(row, "ATPT_OFCDC_SC_NM"),
