@@ -8,13 +8,10 @@ import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.config.external.NeisProperties;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,35 +29,25 @@ public class NeisSchoolClient {
 
   private final NeisProperties neisProperties;
   private final ObjectMapper objectMapper;
-  private final HttpClient httpClient;
 
   public NeisSchoolClient(NeisProperties neisProperties, ObjectMapper objectMapper) {
     this.neisProperties = neisProperties;
     this.objectMapper = objectMapper;
-    this.httpClient =
-        HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(neisProperties.getConnectTimeoutSeconds()))
-            .version(HttpClient.Version.HTTP_1_1)
-            .build();
   }
 
   /** 학교명 키워드로 NEIS 학교기본정보를 조회한다. */
   public SchoolSearchResponse searchByName(String keyword, int size) {
     String normalizedKeyword = keyword.trim();
     try {
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(buildSearchUri(normalizedKeyword, size))
-              .header("Accept", "application/json")
-              .timeout(Duration.ofSeconds(neisProperties.getReadTimeoutSeconds()))
-              .GET()
-              .build();
-
-      HttpResponse<String> response =
-          httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+      URI searchUri = buildSearchUri(normalizedKeyword, size);
+      NeisHttpResponse response = executeGet(searchUri);
 
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
-        log.error("[NEIS] 학교 검색 API 호출 실패. status={}", response.statusCode());
+        log.error(
+            "[NEIS] 학교 검색 API 호출 실패. status={}, uri={}, body={}",
+            response.statusCode(),
+            redactApiKey(searchUri),
+            abbreviate(response.body()));
         throw new ExternalApiException(
             ErrorCode.EXTERNAL_API_ERROR, "NEIS 학교 검색 API 호출 실패. status=" + response.statusCode());
       }
@@ -68,10 +55,6 @@ public class NeisSchoolClient {
       return parseResponse(normalizedKeyword, response.body());
     } catch (ExternalApiException e) {
       throw e;
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "NEIS 학교 검색 API 통신 인터럽트: " + e.getMessage(), e);
     } catch (IOException e) {
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "NEIS 학교 검색 API 통신 오류: " + e.getMessage(), e);
@@ -85,11 +68,11 @@ public class NeisSchoolClient {
     }
 
     Map<String, String> queryParams = new LinkedHashMap<>();
-    queryParams.put("KEY", apiKey);
     queryParams.put("Type", "json");
     queryParams.put("pIndex", "1");
     queryParams.put("pSize", String.valueOf(size));
     queryParams.put("SCHUL_NM", keyword);
+    queryParams.put("KEY", apiKey);
 
     String query =
         queryParams.entrySet().stream()
@@ -97,6 +80,27 @@ public class NeisSchoolClient {
             .reduce((left, right) -> left + "&" + right)
             .orElse("");
     return URI.create(normalizedSchoolInfoUrl() + "?" + query);
+  }
+
+  private NeisHttpResponse executeGet(URI uri) throws IOException {
+    HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
+    connection.setRequestMethod("GET");
+    // NEIS는 Type=json 쿼리로 응답 포맷을 결정하며 Accept 헤더가 있으면 500을 반환한다.
+    connection.setRequestProperty("User-Agent", "GACHI-BE/1.0");
+    connection.setConnectTimeout(neisProperties.getConnectTimeoutSeconds() * 1000);
+    connection.setReadTimeout(neisProperties.getReadTimeoutSeconds() * 1000);
+
+    int statusCode = connection.getResponseCode();
+    try (var inputStream =
+        statusCode >= 200 && statusCode < 300
+            ? connection.getInputStream()
+            : connection.getErrorStream()) {
+      String body =
+          inputStream == null ? "" : new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+      return new NeisHttpResponse(statusCode, body);
+    } finally {
+      connection.disconnect();
+    }
   }
 
   private SchoolSearchResponse parseResponse(String keyword, String responseBody) {
@@ -211,4 +215,19 @@ public class NeisSchoolClient {
   private String encode(String value) {
     return URLEncoder.encode(value, StandardCharsets.UTF_8);
   }
+
+  private String redactApiKey(URI uri) {
+    String apiKey = neisProperties.getApiKey();
+    String value = uri.toString();
+    return StringUtils.hasText(apiKey) ? value.replace(apiKey, "<hidden>") : value;
+  }
+
+  private String abbreviate(String value) {
+    if (value == null || value.length() <= 300) {
+      return value;
+    }
+    return value.substring(0, 300);
+  }
+
+  private record NeisHttpResponse(int statusCode, String body) {}
 }
