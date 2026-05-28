@@ -92,14 +92,18 @@ public class NeisSchoolClient {
     connection.setConnectTimeout(neisProperties.getConnectTimeoutSeconds() * 1000);
     connection.setReadTimeout(neisProperties.getReadTimeoutSeconds() * 1000);
 
-    int statusCode = connection.getResponseCode();
-    try (var inputStream =
-        statusCode >= 200 && statusCode < 300
-            ? connection.getInputStream()
-            : connection.getErrorStream()) {
-      String body =
-          inputStream == null ? "" : new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-      return new NeisHttpResponse(statusCode, body);
+    try {
+      int statusCode = connection.getResponseCode();
+      try (var inputStream =
+          statusCode >= 200 && statusCode < 300
+              ? connection.getInputStream()
+              : connection.getErrorStream()) {
+        String body =
+            inputStream == null
+                ? ""
+                : new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        return new NeisHttpResponse(statusCode, body);
+      }
     } finally {
       connection.disconnect();
     }
@@ -225,9 +229,7 @@ public class NeisSchoolClient {
   }
 
   private String redactApiKey(URI uri) {
-    String apiKey = neisProperties.getApiKey();
-    String value = uri.toString();
-    return StringUtils.hasText(apiKey) ? value.replace(apiKey, "<hidden>") : value;
+    return uri.toString().replaceAll("([?&]KEY=)[^&]*", "$1<hidden>");
   }
 
   private String abbreviate(String value) {
