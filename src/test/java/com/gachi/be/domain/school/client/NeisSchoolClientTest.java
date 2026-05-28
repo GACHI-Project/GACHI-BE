@@ -76,6 +76,7 @@ class NeisSchoolClientTest {
 
     assertThat(rawQuery.get()).contains("KEY=test-key", "Type=json", "pIndex=1", "pSize=5");
     assertThat(rawQuery.get()).contains("SCHUL_NM=%EC%84%9C%EC%9A%B8%EA%B9%8C%EC%B9%98");
+    assertThat(rawQuery.get()).contains("SCHUL_KND_SC_NM=%EC%B4%88%EB%93%B1%ED%95%99%EA%B5%90");
     assertThat(response.keyword()).isEqualTo("서울까치");
     assertThat(response.totalCount()).isEqualTo(1);
     assertThat(response.schools()).hasSize(1);
@@ -106,6 +107,60 @@ class NeisSchoolClientTest {
     assertThat(response.keyword()).isEqualTo("없는학교");
     assertThat(response.totalCount()).isZero();
     assertThat(response.schools()).isEmpty();
+  }
+
+  @Test
+  void searchByNameFiltersOutNonElementarySchools() throws IOException {
+    startServer();
+    server.createContext(
+        "/hub/schoolInfo",
+        exchange ->
+            sendResponse(
+                exchange,
+                200,
+                """
+                {
+                  "schoolInfo": [
+                    {
+                      "head": [
+                        {"list_total_count": 2},
+                        {"RESULT": {"CODE": "INFO-000", "MESSAGE": "정상 처리되었습니다."}}
+                      ]
+                    },
+                    {
+                      "row": [
+                        {
+                          "ATPT_OFCDC_SC_CODE": "B10",
+                          "ATPT_OFCDC_SC_NM": "서울특별시교육청",
+                          "SD_SCHUL_CODE": "7130118",
+                          "SCHUL_NM": "서울까치초등학교",
+                          "SCHUL_KND_SC_NM": "초등학교",
+                          "LCTN_SC_NM": "서울특별시",
+                          "ORG_RDNMA": "서울특별시 노원구 덕릉로79길 23"
+                        },
+                        {
+                          "ATPT_OFCDC_SC_CODE": "B10",
+                          "ATPT_OFCDC_SC_NM": "서울특별시교육청",
+                          "SD_SCHUL_CODE": "7130165",
+                          "SCHUL_NM": "가락중학교",
+                          "SCHUL_KND_SC_NM": "중학교",
+                          "LCTN_SC_NM": "서울특별시",
+                          "ORG_RDNMA": "서울특별시 송파구 송이로 45"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """
+                    .getBytes(StandardCharsets.UTF_8)));
+
+    NeisSchoolClient client = newClient("test-key");
+
+    var response = client.searchByName("서울", 10);
+
+    assertThat(response.schools()).hasSize(1);
+    assertThat(response.schools().get(0).schoolName()).isEqualTo("서울까치초등학교");
+    assertThat(response.schools().get(0).schoolKind()).isEqualTo("초등학교");
   }
 
   @Test

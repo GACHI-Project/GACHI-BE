@@ -26,6 +26,7 @@ import org.springframework.util.StringUtils;
 public class NeisSchoolClient {
   private static final String SUCCESS_CODE = "INFO-000";
   private static final String NO_DATA_CODE = "INFO-200";
+  private static final String ELEMENTARY_SCHOOL_KIND = "초등학교";
 
   private final NeisProperties neisProperties;
   private final ObjectMapper objectMapper;
@@ -72,6 +73,7 @@ public class NeisSchoolClient {
     queryParams.put("pIndex", "1");
     queryParams.put("pSize", String.valueOf(size));
     queryParams.put("SCHUL_NM", keyword);
+    queryParams.put("SCHUL_KND_SC_NM", ELEMENTARY_SCHOOL_KIND);
     queryParams.put("KEY", apiKey);
 
     String query =
@@ -180,15 +182,20 @@ public class NeisSchoolClient {
   private java.util.Optional<SchoolSearchItem> toItem(JsonNode row) {
     String schoolCode = text(row, "SD_SCHUL_CODE");
     String schoolName = text(row, "SCHUL_NM");
+    String schoolKind = text(row, "SCHUL_KND_SC_NM");
     if (!StringUtils.hasText(schoolCode) || !StringUtils.hasText(schoolName)) {
       // 학교명/표준학교코드는 선택 저장의 기준값이라 둘 중 하나라도 없으면 내려주지 않는다.
+      return java.util.Optional.empty();
+    }
+    if (!ELEMENTARY_SCHOOL_KIND.equals(schoolKind)) {
+      // 서비스 가입 대상이 초등학생이라 외부 응답에 다른 학교급이 섞여도 저장 후보에서 제외한다.
       return java.util.Optional.empty();
     }
     return java.util.Optional.of(
         new SchoolSearchItem(
             schoolCode,
             schoolName,
-            text(row, "SCHUL_KND_SC_NM"),
+            schoolKind,
             text(row, "ATPT_OFCDC_SC_CODE"),
             text(row, "ATPT_OFCDC_SC_NM"),
             text(row, "LCTN_SC_NM"),
