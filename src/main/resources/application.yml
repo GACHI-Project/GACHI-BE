@@ -69,6 +69,11 @@ app:
     base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
     connect-timeout-seconds: ${AI_SERVER_CONNECT_TIMEOUT_SECONDS:10}
     read-timeout-seconds: ${AI_SERVER_READ_TIMEOUT_SECONDS:120}
+  neis:
+    api-key: ${NEIS_API_KEY:}
+    school-info-url: ${NEIS_SCHOOL_INFO_URL:https://open.neis.go.kr/hub/schoolInfo}
+    connect-timeout-seconds: ${NEIS_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${NEIS_READ_TIMEOUT_SECONDS:10}
   notification:
     push:
       enabled: ${NOTIFICATION_PUSH_ENABLED:false}
