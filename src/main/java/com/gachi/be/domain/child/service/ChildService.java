@@ -37,7 +37,8 @@ public class ChildService {
             .user(user)
             .name(normalizeRequiredText(request.name()))
             .schoolName(normalizeRequiredText(request.schoolName()))
-            .schoolCode(normalizeOptionalText(request.schoolCode()))
+            .schoolCode(normalizeRequiredText(request.schoolCode()))
+            .officeCode(normalizeRequiredText(request.officeCode()))
             .grade(request.grade())
             .colorCode(normalizeRequiredText(request.colorCode()).toUpperCase())
             .build();
@@ -60,6 +61,7 @@ public class ChildService {
         child.getName(),
         child.getSchoolName(),
         child.getSchoolCode(),
+        child.getOfficeCode(),
         child.getGrade(),
         child.getColorCode(),
         child.getCreatedAt());

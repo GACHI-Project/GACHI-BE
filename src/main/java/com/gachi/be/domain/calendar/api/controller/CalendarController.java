@@ -3,7 +3,9 @@ package com.gachi.be.domain.calendar.api.controller;
 import com.gachi.be.domain.calendar.dto.response.CalendarDailyResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarMonthlyResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarWeeklyResponse;
+import com.gachi.be.domain.calendar.dto.response.SchoolScheduleCalendarResponse;
 import com.gachi.be.domain.calendar.service.CalendarQueryService;
+import com.gachi.be.domain.calendar.service.SchoolScheduleQueryService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,7 +14,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CalendarController {
 
   private final CalendarQueryService calendarQueryService;
+  private final SchoolScheduleQueryService schoolScheduleQueryService;
 
   /** 별 일정 마커 조회 API. -> 자녀 색 표현 위함 */
   @Operation(
@@ -95,5 +100,30 @@ public class CalendarController {
 
     CalendarDailyResponse response = calendarQueryService.getDaily(userId, date, childName);
     return ApiResponse.success(SuccessCode.CALENDAR_DAILY_SUCCESS, response);
+  }
+
+  /** 자녀 학교별 NEIS 학사일정 조회 API. */
+  @Operation(
+      summary = "자녀 학교 학사일정 조회",
+      description =
+          """
+          로그인 사용자의 자녀 학교 식별값으로 NEIS 학사일정을 조회합니다.
+          같은 학교를 다니는 자녀는 officeCode + schoolCode 기준으로 하나의 학교 그룹에 묶입니다.
+          """)
+  @GetMapping("/school-schedules")
+  public ApiResponse<SchoolScheduleCalendarResponse> getSchoolSchedules(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "조회 시작일 (YYYY-MM-DD)", required = true)
+          @RequestParam
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate fromDate,
+      @Parameter(description = "조회 종료일 (YYYY-MM-DD)", required = true)
+          @RequestParam
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate toDate) {
+
+    SchoolScheduleCalendarResponse response =
+        schoolScheduleQueryService.getSchoolSchedules(userId, fromDate, toDate);
+    return ApiResponse.success(SuccessCode.CALENDAR_SCHOOL_SCHEDULE_SUCCESS, response);
   }
 }

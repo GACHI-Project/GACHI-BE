@@ -36,6 +36,7 @@ public enum SuccessCode {
   CALENDAR_MONTHLY_SUCCESS(HttpStatus.OK, "CAL2003", "월별 캘린더 마커 조회에 성공하였습니다."),
   CALENDAR_WEEKLY_SUCCESS(HttpStatus.OK, "CAL2004", "주별 캘린더 조회에 성공하였습니다."),
   CALENDAR_DAILY_SUCCESS(HttpStatus.OK, "CAL2005", "날짜별 캘린더 조회에 성공하였습니다."),
+  CALENDAR_SCHOOL_SCHEDULE_SUCCESS(HttpStatus.OK, "CAL2006", "자녀 학교 학사일정 조회에 성공하였습니다."),
   CHECKLIST_TODAY_SUCCESS(HttpStatus.OK, "CL2001", "오늘 마감 체크리스트 조회에 성공하였습니다."),
   CHECKLIST_COMPLETE_SUCCESS(HttpStatus.OK, "CL2002", "체크리스트 완료 처리에 성공하였습니다."),
   CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다."),
