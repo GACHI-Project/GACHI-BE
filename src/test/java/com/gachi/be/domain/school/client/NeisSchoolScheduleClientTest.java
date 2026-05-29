@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -115,6 +116,81 @@ class NeisSchoolScheduleClientTest {
         client.search("B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
 
     assertThat(schedules).isEmpty();
+  }
+
+  @Test
+  void searchContinuesPaginationWhenCurrentPageRowsAreFilteredOut() throws IOException {
+    AtomicInteger requestCount = new AtomicInteger();
+    startServer();
+    server.createContext(
+        "/hub/SchoolSchedule",
+        exchange -> {
+          int pageIndex = requestCount.incrementAndGet();
+          if (pageIndex == 1) {
+            sendResponse(
+                exchange,
+                200,
+                """
+                {
+                  "SchoolSchedule": [
+                    {
+                      "head": [
+                        {"list_total_count": 2},
+                        {"RESULT": {"CODE": "INFO-000", "MESSAGE": "정상 처리되었습니다."}}
+                      ]
+                    },
+                    {
+                      "row": [
+                        {"AY": "2026", "AA_YMD": "invalid-date", "EVENT_NM": "잘못된 날짜"}
+                      ]
+                    }
+                  ]
+                }
+                """
+                    .getBytes(StandardCharsets.UTF_8));
+            return;
+          }
+          if (pageIndex == 2) {
+            sendResponse(
+                exchange,
+                200,
+                """
+                {
+                  "SchoolSchedule": [
+                    {
+                      "head": [
+                        {"list_total_count": 2},
+                        {"RESULT": {"CODE": "INFO-000", "MESSAGE": "정상 처리되었습니다."}}
+                      ]
+                    },
+                    {
+                      "row": [
+                        {"AY": "2026", "AA_YMD": "20260305", "EVENT_NM": "재량휴업일"}
+                      ]
+                    }
+                  ]
+                }
+                """
+                    .getBytes(StandardCharsets.UTF_8));
+            return;
+          }
+          sendResponse(
+              exchange,
+              200,
+              """
+              {"RESULT": {"CODE": "INFO-200", "MESSAGE": "해당하는 데이터가 없습니다."}}
+              """
+                  .getBytes(StandardCharsets.UTF_8));
+        });
+
+    NeisSchoolScheduleClient client = newClient("test-key");
+
+    var schedules =
+        client.search("B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+
+    assertThat(schedules).hasSize(1);
+    assertThat(schedules.get(0).eventName()).isEqualTo("재량휴업일");
+    assertThat(requestCount).hasValue(3);
   }
 
   @Test

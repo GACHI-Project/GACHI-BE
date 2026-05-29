@@ -62,7 +62,7 @@ public class NeisSchoolScheduleClient {
 
         ParsedSchedulePage parsedPage = parseResponse(response.body());
         totalCount = parsedPage.totalCount();
-        if (parsedPage.schedules().isEmpty()) {
+        if (parsedPage.rowCount() == 0) {
           break;
         }
         schedules.addAll(parsedPage.schedules());
@@ -141,18 +141,20 @@ public class NeisSchoolScheduleClient {
       }
 
       int totalCount = 0;
+      int rowCount = 0;
       List<NeisSchoolScheduleItem> schedules = new ArrayList<>();
       for (JsonNode section : schoolSchedule) {
         totalCount = readTotalCount(section, totalCount);
         validateHeadResult(section);
         JsonNode rows = section.path("row");
         if (rows.isArray()) {
+          rowCount += rows.size();
           for (JsonNode row : rows) {
             toItem(row).ifPresent(schedules::add);
           }
         }
       }
-      return new ParsedSchedulePage(totalCount, schedules);
+      return new ParsedSchedulePage(totalCount, rowCount, schedules);
     } catch (ExternalApiException e) {
       throw e;
     } catch (IOException e) {
@@ -164,7 +166,7 @@ public class NeisSchoolScheduleClient {
   private ParsedSchedulePage parseResultOnlyResponse(JsonNode resultNode) {
     String code = resultNode.path("CODE").asText("");
     if (NO_DATA_CODE.equals(code)) {
-      return new ParsedSchedulePage(0, List.of());
+      return new ParsedSchedulePage(0, 0, List.of());
     }
     throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "NEIS 학사일정 API 오류. code=" + code);
   }
@@ -229,8 +231,8 @@ public class NeisSchoolScheduleClient {
     try {
       return LocalDate.parse(value, NEIS_DATE_FORMATTER);
     } catch (DateTimeParseException e) {
-      throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "NEIS 학사일정 날짜 형식 오류: " + value, e);
+      log.warn("[NEIS] 학사일정 날짜 형식 오류로 해당 행 제외. value={}", value);
+      return null;
     }
   }
 
@@ -266,7 +268,8 @@ public class NeisSchoolScheduleClient {
     return value.substring(0, 300);
   }
 
-  private record ParsedSchedulePage(int totalCount, List<NeisSchoolScheduleItem> schedules) {}
+  private record ParsedSchedulePage(
+      int totalCount, int rowCount, List<NeisSchoolScheduleItem> schedules) {}
 
   private record NeisHttpResponse(int statusCode, String body) {}
 }

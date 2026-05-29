@@ -9,8 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.gachi.be.domain.child.entity.Child;
-import com.gachi.be.domain.child.repository.ChildRepository;
+import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
 import com.gachi.be.domain.school.client.NeisSchoolScheduleClient;
 import com.gachi.be.domain.school.dto.response.NeisSchoolScheduleItem;
 import com.gachi.be.global.code.ErrorCode;
@@ -18,24 +17,25 @@ import com.gachi.be.global.exception.BusinessException;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class SchoolScheduleQueryServiceImplTest {
 
-  private final ChildRepository childRepository = mock(ChildRepository.class);
+  private final SchoolScheduleChildReader schoolScheduleChildReader =
+      mock(SchoolScheduleChildReader.class);
   private final NeisSchoolScheduleClient neisSchoolScheduleClient =
       mock(NeisSchoolScheduleClient.class);
   private final SchoolScheduleQueryServiceImpl service =
-      new SchoolScheduleQueryServiceImpl(childRepository, neisSchoolScheduleClient);
+      new SchoolScheduleQueryServiceImpl(schoolScheduleChildReader, neisSchoolScheduleClient);
 
   @Test
   void getSchoolSchedulesGroupsChildrenByOfficeCodeAndSchoolCode() {
-    Child first = child(1L, "첫째", "화랑초등학교", "7051173", "B10", 4, "#22CC88");
-    Child second = child(2L, "둘째", "화랑초등학교", "7051173", "B10", 2, "#FFCC00");
-    Child sameNameOtherSchool = child(3L, "셋째", "화랑초등학교", "7611076", "J10", 1, "#3366FF");
+    SchoolScheduleChild first = child(1L, "첫째", "화랑초등학교", "7051173", "B10", 4, "#22CC88");
+    SchoolScheduleChild second = child(2L, "둘째", "화랑초등학교", "7051173", "B10", 2, "#FFCC00");
+    SchoolScheduleChild sameNameOtherSchool =
+        child(3L, "셋째", "화랑초등학교", "7611076", "J10", 1, "#3366FF");
     LocalDate fromDate = LocalDate.of(2026, 3, 1);
     LocalDate toDate = LocalDate.of(2026, 3, 31);
-    when(childRepository.findByUserIdAndDeletedAtIsNull(10L))
+    when(schoolScheduleChildReader.findChildren(10L))
         .thenReturn(List.of(first, second, sameNameOtherSchool));
     when(neisSchoolScheduleClient.search(eq("B10"), eq("7051173"), eq(fromDate), eq(toDate)))
         .thenReturn(List.of(schedule("시업식", LocalDate.of(2026, 3, 2))));
@@ -55,8 +55,8 @@ class SchoolScheduleQueryServiceImplTest {
 
   @Test
   void getSchoolSchedulesThrowsWhenChildSchoolIdentityIsMissing() {
-    Child child = child(1L, "첫째", "화랑초등학교", null, "B10", 4, "#22CC88");
-    when(childRepository.findByUserIdAndDeletedAtIsNull(10L)).thenReturn(List.of(child));
+    SchoolScheduleChild child = child(1L, "첫째", "화랑초등학교", null, "B10", 4, "#22CC88");
+    when(schoolScheduleChildReader.findChildren(10L)).thenReturn(List.of(child));
 
     assertThatThrownBy(
             () ->
@@ -67,7 +67,17 @@ class SchoolScheduleQueryServiceImplTest {
         .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
   }
 
-  private Child child(
+  @Test
+  void getSchoolSchedulesThrowsWhenDateRangeExceedsOneYear() {
+    assertThatThrownBy(
+            () ->
+                service.getSchoolSchedules(10L, LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 3)))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorCode")
+        .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+  }
+
+  private SchoolScheduleChild child(
       Long id,
       String name,
       String schoolName,
@@ -75,17 +85,7 @@ class SchoolScheduleQueryServiceImplTest {
       String officeCode,
       int grade,
       String colorCode) {
-    Child child =
-        Child.builder()
-            .name(name)
-            .schoolName(schoolName)
-            .schoolCode(schoolCode)
-            .officeCode(officeCode)
-            .grade(grade)
-            .colorCode(colorCode)
-            .build();
-    ReflectionTestUtils.setField(child, "id", id);
-    return child;
+    return new SchoolScheduleChild(id, name, schoolName, schoolCode, officeCode, grade, colorCode);
   }
 
   private NeisSchoolScheduleItem schedule(String eventName, LocalDate date) {
