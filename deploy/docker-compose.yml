@@ -105,6 +105,10 @@ services:
       PAPAGO_CLIENT_ID: ${PAPAGO_CLIENT_ID}
       PAPAGO_CLIENT_SECRET: ${PAPAGO_CLIENT_SECRET}
       AI_SERVER_BASE_URL: ${AI_SERVER_BASE_URL:-http://ai:8000}
+      NEIS_API_KEY: ${NEIS_API_KEY}
+      NEIS_SCHOOL_INFO_URL: ${NEIS_SCHOOL_INFO_URL:-https://open.neis.go.kr/hub/schoolInfo}
+      NEIS_CONNECT_TIMEOUT_SECONDS: ${NEIS_CONNECT_TIMEOUT_SECONDS:-5}
+      NEIS_READ_TIMEOUT_SECONDS: ${NEIS_READ_TIMEOUT_SECONDS:-10}
     secrets:
       - source: spring_mail_password
         target: spring_mail_password
