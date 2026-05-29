@@ -7,6 +7,7 @@ public record ChildResponse(
     String name,
     String schoolName,
     String schoolCode,
+    String officeCode,
     Integer grade,
     String colorCode,
     LocalDateTime createdAt) {}

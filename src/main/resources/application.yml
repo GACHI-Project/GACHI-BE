@@ -72,6 +72,7 @@ app:
   neis:
     api-key: ${NEIS_API_KEY:}
     school-info-url: ${NEIS_SCHOOL_INFO_URL:https://open.neis.go.kr/hub/schoolInfo}
+    school-schedule-url: ${NEIS_SCHOOL_SCHEDULE_URL:https://open.neis.go.kr/hub/SchoolSchedule}
     connect-timeout-seconds: ${NEIS_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${NEIS_READ_TIMEOUT_SECONDS:10}
   notification:

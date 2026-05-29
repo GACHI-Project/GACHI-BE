@@ -17,6 +17,8 @@ public class NeisProperties {
 
   @NotBlank private String schoolInfoUrl = "https://open.neis.go.kr/hub/schoolInfo";
 
+  @NotBlank private String schoolScheduleUrl = "https://open.neis.go.kr/hub/SchoolSchedule";
+
   @Min(1)
   private int connectTimeoutSeconds = 5;
 
