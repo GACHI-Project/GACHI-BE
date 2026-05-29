@@ -97,6 +97,9 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       @Param("rangeStart") OffsetDateTime rangeStart,
       @Param("rangeEnd") OffsetDateTime rangeEnd);
 
+  long countByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+      Long userId, OffsetDateTime rangeStart, OffsetDateTime rangeEnd);
+
   /** 언어 변경 시 진행중인 파이프라인 중단 처리용 쿼리 */
   @Modifying
   @Query(

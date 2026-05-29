@@ -42,6 +42,9 @@ public class Child {
   @Column(name = "school_code", length = 64)
   private String schoolCode;
 
+  @Column(name = "office_code", length = 20)
+  private String officeCode;
+
   @Column(nullable = false)
   private Integer grade;
 
@@ -63,12 +66,14 @@ public class Child {
       String name,
       String schoolName,
       String schoolCode,
+      String officeCode,
       Integer grade,
       String colorCode) {
     this.user = user;
     this.name = name;
     this.schoolName = schoolName;
     this.schoolCode = schoolCode;
+    this.officeCode = officeCode;
     this.grade = grade;
     this.colorCode = colorCode;
   }

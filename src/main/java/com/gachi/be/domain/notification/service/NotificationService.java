@@ -2,6 +2,7 @@ package com.gachi.be.domain.notification.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gachi.be.domain.child.repository.ChildRepository;
 import com.gachi.be.domain.notification.dto.request.NotificationReadRequest;
 import com.gachi.be.domain.notification.dto.request.PushTokenDeleteRequest;
 import com.gachi.be.domain.notification.dto.request.PushTokenRegisterRequest;
@@ -46,16 +47,18 @@ public class NotificationService {
   private final NotificationRepository notificationRepository;
   private final PushDeviceTokenRepository pushDeviceTokenRepository;
   private final NotificationDeliveryLogRepository notificationDeliveryLogRepository;
+  private final ChildRepository childRepository;
   private final ObjectMapper objectMapper;
   private final ApplicationEventPublisher eventPublisher;
 
   @Transactional(readOnly = true)
   public NotificationListResponse getNotifications(
-      Long userId, Long cursorId, Integer size, boolean unreadOnly) {
+      Long userId, Long cursorId, Integer size, boolean unreadOnly, Long childId) {
     int pageSize = normalizePageSize(size);
+    String childName = resolveChildName(userId, childId);
     List<Notification> rows =
         notificationRepository.findInbox(
-            userId, cursorId, unreadOnly, PageRequest.of(0, pageSize + 1));
+            userId, cursorId, childId, childName, unreadOnly, PageRequest.of(0, pageSize + 1));
 
     boolean hasNext = rows.size() > pageSize;
     List<Notification> page = hasNext ? rows.subList(0, pageSize) : rows;
@@ -63,6 +66,12 @@ public class NotificationService {
 
     return new NotificationListResponse(
         page.stream().map(this::toResponse).toList(), nextCursor, hasNext);
+  }
+
+  @Transactional(readOnly = true)
+  public NotificationListResponse getNotifications(
+      Long userId, Long cursorId, Integer size, boolean unreadOnly) {
+    return getNotifications(userId, cursorId, size, unreadOnly, null);
   }
 
   @Transactional(readOnly = true)
@@ -166,6 +175,9 @@ public class NotificationService {
         Notification.builder()
             .userId(userId)
             .type(command.type())
+            .level(command.level())
+            .childId(command.childId())
+            .childName(normalizeOptional(command.childName()))
             .title(normalizeRequired(command.title()))
             .body(normalizeRequired(command.body()))
             .payloadJson(serializePayload(command.payload()))
@@ -215,6 +227,9 @@ public class NotificationService {
     return new NotificationResponse(
         notification.getId(),
         notification.getType(),
+        notification.getLevel(),
+        notification.getChildId(),
+        notification.getChildName(),
         notification.getTitle(),
         notification.getBody(),
         deserializePayload(notification.getPayloadJson()),
@@ -231,6 +246,16 @@ public class NotificationService {
         token.getAppVersion(),
         token.isEnabled(),
         token.getLastRegisteredAt());
+  }
+
+  private String resolveChildName(Long userId, Long childId) {
+    if (childId == null) {
+      return null;
+    }
+    return childRepository
+        .findByIdAndUserIdAndDeletedAtIsNull(childId, userId)
+        .map(child -> normalizeOptional(child.getName()))
+        .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT_VALUE));
   }
 
   private int normalizePageSize(Integer size) {

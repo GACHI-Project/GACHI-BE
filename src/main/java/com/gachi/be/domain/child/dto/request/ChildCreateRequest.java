@@ -10,7 +10,8 @@ import jakarta.validation.constraints.Size;
 public record ChildCreateRequest(
     @NotBlank @Size(max = 50) String name,
     @NotBlank @Size(max = 120) String schoolName,
-    @Size(max = 64) String schoolCode,
+    @NotBlank @Size(max = 64) String schoolCode,
+    @NotBlank @Size(max = 20) String officeCode,
     @NotNull @Min(1) @Max(6) Integer grade,
     @NotBlank
         @Pattern(
