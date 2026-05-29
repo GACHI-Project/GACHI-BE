@@ -40,6 +40,7 @@ public enum SuccessCode {
   CHECKLIST_COMPLETE_SUCCESS(HttpStatus.OK, "CL2002", "체크리스트 완료 처리에 성공하였습니다."),
   CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다."),
   USER_LANGUAGE_UPDATED(HttpStatus.OK, "USER2001", "언어 설정이 변경되었습니다."),
+  USER_NOTIFICATION_UPDATED(HttpStatus.OK, "USER2002", "알림 설정이 변경되었습니다."),
   NOTIFICATION_LIST_SUCCESS(HttpStatus.OK, "NOTI2001", "알림 목록 조회에 성공하였습니다."),
   NOTIFICATION_UNREAD_COUNT_SUCCESS(HttpStatus.OK, "NOTI2002", "미읽음 알림 수 조회에 성공하였습니다."),
   NOTIFICATION_READ_SUCCESS(HttpStatus.OK, "NOTI2003", "알림 읽음 처리에 성공하였습니다."),

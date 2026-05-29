@@ -4,6 +4,7 @@ import com.gachi.be.domain.auth.service.AuthenticatedUserResolver;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.user.dto.request.ChangeLanguageRequest;
+import com.gachi.be.domain.user.dto.request.ChangeNotificationRequest;
 import com.gachi.be.domain.user.dto.response.UserMeResponse;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.repository.UserRepository;
@@ -49,6 +50,7 @@ public class UserController {
             user.getName(),
             user.getLanguageCode(),
             user.isNotificationEnabled(),
+            user.getNotificationPreference(),
             user.getCreatedAt()));
   }
 
@@ -93,5 +95,17 @@ public class UserController {
         cancelledCount);
 
     return ApiResponse.success(SuccessCode.USER_LANGUAGE_UPDATED, null);
+  }
+
+  @Operation(summary = "사용자 알림 설정 변경", description = "마이페이지에서 알림 수신 단계를 변경합니다.")
+  @PatchMapping("/me/notification")
+  @Transactional
+  public ApiResponse<Void> changeNotificationPreference(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @RequestBody @Valid ChangeNotificationRequest request) {
+    User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
+    user.updateNotificationPreference(request.notificationPreference());
+    userRepository.save(user);
+    return ApiResponse.success(SuccessCode.USER_NOTIFICATION_UPDATED, null);
   }
 }

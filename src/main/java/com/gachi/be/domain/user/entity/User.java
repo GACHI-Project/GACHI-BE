@@ -1,5 +1,6 @@
 package com.gachi.be.domain.user.entity;
 
+import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -54,6 +55,10 @@ public class User {
   @Column(name = "notification_enabled", nullable = false)
   private boolean notificationEnabled;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "notification_preference", nullable = false, length = 20)
+  private NotificationPreference notificationPreference;
+
   @Column(name = "deleted_at")
   private OffsetDateTime deletedAt;
 
@@ -88,6 +93,7 @@ public class User {
       UserStatus status,
       String languageCode,
       Boolean notificationEnabled,
+      NotificationPreference notificationPreference,
       OffsetDateTime emailVerifiedAt,
       OffsetDateTime consentAgreedAt,
       String consentVersion,
@@ -100,7 +106,11 @@ public class User {
     this.phoneNumber = phoneNumber;
     this.status = status;
     this.languageCode = languageCode != null ? languageCode : "KO";
-    this.notificationEnabled = notificationEnabled != null ? notificationEnabled : true;
+    this.notificationPreference =
+        notificationPreference != null
+            ? notificationPreference
+            : NotificationPreference.fromLegacyEnabled(notificationEnabled);
+    this.notificationEnabled = this.notificationPreference.isPushEnabled();
     this.emailVerifiedAt = emailVerifiedAt;
     this.consentAgreedAt = consentAgreedAt;
     this.consentVersion = consentVersion;
@@ -121,7 +131,25 @@ public class User {
   }
 
   public void updateNotificationEnabled(boolean notificationEnabled) {
-    this.notificationEnabled = notificationEnabled;
+    updateNotificationPreference(NotificationPreference.fromLegacyEnabled(notificationEnabled));
+  }
+
+  public void updateNotificationPreference(NotificationPreference notificationPreference) {
+    this.notificationPreference =
+        notificationPreference != null
+            ? notificationPreference
+            : NotificationPreference.defaultValue();
+    this.notificationEnabled = this.notificationPreference.isPushEnabled();
+  }
+
+  public NotificationPreference getNotificationPreference() {
+    return notificationPreference != null
+        ? notificationPreference
+        : NotificationPreference.fromLegacyEnabled(notificationEnabled);
+  }
+
+  public boolean isNotificationEnabled() {
+    return getNotificationPreference().isPushEnabled();
   }
 
   @PrePersist
@@ -137,6 +165,10 @@ public class User {
     if (languageCode == null) {
       languageCode = "KO";
     }
+    if (notificationPreference == null) {
+      notificationPreference = NotificationPreference.fromLegacyEnabled(notificationEnabled);
+    }
+    notificationEnabled = notificationPreference.isPushEnabled();
   }
 
   @PreUpdate

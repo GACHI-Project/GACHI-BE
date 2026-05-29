@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -34,6 +33,7 @@ public class NewsletterPipelineService {
   private final PapagoTranslateClient papagoTranslateClient;
   private final NewsletterAiAnalyzer newsletterAiAnalyzer;
   private final NewsletterDateCandidateService newsletterDateCandidateService;
+  private final NewsletterPipelineStatusService newsletterPipelineStatusService;
 
   @Async
   @Transactional
@@ -46,7 +46,7 @@ public class NewsletterPipelineService {
       return;
     }
 
-    markProcessing(newsletterId);
+    newsletterPipelineStatusService.markProcessing(newsletterId);
     log.debug("[Pipeline] PROCESSING 전환 완료. newsletterId={}", newsletterId);
 
     String tempFileKey = null;
@@ -116,13 +116,13 @@ public class NewsletterPipelineService {
             e.getClass().getSimpleName(),
             e.getMessage(),
             e);
-        markFailedWithSnapshot(
+        newsletterPipelineStatusService.markFailedWithSnapshot(
             newsletterId, ocrText, originalText, translatedText, failureStage, failureReason(e));
         return;
       }
       log.debug("[Pipeline][STEP7] AI 서버 분석 완료. title={}", aiResult.title());
 
-      markCompleted(
+      newsletterPipelineStatusService.markCompleted(
           newsletterId,
           ocrText,
           originalText,
@@ -139,7 +139,7 @@ public class NewsletterPipelineService {
           e.getClass().getSimpleName(),
           e.getMessage(),
           e);
-      markFailedWithSnapshot(
+      newsletterPipelineStatusService.markFailedWithSnapshot(
           newsletterId, ocrText, originalText, translatedText, failureStage, failureReason(e));
     } finally {
       if (tempFileKey != null) {
@@ -147,58 +147,11 @@ public class NewsletterPipelineService {
           deleteFromS3(tempFileKey);
           log.debug("[Pipeline] 임시 파일 삭제 완료. tempFileKey={}", tempFileKey);
         } catch (Exception ex) {
-          // 임시 파일 정리는 후처리라서 실패해도 분석 결과는 되돌리지 않는다.
           log.warn(
               "[Pipeline] 임시 파일 삭제 실패. tempFileKey={}, error={}", tempFileKey, ex.getMessage());
         }
       }
     }
-  }
-
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markProcessing(Long newsletterId) {
-    newsletterRepository
-        .findById(newsletterId)
-        .ifPresent(
-            n -> {
-              n.startProcessing();
-              newsletterRepository.save(n);
-            });
-  }
-
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markCompleted(
-      Long newsletterId,
-      String ocrText,
-      String originalText,
-      String translatedText,
-      String title,
-      String summary) {
-    newsletterRepository
-        .findById(newsletterId)
-        .ifPresent(
-            n -> {
-              n.complete(ocrText, originalText, translatedText, title, summary);
-              newsletterRepository.save(n);
-            });
-  }
-
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void markFailedWithSnapshot(
-      Long newsletterId,
-      String ocrText,
-      String originalText,
-      String translatedText,
-      String failureStage,
-      String failureReason) {
-    newsletterRepository
-        .findById(newsletterId)
-        .ifPresent(
-            n -> {
-              n.failWithSnapshot(
-                  ocrText, originalText, translatedText, failureStage, failureReason);
-              newsletterRepository.save(n);
-            });
   }
 
   private String failureReason(Exception e) {
