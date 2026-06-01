@@ -10,6 +10,7 @@ public record UserMeResponse(
     String email,
     String name,
     String languageCode,
+    String phoneNumber,
     Boolean notificationEnabled,
     NotificationPreference notificationPreference,
     LocalDateTime createdAt) {}

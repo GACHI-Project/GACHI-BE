@@ -40,6 +40,7 @@ class NotificationPushDispatcherIntegrationTest {
   @BeforeEach
   void setUp() {
     pushNotificationClient.reset();
+    userRepository.deleteAll();
   }
 
   @Test
@@ -122,6 +123,7 @@ class NotificationPushDispatcherIntegrationTest {
             .consentAgreedAt(now)
             .consentVersion("2026-04-v1")
             .passwordUpdatedAt(now)
+            .languageCode("KO")
             .build());
   }
 
