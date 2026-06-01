@@ -49,6 +49,7 @@ public class UserController {
             user.getEmail(),
             user.getName(),
             user.getLanguageCode(),
+            user.getPhoneNumber(),
             user.isNotificationEnabled(),
             user.getNotificationPreference(),
             user.getCreatedAt()));
