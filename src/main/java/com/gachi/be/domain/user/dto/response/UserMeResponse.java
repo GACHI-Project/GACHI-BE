@@ -9,6 +9,7 @@ public record UserMeResponse(
     String loginId,
     String email,
     String name,
+    String phoneNumber,
     String languageCode,
     Boolean notificationEnabled,
     NotificationPreference notificationPreference,
