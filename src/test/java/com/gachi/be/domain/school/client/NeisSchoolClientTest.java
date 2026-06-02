@@ -201,7 +201,7 @@ class NeisSchoolClientTest {
 
   private NeisSchoolClient newClient(String apiKey) {
     NeisProperties properties = new NeisProperties();
-    properties.setApiKey(apiKey);
+    properties.setSchoolApiKey(apiKey);
     if (server != null) {
       properties.setSchoolInfoUrl(
           "http://localhost:" + server.getAddress().getPort() + "/hub/schoolInfo");
