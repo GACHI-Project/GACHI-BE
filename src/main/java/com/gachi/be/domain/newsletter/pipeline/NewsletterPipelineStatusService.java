@@ -11,10 +11,13 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -24,6 +27,7 @@ public class NewsletterPipelineStatusService {
   private final NewsletterRepository newsletterRepository;
   private final NotificationService notificationService;
   private final ChildRepository childRepository;
+  private final PlatformTransactionManager transactionManager;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void markProcessing(Long newsletterId) {
@@ -88,7 +92,7 @@ public class NewsletterPipelineStatusService {
 
   private void createAnalysisCompletedNotificationSafely(Newsletter newsletter) {
     try {
-      createAnalysisCompletedNotification(newsletter);
+      createAnalysisCompletedNotificationInNewTransaction(newsletter);
     } catch (Exception ex) {
       log.warn(
           "[Pipeline] 분석 완료 알림 생성 실패. newsletterId={}, error={}",
@@ -96,6 +100,14 @@ public class NewsletterPipelineStatusService {
           ex.getMessage(),
           ex);
     }
+  }
+
+  private void createAnalysisCompletedNotificationInNewTransaction(Newsletter newsletter) {
+    TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+    transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    // afterCommit 콜백 안에서는 기존 트랜잭션 리소스가 남아 알림 저장과 이벤트 커밋 경계가 꼬일 수 있습니다.
+    transactionTemplate.executeWithoutResult(
+        status -> createAnalysisCompletedNotification(newsletter));
   }
 
   private void createAnalysisCompletedNotification(Newsletter newsletter) {
