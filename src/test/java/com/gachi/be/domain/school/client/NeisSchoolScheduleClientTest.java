@@ -220,7 +220,7 @@ class NeisSchoolScheduleClientTest {
 
   private NeisSchoolScheduleClient newClient(String apiKey) {
     NeisProperties properties = new NeisProperties();
-    properties.setApiKey(apiKey);
+    properties.setScheduleApiKey(apiKey);
     if (server != null) {
       properties.setSchoolScheduleUrl(
           "http://localhost:" + server.getAddress().getPort() + "/hub/SchoolSchedule");
