@@ -36,7 +36,6 @@ public class NewsletterPipelineService {
   private final NewsletterPipelineStatusService newsletterPipelineStatusService;
 
   @Async
-  @Transactional
   public void runPipeline(Long newsletterId) {
     log.info("[Pipeline] 파이프라인 시작. newsletterId={}", newsletterId);
 
