@@ -14,6 +14,8 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "app.neis")
 public class NeisProperties {
   private String apiKey;
+  private String schoolApiKey;
+  private String scheduleApiKey;
 
   @NotBlank private String schoolInfoUrl = "https://open.neis.go.kr/hub/schoolInfo";
 
@@ -24,4 +26,16 @@ public class NeisProperties {
 
   @Min(1)
   private int readTimeoutSeconds = 10;
+
+  public String getSchoolApiKey() {
+    return hasText(schoolApiKey) ? schoolApiKey : apiKey;
+  }
+
+  public String getScheduleApiKey() {
+    return hasText(scheduleApiKey) ? scheduleApiKey : apiKey;
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.trim().isEmpty();
+  }
 }

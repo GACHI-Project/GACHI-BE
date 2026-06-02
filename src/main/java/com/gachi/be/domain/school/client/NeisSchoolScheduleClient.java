@@ -79,9 +79,9 @@ public class NeisSchoolScheduleClient {
 
   private URI buildSearchUri(
       String officeCode, String schoolCode, LocalDate fromDate, LocalDate toDate, int pageIndex) {
-    String apiKey = neisProperties.getApiKey();
+    String apiKey = neisProperties.getScheduleApiKey();
     if (!StringUtils.hasText(apiKey)) {
-      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "NEIS 인증키가 설정되지 않았습니다.");
+      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "NEIS 학사일정 인증키가 설정되지 않았습니다.");
     }
 
     Map<String, String> queryParams = new LinkedHashMap<>();

@@ -63,9 +63,9 @@ public class NeisSchoolClient {
   }
 
   private URI buildSearchUri(String keyword, int size) {
-    String apiKey = neisProperties.getApiKey();
+    String apiKey = neisProperties.getSchoolApiKey();
     if (!StringUtils.hasText(apiKey)) {
-      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "NEIS 인증키가 설정되지 않았습니다.");
+      throw new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR, "NEIS 학교 검색 인증키가 설정되지 않았습니다.");
     }
 
     Map<String, String> queryParams = new LinkedHashMap<>();
