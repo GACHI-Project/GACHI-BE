@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**채팅 컨트롤러. */
+/** 채팅 컨트롤러. */
 @Tag(name = "Chat", description = "AI 챗봇 API")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
@@ -24,11 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/chat")
 public class ChatController {
 
-    private final ChatService chatService;
+  private final ChatService chatService;
 
-    @Operation(
-        summary = "채팅 메시지 전송",
-        description = """
+  @Operation(
+      summary = "채팅 메시지 전송",
+      description =
+          """
           AI 챗봇에게 메시지를 전송하고 응답을 받습니다.
 
           - sessionId가 null이면 새 세션을 생성합니다.
@@ -36,11 +37,10 @@ public class ChatController {
           - 앱을 종료하고 재진입 시 sessionId 없이 요청하면 새 대화가 시작됩니다.
           - chatType: GENERAL(학교 문화/용어 질문), DOCUMENT는 추후 지원 예정
           """)
-    @PostMapping("/messages")
-    public ApiResponse<ChatMessageResponse> sendMessage(
-        @AuthenticationPrincipal Long userId,
-        @Valid @RequestBody ChatMessageRequest request) {
-        ChatMessageResponse response = chatService.sendMessage(userId, request);
-        return ApiResponse.success(SuccessCode.CHAT_MESSAGE_SUCCESS, response);
-    }
+  @PostMapping("/messages")
+  public ApiResponse<ChatMessageResponse> sendMessage(
+      @AuthenticationPrincipal Long userId, @Valid @RequestBody ChatMessageRequest request) {
+    ChatMessageResponse response = chatService.sendMessage(userId, request);
+    return ApiResponse.success(SuccessCode.CHAT_MESSAGE_SUCCESS, response);
+  }
 }
