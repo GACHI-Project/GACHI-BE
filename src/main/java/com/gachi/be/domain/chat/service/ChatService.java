@@ -36,7 +36,7 @@ public class ChatService {
         // 사용자 languageCode 조회 (AI 서버 응답 언어 결정)
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        String language = user.getLanguageCode().name();
+        String language = user.getLanguageCode();
 
         // chatType 기본값 처리
         String chatType = (request.chatType() != null && !request.chatType().isBlank())
