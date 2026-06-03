@@ -236,6 +236,13 @@ public enum ErrorCode {
       "notificationId에 해당하는 알림이 없거나 소유권이 일치하지 않음",
       ErrorLogLevel.INFO),
 
+  CHAT_AI_ERROR(
+      HttpStatus.BAD_GATEWAY,
+      "CHAT5021",
+      "채팅 AI 서버 오류가 발생했습니다.",
+      "AI 서버 /ai/chat/messages 호출 실패",
+      ErrorLogLevel.ERROR),
+
   EXTERNAL_API_ERROR(
       HttpStatus.BAD_GATEWAY,
       "EXT5021",
