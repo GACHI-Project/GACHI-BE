@@ -11,6 +11,7 @@ import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -70,7 +71,7 @@ public class ChatServiceImpl implements ChatService {
     String reply = aiChatClient.chat(request.message(), history, language, chatType);
 
     // AI 응답 시간 (KST)
-    String sentAt = ZonedDateTime.now(KST).toString();
+      String sentAt = ZonedDateTime.now(KST).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
     // Redis 히스토리 업데이트 (유저 메시지 + AI 응답 추가)
     chatRedisService.appendAndSave(sessionId, request.message(), reply);
