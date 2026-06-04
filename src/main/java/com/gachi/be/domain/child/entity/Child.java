@@ -99,4 +99,19 @@ public class Child {
   public void updateColorCode(String newColorCode) {
     this.colorCode = newColorCode;
   }
+
+  public void update(
+      String name,
+      String schoolName,
+      String schoolCode,
+      String officeCode,
+      Integer grade,
+      String colorCode) {
+      if (name != null) this.name = name;
+      if (schoolName != null) this.schoolName = schoolName;
+      if (schoolCode != null) this.schoolCode = schoolCode;
+      if (officeCode != null) this.officeCode = officeCode;
+      if (grade != null) this.grade = grade;
+      if (colorCode != null) this.colorCode = colorCode;
+  }
 }
