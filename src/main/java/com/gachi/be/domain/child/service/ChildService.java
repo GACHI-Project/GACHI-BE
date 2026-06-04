@@ -1,5 +1,6 @@
 package com.gachi.be.domain.child.service;
 
+// import 추가 (파일 상단)
 import com.gachi.be.domain.auth.service.AuthenticatedUserResolver;
 import com.gachi.be.domain.calendar.repository.CalendarEventRepository;
 import com.gachi.be.domain.child.dto.request.ChildCreateRequest;
@@ -18,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 /** 자녀 등록/조회 비즈니스 로직을 담당한다. */
@@ -89,6 +92,7 @@ public class ChildService {
             .orElseThrow(() -> new BusinessException(ErrorCode.CHILD_NOT_FOUND));
 
     String oldName = child.getName();
+    String oldColorCode = child.getColorCode();
     String newName = request.name() != null ? request.name().trim() : null;
     String newColorCode =
         request.colorCode() != null ? request.colorCode().trim().toUpperCase() : null;
@@ -113,7 +117,7 @@ public class ChildService {
     }
 
     // 색상이 변경된 경우 → newsletter, calendar_events child_color 일괄 동기화
-    if (newColorCode != null && !newColorCode.equals(child.getColorCode())) {
+    if (newColorCode != null && !newColorCode.equals(oldColorCode)) {
       String syncTargetName = (newName != null) ? newName : oldName;
       newsletterRepository.updateChildColorByUserIdAndChildName(
           user.getId(), syncTargetName, newColorCode);
@@ -156,19 +160,32 @@ public class ChildService {
         childName,
         newsletters.size());
 
-    // S3 파일 삭제 (DB 삭제 성공 후 실행)
-    for (String fileKey : fileKeys) {
-      try {
-        s3FileService.deleteFile(fileKey);
-      } catch (Exception e) {
-        // S3 삭제 실패는 로그만 남기고 계속 진행 (DB 삭제가 이미 완료됐으므로 롤백 불가)
-        log.error("[Child] S3 파일 삭제 실패. fileKey={}, error={}", fileKey, e.getMessage());
-      }
-    }
-
     // 자녀 soft delete
     child.softDelete();
     log.info("[Child] 자녀 삭제 완료. userId={}, childId={}, childName={}", userId, childId, childName);
+
+    // S3 삭제를 트랜잭션 커밋 이후 실행으로 분리
+    // 트랜잭션 내부에서 외부 네트워크 호출 시 느린 S3 응답이 DB 커넥션을 불필요하게 점유하고,
+    // S3 장애가 DB 롤백을 유발하는 리스크를 제거하기 위해 afterCommit으로 분리
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            for (String fileKey : fileKeys) {
+              try {
+                s3FileService.deleteFile(fileKey);
+              } catch (Exception e) {
+                // S3 삭제 실패는 로그만 남기고 계속 진행 (DB 삭제가 이미 커밋됐으므로 롤백 불가)
+                log.error("[Child] S3 파일 삭제 실패. fileKey={}, error={}", fileKey, e.getMessage());
+              }
+            }
+            log.debug(
+                "[Child] S3 파일 삭제 완료. userId={}, childName={}, count={}",
+                userId,
+                childName,
+                fileKeys.size());
+          }
+        });
   }
 
   private String normalizeRequiredText(String value) {
