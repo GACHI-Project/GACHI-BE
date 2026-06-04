@@ -35,10 +35,29 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       @Param("childName") String childName,
       @Param("newColor") String newColor);
 
+  // 자녀 이름 변경 시 newsletter.child_name 일괄 동기화
+  @Modifying
+  @Query(
+      """
+       UPDATE Newsletter n
+       SET n.childName = :newName
+       WHERE n.userId = :userId AND n.childName = :oldName
+       """)
+  void updateChildNameByUserIdAndOldName(
+      @Param("userId") Long userId,
+      @Param("oldName") String oldName,
+      @Param("newName") String newName);
+
+  // 자녀 삭제 시 해당 자녀의 모든 newsletter 조회 (S3 fileKey 수집용)
+  List<Newsletter> findAllByUserIdAndChildName(Long userId, String childName);
+
+  // 자녀 삭제 시 해당 자녀의 모든 newsletter 삭제
+  void deleteAllByUserIdAndChildName(Long userId, String childName);
+
   /**
    * FAILED 상태인 가정통신문만 PENDING으로 원자적으로 전환합니다.
    *
-   * <p>동시 재시도 요청이 들어와도 첫 요청만 update count 1을 받고, 나머지는 0을 받아 중복 파이프라인 실행을 막습니다.
+   * 동시 재시도 요청이 들어와도 첫 요청만 update count 1을 받고, 나머지는 0을 받아 중복 파이프라인 실행을 막습니다.
    */
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(
