@@ -107,11 +107,11 @@ public class Child {
       String officeCode,
       Integer grade,
       String colorCode) {
-      if (name != null) this.name = name;
-      if (schoolName != null) this.schoolName = schoolName;
-      if (schoolCode != null) this.schoolCode = schoolCode;
-      if (officeCode != null) this.officeCode = officeCode;
-      if (grade != null) this.grade = grade;
-      if (colorCode != null) this.colorCode = colorCode;
+    if (name != null) this.name = name;
+    if (schoolName != null) this.schoolName = schoolName;
+    if (schoolCode != null) this.schoolCode = schoolCode;
+    if (officeCode != null) this.officeCode = officeCode;
+    if (grade != null) this.grade = grade;
+    if (colorCode != null) this.colorCode = colorCode;
   }
 }

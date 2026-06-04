@@ -57,7 +57,7 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
   /**
    * FAILED 상태인 가정통신문만 PENDING으로 원자적으로 전환합니다.
    *
-   * 동시 재시도 요청이 들어와도 첫 요청만 update count 1을 받고, 나머지는 0을 받아 중복 파이프라인 실행을 막습니다.
+   * <p>동시 재시도 요청이 들어와도 첫 요청만 update count 1을 받고, 나머지는 0을 받아 중복 파이프라인 실행을 막습니다.
    */
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(

@@ -70,32 +70,32 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
   List<Long> findRegisteredNewsletterIds(
       @Param("userId") Long userId, @Param("newsletterIds") List<Long> newsletterIds);
 
-    // 자녀 이름 변경 시 calendar_events.child_name 일괄 동기화
-    @Modifying
-    @Query(
-        """
+  // 자녀 이름 변경 시 calendar_events.child_name 일괄 동기화
+  @Modifying
+  @Query(
+      """
         UPDATE CalendarEvent e
         SET e.childName = :newName
         WHERE e.userId = :userId AND e.childName = :oldName
         """)
-    void updateChildNameByUserIdAndOldName(
-        @Param("userId") Long userId,
-        @Param("oldName") String oldName,
-        @Param("newName") String newName);
+  void updateChildNameByUserIdAndOldName(
+      @Param("userId") Long userId,
+      @Param("oldName") String oldName,
+      @Param("newName") String newName);
 
-    // 자녀 색상 변경 시 calendar_events.child_color 일괄 동기화
-    @Modifying
-    @Query(
-        """
+  // 자녀 색상 변경 시 calendar_events.child_color 일괄 동기화
+  @Modifying
+  @Query(
+      """
         UPDATE CalendarEvent e
         SET e.childColor = :newColor
         WHERE e.userId = :userId AND e.childName = :childName
         """)
-    void updateChildColorByUserIdAndChildName(
-        @Param("userId") Long userId,
-        @Param("childName") String childName,
-        @Param("newColor") String newColor);
+  void updateChildColorByUserIdAndChildName(
+      @Param("userId") Long userId,
+      @Param("childName") String childName,
+      @Param("newColor") String newColor);
 
-    // 자녀 삭제 시 해당 자녀의 모든 calendar_events 삭제
-    void deleteAllByUserIdAndChildName(Long userId, String childName);
+  // 자녀 삭제 시 해당 자녀의 모든 calendar_events 삭제
+  void deleteAllByUserIdAndChildName(Long userId, String childName);
 }

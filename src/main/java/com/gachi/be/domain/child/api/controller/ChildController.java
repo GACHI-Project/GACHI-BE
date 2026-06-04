@@ -40,15 +40,15 @@ public class ChildController {
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long childId,
       @Valid @RequestBody ChildUpdateRequest request) {
-      childService.updateChild(authorizationHeader, childId, request);
-      return ApiResponse.success(SuccessCode.CHILD_UPDATE_SUCCESS, null);
+    childService.updateChild(authorizationHeader, childId, request);
+    return ApiResponse.success(SuccessCode.CHILD_UPDATE_SUCCESS, null);
   }
 
   @DeleteMapping("/{childId}")
   public ApiResponse<Void> deleteChild(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @PathVariable Long childId) {
-      childService.deleteChild(authorizationHeader, childId);
-      return ApiResponse.success(SuccessCode.CHILD_DELETE_SUCCESS, null);
+    childService.deleteChild(authorizationHeader, childId);
+    return ApiResponse.success(SuccessCode.CHILD_DELETE_SUCCESS, null);
   }
 }
