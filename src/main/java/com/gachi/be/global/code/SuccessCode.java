@@ -46,7 +46,8 @@ public enum SuccessCode {
   NOTIFICATION_UNREAD_COUNT_SUCCESS(HttpStatus.OK, "NOTI2002", "미읽음 알림 수 조회에 성공하였습니다."),
   NOTIFICATION_READ_SUCCESS(HttpStatus.OK, "NOTI2003", "알림 읽음 처리에 성공하였습니다."),
   NOTIFICATION_PUSH_TOKEN_REGISTERED(HttpStatus.OK, "NOTI2004", "푸시 토큰 등록에 성공하였습니다."),
-  NOTIFICATION_PUSH_TOKEN_DELETED(HttpStatus.OK, "NOTI2005", "푸시 토큰 삭제에 성공하였습니다.");
+  NOTIFICATION_PUSH_TOKEN_DELETED(HttpStatus.OK, "NOTI2005", "푸시 토큰 삭제에 성공하였습니다."),
+  CHAT_MESSAGE_SUCCESS(HttpStatus.OK, "CHAT2001", "채팅 응답에 성공하였습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;
