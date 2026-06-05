@@ -38,7 +38,7 @@ public class ChildService {
   @Transactional
   public ChildResponse createChild(String authorizationHeader, ChildCreateRequest request) {
     User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
-    long childrenCount = childRepository.countByUserId(user.getId());
+    long childrenCount = childRepository.countByUserIdAndDeletedAtIsNull(user.getId());
     if (childrenCount >= DEFAULT_MAX_CHILDREN_PER_USER) {
       // 정책은 무제한처럼 보이더라도 서버 보호를 위해 내부 가드레일을 둔다.
       throw new BusinessException(ErrorCode.BUSINESS_RULE_VIOLATION);
