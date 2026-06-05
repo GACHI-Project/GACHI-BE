@@ -70,7 +70,7 @@ public class SchoolGuideServiceImpl implements SchoolGuideService {
     } else if (search != null && !search.isBlank()) {
       faqs = schoolGuideRepository.findByQuestionContainingIgnoreCaseOrderByCreatedAtAsc(search);
     } else {
-      faqs = schoolGuideRepository.findAll();
+      faqs = schoolGuideRepository.findAllByOrderByCreatedAtAsc();
     }
 
     return SchoolGuideListResponse.of(faqs);

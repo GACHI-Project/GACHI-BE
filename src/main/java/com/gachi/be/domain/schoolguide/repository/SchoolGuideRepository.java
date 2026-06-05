@@ -22,6 +22,8 @@ public interface SchoolGuideRepository extends JpaRepository<SchoolGuide, Long> 
   /** 주간 조회수 TOP 2 */
   List<SchoolGuide> findTop2ByOrderByWeeklyViewCountDesc();
 
+  List<SchoolGuide> findAllByOrderByCreatedAtAsc();
+
   /** 매주 월요일 00:00 주간 조회수 일괄 초기화 */
   @Modifying
   @Query("UPDATE SchoolGuide s SET s.weeklyViewCount = 0")

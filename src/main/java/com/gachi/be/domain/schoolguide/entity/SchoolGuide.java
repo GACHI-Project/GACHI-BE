@@ -38,7 +38,7 @@ public class SchoolGuide {
   private String answer;
 
   @Column(name = "weekly_view_count", nullable = false)
-  private long weeklyViewCount = 0;
+  private long weeklyViewCount;
 
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
