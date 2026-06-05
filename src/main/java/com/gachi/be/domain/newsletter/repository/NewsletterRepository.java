@@ -115,4 +115,6 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       @Param("targetStatuses") List<NewsletterStatus> targetStatuses,
       @Param("failedStatus") NewsletterStatus failedStatus,
       @Param("newLanguage") String newLanguage);
+
+    <T> java.lang.ScopedValue<T> findByIdAndUserId(Long id, Long userId);
 }
