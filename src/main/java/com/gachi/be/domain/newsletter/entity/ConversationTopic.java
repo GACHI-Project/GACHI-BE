@@ -21,41 +21,41 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ConversationTopic {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
-    @Column(name = "newsletter_id", nullable = false)
-    private Long newsletterId;
+  @Column(name = "newsletter_id", nullable = false)
+  private Long newsletterId;
 
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+  @Column(name = "user_id", nullable = false)
+  private Long userId;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String topic;
+  @Column(nullable = false, columnDefinition = "TEXT")
+  private String topic;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
+  @Column(name = "created_at", nullable = false, updatable = false)
+  private OffsetDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+  @Column(name = "updated_at", nullable = false)
+  private OffsetDateTime updatedAt;
 
-    @Builder
-    public ConversationTopic(Long newsletterId, Long userId, String topic) {
-        this.newsletterId = newsletterId;
-        this.userId = userId;
-        this.topic = topic;
-    }
+  @Builder
+  public ConversationTopic(Long newsletterId, Long userId, String topic) {
+    this.newsletterId = newsletterId;
+    this.userId = userId;
+    this.topic = topic;
+  }
 
-    @PrePersist
-    protected void onCreate() {
-        OffsetDateTime now = OffsetDateTime.now();
-        if (createdAt == null) createdAt = now;
-        updatedAt = now;
-    }
+  @PrePersist
+  protected void onCreate() {
+    OffsetDateTime now = OffsetDateTime.now();
+    if (createdAt == null) createdAt = now;
+    updatedAt = now;
+  }
 
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = OffsetDateTime.now();
-    }
+  @PreUpdate
+  protected void onUpdate() {
+    updatedAt = OffsetDateTime.now();
+  }
 }

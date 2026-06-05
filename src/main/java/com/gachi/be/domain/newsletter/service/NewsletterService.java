@@ -46,6 +46,6 @@ public interface NewsletterService {
   /** 홈화면 최근 7일 가정통신문 조회. */
   NewsletterRecentResponse getRecent(Long userId);
 
-  /**자녀와의 대화 주제 추천 조회 */
+  /** 자녀와의 대화 주제 추천 조회 */
   ConversationTopicResponse getConversationTopics(Long userId, Long newsletterId);
 }

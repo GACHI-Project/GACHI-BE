@@ -42,7 +42,7 @@ public class NewsletterController {
   /**
    * 가정통신문 업로드 API.
    *
-   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -315,8 +315,8 @@ public class NewsletterController {
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
 
-      ConversationTopicResponse response =
-          newsletterService.getConversationTopics(userId, newsletterId);
-      return ApiResponse.success(SuccessCode.NEWSLETTER_CONVERSATION_TOPICS_SUCCESS, response);
+    ConversationTopicResponse response =
+        newsletterService.getConversationTopics(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_CONVERSATION_TOPICS_SUCCESS, response);
   }
 }

@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ConversationTopicRepository extends JpaRepository<ConversationTopic, Long> {
 
-    List<ConversationTopic> findAllByNewsletterIdOrderByIdAsc(Long newsletterId);
+  List<ConversationTopic> findAllByNewsletterIdOrderByIdAsc(Long newsletterId);
 }

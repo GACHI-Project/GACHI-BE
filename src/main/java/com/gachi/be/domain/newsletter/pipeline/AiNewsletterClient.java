@@ -140,10 +140,19 @@ public class AiNewsletterClient {
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record AnalysisResponse(
-      String title, String summary, List<ExtractedItem> items, List<ConversationTopicItem> conversationTopics, Map<String, Object> meta) {
+      String title,
+      String summary,
+      List<ExtractedItem> items,
+      List<ConversationTopicItem> conversationTopics,
+      Map<String, Object> meta) {
 
     AnalysisResponse normalized() {
-      return new AnalysisResponse(title, summary, items != null ? items : List.of(),conversationTopics != null ? conversationTopics : List.of(), meta);
+      return new AnalysisResponse(
+          title,
+          summary,
+          items != null ? items : List.of(),
+          conversationTopics != null ? conversationTopics : List.of(),
+          meta);
     }
   }
 

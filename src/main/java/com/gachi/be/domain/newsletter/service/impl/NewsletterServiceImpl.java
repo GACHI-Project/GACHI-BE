@@ -8,6 +8,7 @@ import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.child.entity.Child;
 import com.gachi.be.domain.child.repository.ChildRepository;
 import com.gachi.be.domain.newsletter.dto.response.*;
+import com.gachi.be.domain.newsletter.dto.response.ConversationTopicResponse;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse.ChecklistItem;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterListResponse.NewsletterItem;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterRecentResponse.DateGroup;
@@ -17,7 +18,6 @@ import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterPipelineService;
 import com.gachi.be.domain.newsletter.repository.ConversationTopicRepository;
-import com.gachi.be.domain.newsletter.dto.response.ConversationTopicResponse;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.newsletter.service.NewsletterService;
 import com.gachi.be.domain.user.entity.User;
@@ -466,20 +466,20 @@ public class NewsletterServiceImpl implements NewsletterService {
   @Transactional(readOnly = true)
   public ConversationTopicResponse getConversationTopics(Long userId, Long newsletterId) {
 
-      // 소유권 검증
-      Newsletter newsletter =
-          newsletterRepository
-              .findById(newsletterId)
-              .orElseThrow(() -> new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND));
+    // 소유권 검증
+    Newsletter newsletter =
+        newsletterRepository
+            .findById(newsletterId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND));
 
-      if (!newsletter.getUserId().equals(userId)) {
-          throw new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND);
-      }
+    if (!newsletter.getUserId().equals(userId)) {
+      throw new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND);
+    }
 
-      List<ConversationTopic> topics =
-          conversationTopicRepository.findAllByNewsletterIdOrderByIdAsc(newsletterId);
+    List<ConversationTopic> topics =
+        conversationTopicRepository.findAllByNewsletterIdOrderByIdAsc(newsletterId);
 
-      return ConversationTopicResponse.from(topics);
+    return ConversationTopicResponse.from(topics);
   }
 
   /** 조회된 newsletter 목록에서 캘린더 등록된 newsletterId 집합을 반환 */
