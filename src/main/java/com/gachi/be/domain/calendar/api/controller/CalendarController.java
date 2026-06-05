@@ -11,9 +11,7 @@ import com.gachi.be.domain.calendar.service.ElementaryTimetableQueryService;
 import com.gachi.be.domain.calendar.service.SchoolMealQueryService;
 import com.gachi.be.domain.calendar.service.SchoolScheduleQueryService;
 import com.gachi.be.global.api.ApiResponse;
-import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.code.SuccessCode;
-import com.gachi.be.global.exception.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -21,7 +19,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -38,8 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/calendars")
 public class CalendarController {
-  private static final long MAX_SCHOOL_QUERY_RANGE_DAYS = 366L;
-
   private final CalendarQueryService calendarQueryService;
   private final SchoolScheduleQueryService schoolScheduleQueryService;
   private final SchoolMealQueryService schoolMealQueryService;
@@ -132,7 +127,6 @@ public class CalendarController {
           @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate toDate) {
 
-    validateSchoolQueryRange(fromDate, toDate);
     SchoolScheduleCalendarResponse response =
         schoolScheduleQueryService.getSchoolSchedules(userId, fromDate, toDate);
     return ApiResponse.success(SuccessCode.CALENDAR_SCHOOL_SCHEDULE_SUCCESS, response);
@@ -158,7 +152,6 @@ public class CalendarController {
           @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate toDate) {
 
-    validateSchoolQueryRange(fromDate, toDate);
     SchoolMealCalendarResponse response =
         schoolMealQueryService.getSchoolMeals(userId, fromDate, toDate);
     return ApiResponse.success(SuccessCode.CALENDAR_SCHOOL_MEAL_SUCCESS, response);
@@ -184,18 +177,8 @@ public class CalendarController {
           @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate toDate) {
 
-    validateSchoolQueryRange(fromDate, toDate);
     ElementaryTimetableCalendarResponse response =
         elementaryTimetableQueryService.getElementaryTimetables(userId, fromDate, toDate);
     return ApiResponse.success(SuccessCode.CALENDAR_ELEMENTARY_TIMETABLE_SUCCESS, response);
-  }
-
-  private void validateSchoolQueryRange(LocalDate fromDate, LocalDate toDate) {
-    if (fromDate.isAfter(toDate)) {
-      throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "시작일은 종료일보다 이전이어야 합니다.");
-    }
-    if (ChronoUnit.DAYS.between(fromDate, toDate) > MAX_SCHOOL_QUERY_RANGE_DAYS) {
-      throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "최대 1년까지 조회 가능합니다.");
-    }
   }
 }

@@ -43,11 +43,11 @@ public class NeisProperties {
   }
 
   public String getMealApiKey() {
-    return mealApiKey;
+    return hasText(mealApiKey) ? mealApiKey.trim() : null;
   }
 
   public String getTimetableApiKey() {
-    return timetableApiKey;
+    return hasText(timetableApiKey) ? timetableApiKey.trim() : null;
   }
 
   private boolean hasText(String value) {

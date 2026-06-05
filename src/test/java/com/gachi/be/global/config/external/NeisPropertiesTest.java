@@ -41,8 +41,8 @@ class NeisPropertiesTest {
   void mealAndTimetableKeysDoNotFallBackToLegacyCommonKey() {
     NeisProperties properties = new NeisProperties();
     properties.setApiKey("legacy-key");
-    properties.setMealApiKey("meal-key");
-    properties.setTimetableApiKey("timetable-key");
+    properties.setMealApiKey(" meal-key ");
+    properties.setTimetableApiKey(" timetable-key ");
 
     assertThat(properties.getMealApiKey()).isEqualTo("meal-key");
     assertThat(properties.getTimetableApiKey()).isEqualTo("timetable-key");
@@ -51,6 +51,6 @@ class NeisPropertiesTest {
     properties.setTimetableApiKey(" ");
 
     assertThat(properties.getMealApiKey()).isNull();
-    assertThat(properties.getTimetableApiKey()).isBlank();
+    assertThat(properties.getTimetableApiKey()).isNull();
   }
 }

@@ -242,7 +242,8 @@ public class AuthServiceImpl implements AuthService {
 
     return new EmailSendResponse(
         authProperties.getEmail().getCodeTtlSeconds(),
-        authProperties.getEmail().getResendCooldownSeconds());
+        authProperties.getEmail().getResendCooldownSeconds(),
+        shouldExposeVerificationCodeForLocalTest() ? code : null);
   }
 
   @Override
@@ -347,6 +348,11 @@ public class AuthServiceImpl implements AuthService {
     if (user.isPasswordChangeRequired()) {
       throw new BusinessException(ErrorCode.AUTH_PASSWORD_CHANGE_REQUIRED);
     }
+  }
+
+  private boolean shouldExposeVerificationCodeForLocalTest() {
+    return authMailService instanceof NoopAuthMailService
+        && "memory".equalsIgnoreCase(authProperties.getEmail().getStore());
   }
 
   private boolean containsForbiddenPattern(

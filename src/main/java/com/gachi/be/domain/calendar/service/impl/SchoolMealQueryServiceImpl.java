@@ -50,7 +50,8 @@ public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
     if (toDate.isBefore(fromDate)) {
       throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "종료일은 시작일보다 빠를 수 없습니다.");
     }
-    if (ChronoUnit.DAYS.between(fromDate, toDate) > MAX_SCHOOL_MEAL_RANGE_DAYS) {
+    long requestedDays = ChronoUnit.DAYS.between(fromDate, toDate) + 1;
+    if (requestedDays > MAX_SCHOOL_MEAL_RANGE_DAYS) {
       throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "최대 1년까지 조회 가능합니다.");
     }
   }
