@@ -6,7 +6,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ChildRepository extends JpaRepository<Child, Long> {
-    List<Child> findAllByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(Long userId);
+  List<Child> findAllByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(Long userId);
 
   long countByUserId(Long userId);
 
