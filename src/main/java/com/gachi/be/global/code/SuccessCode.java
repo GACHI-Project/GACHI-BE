@@ -19,6 +19,8 @@ public enum SuccessCode {
   AUTH_CHECK_PHONE_NUMBER_AVAILABLE(HttpStatus.OK, "AUTH2007", "사용 가능한 전화번호입니다."),
   CHILD_CREATE_SUCCESS(HttpStatus.CREATED, "CHILD2011", "자녀 정보 등록에 성공하였습니다."),
   CHILD_GET_LIST_SUCCESS(HttpStatus.OK, "CHILD2001", "내 자녀 목록 조회에 성공하였습니다."),
+  CHILD_UPDATE_SUCCESS(HttpStatus.OK, "CHILD2002", "자녀 정보 수정에 성공하였습니다."),
+  CHILD_DELETE_SUCCESS(HttpStatus.OK, "CHILD2003", "자녀 삭제에 성공하였습니다."),
   SCHOOL_SEARCH_SUCCESS(HttpStatus.OK, "SCH2001", "학교 검색 결과 조회에 성공하였습니다."),
   NEWSLETTER_UPLOAD_SUCCESS(HttpStatus.CREATED, "NL2011", "업로드가 시작되었습니다."),
   NEWSLETTER_RETRY_ACCEPTED(HttpStatus.ACCEPTED, "NL2021", "가정통신문 분석 재시도가 시작되었습니다."),
