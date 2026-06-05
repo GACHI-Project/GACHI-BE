@@ -6,6 +6,7 @@ import com.gachi.be.domain.child.dto.response.ChildResponse;
 import com.gachi.be.domain.child.service.ChildService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,13 @@ public class ChildController {
         SuccessCode.CHILD_GET_LIST_SUCCESS, childService.getChildren(authorizationHeader));
   }
 
+  @Operation(
+      summary = "자녀 정보를 수정합니다.",
+      description =
+          """
+      자녀의 이름, 학교, 학교 코드, 캘린더 색상 등의 정보들을 수정합니다.
+      수정된 자녀의 이름, 캘린더 색상들은 동기화 해서 표시해줍니다.
+      """)
   @PatchMapping("/{childId}")
   public ApiResponse<Void> updateChild(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
@@ -44,6 +52,12 @@ public class ChildController {
     return ApiResponse.success(SuccessCode.CHILD_UPDATE_SUCCESS, null);
   }
 
+  @Operation(
+      summary = "자녀 정보를 삭제합니다.",
+      description =
+          """
+      불필요한 자녀 정보를 삭제합니다. 정보를 삭제하면서 일정이나 가정통신문 문서들까지 전부 삭제합니다.
+      """)
   @DeleteMapping("/{childId}")
   public ApiResponse<Void> deleteChild(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,

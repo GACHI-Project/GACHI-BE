@@ -301,4 +301,22 @@ public class NewsletterController {
         calendarRegisterService.register(userId, newsletterId, request);
     return ApiResponse.success(SuccessCode.CALENDAR_REGISTER_SUCCESS, response);
   }
+
+  /** 대화 주제 조회 추천 */
+  @Operation(
+      summary = "대화 주제 조회",
+      description =
+          """
+      AI가 가정통신문에서 추출한 자녀와의 대화 주제 목록을 반환합니다. (최대 3개)
+      자녀와 직접 연관된 내용만 추출되며, 대화 주제가 없으면 빈 배열을 반환합니다.
+      """)
+  @GetMapping("/{newsletterId}/conversation-topics")
+  public ApiResponse<ConversationTopicResponse> getConversationTopics(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+
+    ConversationTopicResponse response =
+        newsletterService.getConversationTopics(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_CONVERSATION_TOPICS_SUCCESS, response);
+  }
 }
