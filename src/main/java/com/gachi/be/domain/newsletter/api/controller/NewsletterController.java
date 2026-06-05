@@ -42,7 +42,7 @@ public class NewsletterController {
   /**
    * 가정통신문 업로드 API.
    *
-   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
