@@ -1,6 +1,5 @@
 package com.gachi.be.domain.child.service;
 
-// import 추가 (파일 상단)
 import com.gachi.be.domain.auth.service.AuthenticatedUserResolver;
 import com.gachi.be.domain.calendar.repository.CalendarEventRepository;
 import com.gachi.be.domain.child.dto.request.ChildCreateRequest;

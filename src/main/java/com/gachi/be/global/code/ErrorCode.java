@@ -243,6 +243,19 @@ public enum ErrorCode {
       "AI 서버 /ai/chat/messages 호출 실패",
       ErrorLogLevel.ERROR),
 
+  SCHOOL_GUIDE_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "SG4041",
+      "해당 FAQ를 찾을 수 없습니다.",
+      "faqId에 해당하는 school_guide 레코드 없음",
+      ErrorLogLevel.INFO),
+  SCHOOL_GUIDE_FILTER_CONFLICT(
+      HttpStatus.BAD_REQUEST,
+      "SG4001",
+      "카테고리 필터와 검색어는 동시에 사용할 수 없습니다.",
+      "category + search 동시 전달",
+      ErrorLogLevel.WARN),
+
   EXTERNAL_API_ERROR(
       HttpStatus.BAD_GATEWAY,
       "EXT5021",
