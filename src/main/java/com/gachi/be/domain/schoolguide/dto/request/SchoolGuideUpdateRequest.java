@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class SchoolGuideUpdateRequest {
 
-    private SchoolGuideCategory category;
-    private String question;
-    private String answer;
+  private SchoolGuideCategory category;
+  private String question;
+  private String answer;
 }

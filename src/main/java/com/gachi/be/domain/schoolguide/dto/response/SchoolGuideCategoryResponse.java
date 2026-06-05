@@ -9,20 +9,20 @@ import lombok.Getter;
 @Builder
 public class SchoolGuideCategoryResponse {
 
-    private List<CategoryItem> categories;
+  private List<CategoryItem> categories;
 
-    public static SchoolGuideCategoryResponse of(List<CategoryItem> categories) {
-        return SchoolGuideCategoryResponse.builder().categories(categories).build();
+  public static SchoolGuideCategoryResponse of(List<CategoryItem> categories) {
+    return SchoolGuideCategoryResponse.builder().categories(categories).build();
+  }
+
+  @Getter
+  @Builder
+  public static class CategoryItem {
+    private SchoolGuideCategory category;
+    private long count;
+
+    public static CategoryItem of(SchoolGuideCategory category, long count) {
+      return CategoryItem.builder().category(category).count(count).build();
     }
-
-    @Getter
-    @Builder
-    public static class CategoryItem {
-        private SchoolGuideCategory category;
-        private long count;
-
-        public static CategoryItem of(SchoolGuideCategory category, long count) {
-            return CategoryItem.builder().category(category).count(count).build();
-        }
-    }
+  }
 }

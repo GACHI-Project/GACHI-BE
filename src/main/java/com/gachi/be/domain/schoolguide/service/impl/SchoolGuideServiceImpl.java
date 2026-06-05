@@ -27,121 +27,119 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SchoolGuideServiceImpl implements SchoolGuideService {
 
-    private final SchoolGuideRepository schoolGuideRepository;
+  private final SchoolGuideRepository schoolGuideRepository;
 
-    /** 카테고리별 FAQ 개수 조회. */
-    @Override
-    @Transactional(readOnly = true)
-    public SchoolGuideCategoryResponse getCategoryCounts() {
+  /** 카테고리별 FAQ 개수 조회. */
+  @Override
+  @Transactional(readOnly = true)
+  public SchoolGuideCategoryResponse getCategoryCounts() {
 
-        // DB에서 카테고리별 개수 집계
-        List<Object[]> rawCounts = schoolGuideRepository.countByCategory();
+    // DB에서 카테고리별 개수 집계
+    List<Object[]> rawCounts = schoolGuideRepository.countByCategory();
 
-        // category → count 맵 생성
-        Map<SchoolGuideCategory, Long> countMap =
-            rawCounts.stream()
-                .collect(
-                    Collectors.toMap(
-                        row -> (SchoolGuideCategory) row[0], row -> (Long) row[1]));
+    // category → count 맵 생성
+    Map<SchoolGuideCategory, Long> countMap =
+        rawCounts.stream()
+            .collect(Collectors.toMap(row -> (SchoolGuideCategory) row[0], row -> (Long) row[1]));
 
-        List<CategoryItem> items =
-            Arrays.stream(SchoolGuideCategory.values())
-                .map(cat -> CategoryItem.of(cat, countMap.getOrDefault(cat, 0L)))
-                .toList();
+    List<CategoryItem> items =
+        Arrays.stream(SchoolGuideCategory.values())
+            .map(cat -> CategoryItem.of(cat, countMap.getOrDefault(cat, 0L)))
+            .toList();
 
-        return SchoolGuideCategoryResponse.of(items);
+    return SchoolGuideCategoryResponse.of(items);
+  }
+
+  /** 주간 인기 질문 TOP 2 조회. */
+  @Override
+  @Transactional(readOnly = true)
+  public SchoolGuidePopularResponse getPopularFaqs() {
+    List<SchoolGuide> faqs = schoolGuideRepository.findTop2ByOrderByWeeklyViewCountDesc();
+    return SchoolGuidePopularResponse.of(faqs);
+  }
+
+  /** FAQ 목록 조회 (카테고리 필터 or 검색). */
+  @Override
+  @Transactional(readOnly = true)
+  public SchoolGuideListResponse getFaqs(SchoolGuideCategory category, String search) {
+
+    List<SchoolGuide> faqs;
+
+    if (category != null) {
+      faqs = schoolGuideRepository.findByCategoryOrderByCreatedAtAsc(category);
+    } else if (search != null && !search.isBlank()) {
+      faqs = schoolGuideRepository.findByQuestionContainingIgnoreCaseOrderByCreatedAtAsc(search);
+    } else {
+      faqs = schoolGuideRepository.findAll();
     }
 
-    /** 주간 인기 질문 TOP 2 조회. */
-    @Override
-    @Transactional(readOnly = true)
-    public SchoolGuidePopularResponse getPopularFaqs() {
-        List<SchoolGuide> faqs = schoolGuideRepository.findTop2ByOrderByWeeklyViewCountDesc();
-        return SchoolGuidePopularResponse.of(faqs);
-    }
+    return SchoolGuideListResponse.of(faqs);
+  }
 
-    /** FAQ 목록 조회 (카테고리 필터 or 검색). */
-    @Override
-    @Transactional(readOnly = true)
-    public SchoolGuideListResponse getFaqs(SchoolGuideCategory category, String search) {
+  /** FAQ 상세 조회 + weekly_view_count 증가. */
+  @Override
+  @Transactional
+  public SchoolGuideDetailResponse getFaqDetail(Long faqId) {
 
-        List<SchoolGuide> faqs;
+    SchoolGuide faq =
+        schoolGuideRepository
+            .findById(faqId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.SCHOOL_GUIDE_NOT_FOUND));
 
-        if (category != null) {
-            faqs = schoolGuideRepository.findByCategoryOrderByCreatedAtAsc(category);
-        } else if (search != null && !search.isBlank()) {
-            faqs = schoolGuideRepository.findByQuestionContainingIgnoreCaseOrderByCreatedAtAsc(search);
-        } else {
-            faqs = schoolGuideRepository.findAll();
-        }
+    faq.incrementWeeklyViewCount();
 
-        return SchoolGuideListResponse.of(faqs);
-    }
+    log.debug("[SchoolGuide] 상세 조회. faqId={}, weeklyViewCount={}", faqId, faq.getWeeklyViewCount());
 
-    /** FAQ 상세 조회 + weekly_view_count 증가. */
-    @Override
-    @Transactional
-    public SchoolGuideDetailResponse getFaqDetail(Long faqId) {
+    return SchoolGuideDetailResponse.of(faq);
+  }
 
-        SchoolGuide faq =
-            schoolGuideRepository
-                .findById(faqId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCHOOL_GUIDE_NOT_FOUND));
+  /** FAQ 등록. */
+  @Override
+  @Transactional
+  public Long createFaq(SchoolGuideCreateRequest request) {
 
-        faq.incrementWeeklyViewCount();
+    SchoolGuide faq =
+        SchoolGuide.builder()
+            .category(request.getCategory())
+            .question(request.getQuestion())
+            .answer(request.getAnswer())
+            .build();
 
-        log.debug("[SchoolGuide] 상세 조회. faqId={}, weeklyViewCount={}", faqId, faq.getWeeklyViewCount());
+    SchoolGuide saved = schoolGuideRepository.save(faq);
+    log.info("[SchoolGuide] FAQ 등록. faqId={}, category={}", saved.getId(), saved.getCategory());
+    return saved.getId();
+  }
 
-        return SchoolGuideDetailResponse.of(faq);
-    }
+  /** FAQ 수정. */
+  @Override
+  @Transactional
+  public void updateFaq(Long faqId, SchoolGuideUpdateRequest request) {
 
-    /** FAQ 등록. */
-    @Override
-    @Transactional
-    public Long createFaq(SchoolGuideCreateRequest request) {
+    SchoolGuide faq =
+        schoolGuideRepository
+            .findById(faqId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.SCHOOL_GUIDE_NOT_FOUND));
 
-        SchoolGuide faq =
-            SchoolGuide.builder()
-                .category(request.getCategory())
-                .question(request.getQuestion())
-                .answer(request.getAnswer())
-                .build();
+    if (request.getCategory() != null) faq.updateCategory(request.getCategory());
+    if (request.getQuestion() != null && !request.getQuestion().isBlank())
+      faq.updateQuestion(request.getQuestion());
+    if (request.getAnswer() != null && !request.getAnswer().isBlank())
+      faq.updateAnswer(request.getAnswer());
 
-        SchoolGuide saved = schoolGuideRepository.save(faq);
-        log.info("[SchoolGuide] FAQ 등록. faqId={}, category={}", saved.getId(), saved.getCategory());
-        return saved.getId();
-    }
+    log.info("[SchoolGuide] FAQ 수정. faqId={}", faqId);
+  }
 
-    /** FAQ 수정. */
-    @Override
-    @Transactional
-    public void updateFaq(Long faqId, SchoolGuideUpdateRequest request) {
+  /** FAQ 삭제. */
+  @Override
+  @Transactional
+  public void deleteFaq(Long faqId) {
 
-        SchoolGuide faq =
-            schoolGuideRepository
-                .findById(faqId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCHOOL_GUIDE_NOT_FOUND));
+    SchoolGuide faq =
+        schoolGuideRepository
+            .findById(faqId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.SCHOOL_GUIDE_NOT_FOUND));
 
-        if (request.getCategory() != null) faq.updateCategory(request.getCategory());
-        if (request.getQuestion() != null && !request.getQuestion().isBlank())
-            faq.updateQuestion(request.getQuestion());
-        if (request.getAnswer() != null && !request.getAnswer().isBlank())
-            faq.updateAnswer(request.getAnswer());
-
-        log.info("[SchoolGuide] FAQ 수정. faqId={}", faqId);
-    }
-
-    /** FAQ 삭제. */
-    @Override
-    @Transactional
-    public void deleteFaq(Long faqId) {
-
-        SchoolGuide faq =
-            schoolGuideRepository
-                .findById(faqId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SCHOOL_GUIDE_NOT_FOUND));
-
-        schoolGuideRepository.delete(faq);
-        log.info("[SchoolGuide] FAQ 삭제. faqId={}", faqId);
-    }
+    schoolGuideRepository.delete(faq);
+    log.info("[SchoolGuide] FAQ 삭제. faqId={}", faqId);
+  }
 }

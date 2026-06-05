@@ -9,17 +9,17 @@ import lombok.Getter;
 @Builder
 public class SchoolGuideDetailResponse {
 
-    private Long faqId;
-    private SchoolGuideCategory category;
-    private String question;
-    private String answer;
+  private Long faqId;
+  private SchoolGuideCategory category;
+  private String question;
+  private String answer;
 
-    public static SchoolGuideDetailResponse of(SchoolGuide faq) {
-        return SchoolGuideDetailResponse.builder()
-            .faqId(faq.getId())
-            .category(faq.getCategory())
-            .question(faq.getQuestion())
-            .answer(faq.getAnswer())
-            .build();
-    }
+  public static SchoolGuideDetailResponse of(SchoolGuide faq) {
+    return SchoolGuideDetailResponse.builder()
+        .faqId(faq.getId())
+        .category(faq.getCategory())
+        .question(faq.getQuestion())
+        .answer(faq.getAnswer())
+        .build();
+  }
 }
