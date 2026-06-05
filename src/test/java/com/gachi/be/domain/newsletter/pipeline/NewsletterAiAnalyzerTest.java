@@ -16,6 +16,7 @@ import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.AnalysisResponse;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisResult;
+import com.gachi.be.domain.newsletter.repository.ConversationTopicRepository;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import java.time.LocalDate;
 import java.util.List;
@@ -37,6 +38,7 @@ class NewsletterAiAnalyzerTest {
   @Mock private ChecklistRepository checklistRepository;
   @Mock private CalendarPreviewRedisService calendarPreviewRedisService;
   @Mock private NewsletterRepository newsletterRepository;
+  @Mock private ConversationTopicRepository conversationTopicRepository;
 
   @Captor private ArgumentCaptor<List<Checklist>> checklistsCaptor;
   @Captor private ArgumentCaptor<List<CalendarPreviewEvent>> previewEventsCaptor;
@@ -70,7 +72,7 @@ class NewsletterAiAnalyzerTest {
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
-        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), Map.of()));
+        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), List.of(), Map.of()));
     when(checklistRepository.saveAll(anyList()))
         .thenAnswer(
             invocation -> {
@@ -133,7 +135,7 @@ class NewsletterAiAnalyzerTest {
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
-        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), Map.of()));
+        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), List.of(), Map.of()));
     when(checklistRepository.saveAll(anyList()))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -169,7 +171,7 @@ class NewsletterAiAnalyzerTest {
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
-        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), Map.of()));
+        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), List.of(), Map.of()));
     when(checklistRepository.saveAll(anyList()))
         .thenAnswer(
             invocation -> {
@@ -202,7 +204,7 @@ class NewsletterAiAnalyzerTest {
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("가정통신문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of()))
-        .thenReturn(new AnalysisResponse("  ", "  ", List.of(), Map.of()));
+        .thenReturn(new AnalysisResponse("  ", "  ", List.of(), List.of(), Map.of()));
 
     AiAnalysisResult result =
         newsletterAiAnalyzer.analyze(newsletterId, "가정통신문 제목\n본문입니다.", "번역 요약 대상", "KO");
@@ -226,7 +228,7 @@ class NewsletterAiAnalyzerTest {
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of()))
-        .thenReturn(new AnalysisResponse("AI 제목", " ", List.of(), Map.of()));
+        .thenReturn(new AnalysisResponse("AI 제목", " ", List.of(), List.of(), Map.of()));
 
     AiAnalysisResult result =
         newsletterAiAnalyzer.analyze(newsletterId, "원문 제목\n본문입니다.", "번역 요약 대상", "KO");
@@ -250,7 +252,7 @@ class NewsletterAiAnalyzerTest {
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of()))
-        .thenReturn(new AnalysisResponse("", "AI 요약", List.of(), Map.of()));
+        .thenReturn(new AnalysisResponse("", "AI 요약", List.of(), List.of(), Map.of()));
 
     AiAnalysisResult result =
         newsletterAiAnalyzer.analyze(newsletterId, "원문 제목\n본문입니다.", "번역 요약 대상", "KO");

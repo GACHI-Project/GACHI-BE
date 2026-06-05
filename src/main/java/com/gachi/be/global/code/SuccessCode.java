@@ -19,6 +19,8 @@ public enum SuccessCode {
   AUTH_CHECK_PHONE_NUMBER_AVAILABLE(HttpStatus.OK, "AUTH2007", "사용 가능한 전화번호입니다."),
   CHILD_CREATE_SUCCESS(HttpStatus.CREATED, "CHILD2011", "자녀 정보 등록에 성공하였습니다."),
   CHILD_GET_LIST_SUCCESS(HttpStatus.OK, "CHILD2001", "내 자녀 목록 조회에 성공하였습니다."),
+  CHILD_UPDATE_SUCCESS(HttpStatus.OK, "CHILD2002", "자녀 정보 수정에 성공하였습니다."),
+  CHILD_DELETE_SUCCESS(HttpStatus.OK, "CHILD2003", "자녀 삭제에 성공하였습니다."),
   SCHOOL_SEARCH_SUCCESS(HttpStatus.OK, "SCH2001", "학교 검색 결과 조회에 성공하였습니다."),
   NEWSLETTER_UPLOAD_SUCCESS(HttpStatus.CREATED, "NL2011", "업로드가 시작되었습니다."),
   NEWSLETTER_RETRY_ACCEPTED(HttpStatus.ACCEPTED, "NL2021", "가정통신문 분석 재시도가 시작되었습니다."),
@@ -29,6 +31,7 @@ public enum SuccessCode {
   NEWSLETTER_DETAIL_SUCCESS(HttpStatus.OK, "NL2005", "가정통신문 상세 조회에 성공하였습니다."),
   NEWSLETTER_LIST_SUCCESS(HttpStatus.OK, "NL2006", "가정통신문 목록 조회에 성공하였습니다."),
   NEWSLETTER_RECENT_SUCCESS(HttpStatus.OK, "NL2007", "최근 가정통신문 조회에 성공하였습니다."),
+  NEWSLETTER_CONVERSATION_TOPICS_SUCCESS(HttpStatus.OK, "NL2008", "대화 주제 조회에 성공하였습니다."),
   CALENDAR_PREVIEW_SUCCESS(HttpStatus.OK, "CAL2001", "캘린더 일정 미리보기 조회에 성공하였습니다."),
   CALENDAR_PREVIEW_MOCK_SUCCESS(HttpStatus.OK, "CAL2000", "캘린더 미리보기 더미 데이터가 Redis에 주입되었습니다."),
   CALENDAR_DATES_UPDATED(HttpStatus.OK, "CAL2002", "일정 날짜 수정에 성공하였습니다."),
@@ -46,7 +49,8 @@ public enum SuccessCode {
   NOTIFICATION_UNREAD_COUNT_SUCCESS(HttpStatus.OK, "NOTI2002", "미읽음 알림 수 조회에 성공하였습니다."),
   NOTIFICATION_READ_SUCCESS(HttpStatus.OK, "NOTI2003", "알림 읽음 처리에 성공하였습니다."),
   NOTIFICATION_PUSH_TOKEN_REGISTERED(HttpStatus.OK, "NOTI2004", "푸시 토큰 등록에 성공하였습니다."),
-  NOTIFICATION_PUSH_TOKEN_DELETED(HttpStatus.OK, "NOTI2005", "푸시 토큰 삭제에 성공하였습니다.");
+  NOTIFICATION_PUSH_TOKEN_DELETED(HttpStatus.OK, "NOTI2005", "푸시 토큰 삭제에 성공하였습니다."),
+  CHAT_MESSAGE_SUCCESS(HttpStatus.OK, "CHAT2001", "채팅 응답에 성공하였습니다.");
 
   private final HttpStatus httpStatus;
   private final String code;
