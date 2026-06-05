@@ -8,6 +8,7 @@ import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.AnalysisResponse;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
+import com.gachi.be.domain.newsletter.repository.ConversationTopicRepository;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -32,6 +33,7 @@ public class NewsletterAiAnalyzer {
   private final CalendarPreviewRedisService calendarPreviewRedisService;
   private final NewsletterRepository newsletterRepository;
   private final PapagoTranslateClient papagoTranslateClient;
+  private final ConversationTopicRepository conversationTopicRepository;
 
   public AiAnalysisResult analyze(
       Long newsletterId, String originalText, String translatedText, String language) {
@@ -60,6 +62,8 @@ public class NewsletterAiAnalyzer {
           "[AiAnalyzer] 캘린더 preview 저장 실패. 분석 결과 저장은 계속 진행합니다. newsletterId={}", newsletterId, e);
     }
 
+    saveConversationTopics(newsletterId, newsletter.getUserId(),
+        analysisResponse.conversationTopics(), language);
     String rawTitle = normalizeTitle(analysisResponse.title(), originalText);
     String title = translateIfNeeded(rawTitle, language, "title", newsletterId);
     String summary = normalizeSummary(analysisResponse.summary(), translatedText, originalText);
@@ -281,4 +285,39 @@ public class NewsletterAiAnalyzer {
   private record SavedExtractedItem(ExtractedItem item, Checklist checklist) {}
 
   public record AiAnalysisResult(String title, String summary) {}
+
+  private void saveConversationTopics(
+      Long newsletterId,
+      Long userId,
+      List<AiNewsletterClient.ConversationTopicItem> topicItems,
+      String language) {
+
+      if (topicItems == null || topicItems.isEmpty()) {
+          log.debug("[AiAnalyzer] 대화 주제 없음. newsletterId={}", newsletterId);
+          return;
+      }
+
+      List<com.gachi.be.domain.newsletter.entity.ConversationTopic> entities =
+          topicItems.stream()
+              .filter(item -> item.topic() != null && !item.topic().isBlank())
+              .map(
+                  item -> {
+                      // AI 서버가 한국어로 반환 → 파파고로 번역 (KO이면 원문 유지)
+                      String translated =
+                          translateIfNeeded(item.topic().trim(), language, "conversationTopic",
+                              newsletterId);
+                      return com.gachi.be.domain.newsletter.entity.ConversationTopic.builder()
+                          .newsletterId(newsletterId)
+                          .userId(userId)
+                          .topic(translated)
+                          .build();
+                  })
+              .toList();
+
+      if (!entities.isEmpty()) {
+          conversationTopicRepository.saveAll(entities);
+          log.debug(
+              "[AiAnalyzer] 대화 주제 {}개 저장 완료. newsletterId={}", entities.size(), newsletterId);
+        }
+  }
 }

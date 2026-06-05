@@ -469,12 +469,15 @@ public class NewsletterServiceImpl implements NewsletterService {
       // 소유권 검증
       Newsletter newsletter =
           newsletterRepository
-              .findByIdAndUserId(newsletterId, userId)
-              .orElseThrow(
-                  () -> new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND));
+              .findById(newsletterId)
+              .orElseThrow(() -> new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND));
+
+      if (!newsletter.getUserId().equals(userId)) {
+          throw new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND);
+      }
 
       List<ConversationTopic> topics =
-          conversationTopicRepository.findAllByNewsletterIdOrderByIdAsc(newsletter.getId());
+          conversationTopicRepository.findAllByNewsletterIdOrderByIdAsc(newsletterId);
 
       return ConversationTopicResponse.from(topics);
   }
