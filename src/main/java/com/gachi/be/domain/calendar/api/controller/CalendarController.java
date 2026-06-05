@@ -3,8 +3,12 @@ package com.gachi.be.domain.calendar.api.controller;
 import com.gachi.be.domain.calendar.dto.response.CalendarDailyResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarMonthlyResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarWeeklyResponse;
+import com.gachi.be.domain.calendar.dto.response.ElementaryTimetableCalendarResponse;
+import com.gachi.be.domain.calendar.dto.response.SchoolMealCalendarResponse;
 import com.gachi.be.domain.calendar.dto.response.SchoolScheduleCalendarResponse;
 import com.gachi.be.domain.calendar.service.CalendarQueryService;
+import com.gachi.be.domain.calendar.service.ElementaryTimetableQueryService;
+import com.gachi.be.domain.calendar.service.SchoolMealQueryService;
 import com.gachi.be.domain.calendar.service.SchoolScheduleQueryService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.ErrorCode;
@@ -34,10 +38,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/calendars")
 public class CalendarController {
-  private static final long MAX_SCHOOL_SCHEDULE_RANGE_DAYS = 366L;
+  private static final long MAX_SCHOOL_QUERY_RANGE_DAYS = 366L;
 
   private final CalendarQueryService calendarQueryService;
   private final SchoolScheduleQueryService schoolScheduleQueryService;
+  private final SchoolMealQueryService schoolMealQueryService;
+  private final ElementaryTimetableQueryService elementaryTimetableQueryService;
 
   /** 별 일정 마커 조회 API. -> 자녀 색 표현 위함 */
   @Operation(
@@ -126,17 +132,69 @@ public class CalendarController {
           @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate toDate) {
 
-    validateSchoolScheduleRange(fromDate, toDate);
+    validateSchoolQueryRange(fromDate, toDate);
     SchoolScheduleCalendarResponse response =
         schoolScheduleQueryService.getSchoolSchedules(userId, fromDate, toDate);
     return ApiResponse.success(SuccessCode.CALENDAR_SCHOOL_SCHEDULE_SUCCESS, response);
   }
 
-  private void validateSchoolScheduleRange(LocalDate fromDate, LocalDate toDate) {
+  /** 자녀 학교별 NEIS 급식표 조회 API. */
+  @Operation(
+      summary = "자녀 학교 급식표 조회",
+      description =
+          """
+          로그인 사용자의 자녀 학교 식별값으로 NEIS 급식표를 조회합니다.
+          같은 학교를 다니는 자녀는 officeCode + schoolCode 기준으로 하나의 학교 그룹에 묶입니다.
+          """)
+  @GetMapping("/school-meals")
+  public ApiResponse<SchoolMealCalendarResponse> getSchoolMeals(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "조회 시작일 (YYYY-MM-DD)", required = true)
+          @RequestParam
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate fromDate,
+      @Parameter(description = "조회 종료일 (YYYY-MM-DD)", required = true)
+          @RequestParam
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate toDate) {
+
+    validateSchoolQueryRange(fromDate, toDate);
+    SchoolMealCalendarResponse response =
+        schoolMealQueryService.getSchoolMeals(userId, fromDate, toDate);
+    return ApiResponse.success(SuccessCode.CALENDAR_SCHOOL_MEAL_SUCCESS, response);
+  }
+
+  /** 자녀 학교별 NEIS 초등학교 시간표 조회 API. */
+  @Operation(
+      summary = "자녀 학교 초등학교 시간표 조회",
+      description =
+          """
+          로그인 사용자의 자녀 학교 식별값과 학년으로 NEIS 초등학교 시간표를 조회합니다.
+          같은 학교를 다니는 자녀는 officeCode + schoolCode 기준으로 하나의 학교 그룹에 묶입니다.
+          """)
+  @GetMapping("/elementary-timetables")
+  public ApiResponse<ElementaryTimetableCalendarResponse> getElementaryTimetables(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "조회 시작일 (YYYY-MM-DD)", required = true)
+          @RequestParam
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate fromDate,
+      @Parameter(description = "조회 종료일 (YYYY-MM-DD)", required = true)
+          @RequestParam
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate toDate) {
+
+    validateSchoolQueryRange(fromDate, toDate);
+    ElementaryTimetableCalendarResponse response =
+        elementaryTimetableQueryService.getElementaryTimetables(userId, fromDate, toDate);
+    return ApiResponse.success(SuccessCode.CALENDAR_ELEMENTARY_TIMETABLE_SUCCESS, response);
+  }
+
+  private void validateSchoolQueryRange(LocalDate fromDate, LocalDate toDate) {
     if (fromDate.isAfter(toDate)) {
       throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "시작일은 종료일보다 이전이어야 합니다.");
     }
-    if (ChronoUnit.DAYS.between(fromDate, toDate) > MAX_SCHOOL_SCHEDULE_RANGE_DAYS) {
+    if (ChronoUnit.DAYS.between(fromDate, toDate) > MAX_SCHOOL_QUERY_RANGE_DAYS) {
       throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "최대 1년까지 조회 가능합니다.");
     }
   }

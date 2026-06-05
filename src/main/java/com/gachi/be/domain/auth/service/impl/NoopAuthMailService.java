@@ -3,12 +3,12 @@ package com.gachi.be.domain.auth.service.impl;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import lombok.extern.slf4j.Slf4j;
 
-/** SMTP 미설정 환경에서 메일 미발송 사실과 마스킹된 이메일만 로그로 남긴다. */
+/** SMTP 미설정 환경에서 메일 미발송 사실과 인증코드를 로그로 남긴다. */
 @Slf4j
 public class NoopAuthMailService implements AuthMailService {
   @Override
   public void sendVerificationCode(String email, String code) {
-    log.info("Mail sender is not configured. email={}", maskEmail(email));
+    log.info("Mail sender is not configured. email={}, code={}", maskEmail(email), code);
   }
 
   private String maskEmail(String email) {
