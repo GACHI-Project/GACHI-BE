@@ -61,10 +61,10 @@ public class ChildService {
 
   @Transactional(readOnly = true)
   public List<ChildResponse> getChildren(String authorizationHeader) {
-    User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
-    return childRepository.findAllByUserIdOrderByCreatedAtAsc(user.getId()).stream()
-        .map(this::toResponse)
-        .toList();
+      User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
+      return childRepository.findAllByUserIdAndDeletedAtIsNullOrderByCreatedAtAsc(user.getId()).stream()
+          .map(this::toResponse)
+          .toList();
   }
 
   private ChildResponse toResponse(Child child) {
