@@ -8,6 +8,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.util.StringUtils;
 
@@ -20,7 +21,9 @@ public class AuthConfig {
   /** JavaMailSender 존재 여부에 따라 SMTP 발송기 또는 로그 대체 발송기를 선택한다. */
   @Bean
   public AuthMailService authMailService(
-      ObjectProvider<JavaMailSender> javaMailSenderProvider, AuthProperties authProperties) {
+      ObjectProvider<JavaMailSender> javaMailSenderProvider,
+      AuthProperties authProperties,
+      Environment environment) {
     JavaMailSender javaMailSender = javaMailSenderProvider.getIfAvailable();
     if (javaMailSender != null) {
       if (!StringUtils.hasText(authProperties.getEmail().getFromAddress())) {
@@ -32,6 +35,9 @@ public class AuthConfig {
     }
 
     if (authProperties.getEmail().isNoopAllowed()) {
+      if (environment.matchesProfiles("prod")) {
+        throw new IllegalStateException("Noop mail sender is not allowed in production profile.");
+      }
       log.warn("AuthMailService selected: Noop sender (explicitly allowed)");
       return new NoopAuthMailService();
     }

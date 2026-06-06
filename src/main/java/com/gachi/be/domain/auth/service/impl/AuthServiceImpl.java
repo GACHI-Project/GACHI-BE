@@ -242,7 +242,8 @@ public class AuthServiceImpl implements AuthService {
 
     return new EmailSendResponse(
         authProperties.getEmail().getCodeTtlSeconds(),
-        authProperties.getEmail().getResendCooldownSeconds());
+        authProperties.getEmail().getResendCooldownSeconds(),
+        shouldExposeVerificationCodeForLocalTest() ? code : null);
   }
 
   @Override
@@ -347,6 +348,18 @@ public class AuthServiceImpl implements AuthService {
     if (user.isPasswordChangeRequired()) {
       throw new BusinessException(ErrorCode.AUTH_PASSWORD_CHANGE_REQUIRED);
     }
+  }
+
+  /**
+   * 로컬 개발/테스트 환경에서 HTTP 응답에 인증코드를 노출할지 결정한다.
+   *
+   * <p>실제 메일이 발송되지 않는 {@link NoopAuthMailService}이고, 인증코드 저장소가 인메모리일 때만 true를 반환한다. 프로덕션 프로필에서는
+   * {@link com.gachi.be.domain.auth.config.AuthConfig}가 noop 메일 발송기 생성을 차단한다.
+   */
+  private boolean shouldExposeVerificationCodeForLocalTest() {
+    return authMailService instanceof NoopAuthMailService
+        && AuthProperties.Email.STORE_TYPE_MEMORY.equalsIgnoreCase(
+            authProperties.getEmail().getStore());
   }
 
   private boolean containsForbiddenPattern(

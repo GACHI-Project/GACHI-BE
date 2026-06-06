@@ -83,6 +83,7 @@ public record AuthProperties(
       @DefaultValue("") String replyTo,
       @DefaultValue("[GACHI] Email verification code") String subject,
       @DefaultValue("false") boolean noopAllowed) {
+    public static final String STORE_TYPE_MEMORY = "memory";
 
     public String getStore() {
       return store;

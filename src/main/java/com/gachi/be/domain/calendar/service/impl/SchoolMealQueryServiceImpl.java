@@ -1,10 +1,10 @@
 package com.gachi.be.domain.calendar.service.impl;
 
-import com.gachi.be.domain.calendar.dto.response.SchoolScheduleCalendarResponse;
-import com.gachi.be.domain.calendar.service.SchoolScheduleQueryService;
+import com.gachi.be.domain.calendar.dto.response.SchoolMealCalendarResponse;
+import com.gachi.be.domain.calendar.service.SchoolMealQueryService;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
-import com.gachi.be.domain.school.client.NeisSchoolScheduleClient;
-import com.gachi.be.domain.school.dto.response.NeisSchoolScheduleItem;
+import com.gachi.be.domain.school.client.NeisSchoolMealClient;
+import com.gachi.be.domain.school.dto.response.NeisSchoolMealItem;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import java.time.LocalDate;
@@ -20,30 +20,30 @@ import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
-public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryService {
-  private static final long MAX_SCHOOL_SCHEDULE_RANGE_DAYS = 366L;
+public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
+  private static final long MAX_SCHOOL_MEAL_RANGE_DAYS = 366L;
 
   private final SchoolScheduleChildReader schoolScheduleChildReader;
-  private final NeisSchoolScheduleClient neisSchoolScheduleClient;
+  private final NeisSchoolMealClient neisSchoolMealClient;
 
   @Override
-  public SchoolScheduleCalendarResponse getSchoolSchedules(
+  public SchoolMealCalendarResponse getSchoolMeals(
       Long userId, LocalDate fromDate, LocalDate toDate) {
     validateRange(fromDate, toDate);
 
     Map<SchoolIdentity, List<SchoolScheduleChild>> childrenBySchool =
         groupBySchoolIdentity(schoolScheduleChildReader.findChildren(userId));
-    List<SchoolScheduleCalendarResponse.SchoolScheduleGroup> groups = new ArrayList<>();
+    List<SchoolMealCalendarResponse.SchoolMealGroup> groups = new ArrayList<>();
     for (Map.Entry<SchoolIdentity, List<SchoolScheduleChild>> entry : childrenBySchool.entrySet()) {
       SchoolIdentity identity = entry.getKey();
       List<SchoolScheduleChild> schoolChildren = entry.getValue();
-      List<NeisSchoolScheduleItem> schedules =
-          neisSchoolScheduleClient.search(
+      List<NeisSchoolMealItem> meals =
+          neisSchoolMealClient.search(
               identity.officeCode(), identity.schoolCode(), fromDate, toDate);
-      groups.add(toGroup(identity, schoolChildren, schedules));
+      groups.add(toGroup(identity, schoolChildren, meals));
     }
 
-    return new SchoolScheduleCalendarResponse(groups);
+    return new SchoolMealCalendarResponse(groups);
   }
 
   private void validateRange(LocalDate fromDate, LocalDate toDate) {
@@ -51,7 +51,7 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
       throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "종료일은 시작일보다 빠를 수 없습니다.");
     }
     long requestedDays = ChronoUnit.DAYS.between(fromDate, toDate) + 1;
-    if (requestedDays > MAX_SCHOOL_SCHEDULE_RANGE_DAYS) {
+    if (requestedDays > MAX_SCHOOL_MEAL_RANGE_DAYS) {
       throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "최대 1년까지 조회 가능합니다.");
     }
   }
@@ -69,45 +69,39 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
     return grouped;
   }
 
-  private SchoolScheduleCalendarResponse.SchoolScheduleGroup toGroup(
-      SchoolIdentity identity,
-      List<SchoolScheduleChild> children,
-      List<NeisSchoolScheduleItem> schedules) {
+  private SchoolMealCalendarResponse.SchoolMealGroup toGroup(
+      SchoolIdentity identity, List<SchoolScheduleChild> children, List<NeisSchoolMealItem> meals) {
     List<Long> childIds = children.stream().map(SchoolScheduleChild::childId).toList();
-    List<SchoolScheduleCalendarResponse.ChildItem> childItems =
+    List<SchoolMealCalendarResponse.ChildItem> childItems =
         children.stream()
             .map(
                 child ->
-                    new SchoolScheduleCalendarResponse.ChildItem(
+                    new SchoolMealCalendarResponse.ChildItem(
                         child.childId(), child.childName(), child.grade(), child.colorCode()))
             .toList();
-    List<SchoolScheduleCalendarResponse.ScheduleItem> scheduleItems =
-        schedules.stream().map(this::toScheduleItem).toList();
+    List<SchoolMealCalendarResponse.MealItem> mealItems =
+        meals.stream().map(this::toMealItem).toList();
 
-    return new SchoolScheduleCalendarResponse.SchoolScheduleGroup(
+    return new SchoolMealCalendarResponse.SchoolMealGroup(
         identity.groupKey(),
         identity.officeCode(),
         identity.schoolCode(),
         children.get(0).schoolName(),
         childIds,
         childItems,
-        scheduleItems);
+        mealItems);
   }
 
-  private SchoolScheduleCalendarResponse.ScheduleItem toScheduleItem(NeisSchoolScheduleItem item) {
-    NeisSchoolScheduleItem.GradeEventYn gradeEventYn = item.gradeEventYn();
-    return new SchoolScheduleCalendarResponse.ScheduleItem(
+  private SchoolMealCalendarResponse.MealItem toMealItem(NeisSchoolMealItem item) {
+    return new SchoolMealCalendarResponse.MealItem(
         item.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
-        item.academicYear(),
-        item.eventName(),
-        item.eventContent(),
-        new SchoolScheduleCalendarResponse.GradeEventYn(
-            gradeEventYn.grade1(),
-            gradeEventYn.grade2(),
-            gradeEventYn.grade3(),
-            gradeEventYn.grade4(),
-            gradeEventYn.grade5(),
-            gradeEventYn.grade6()));
+        item.mealCode(),
+        item.mealName(),
+        item.mealPeopleCount(),
+        item.dishName(),
+        item.originInfo(),
+        item.calorieInfo(),
+        item.nutritionInfo());
   }
 
   private record SchoolIdentity(String officeCode, String schoolCode) {

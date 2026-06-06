@@ -1,49 +1,61 @@
 package com.gachi.be.domain.calendar.service.impl;
 
-import com.gachi.be.domain.calendar.dto.response.SchoolScheduleCalendarResponse;
-import com.gachi.be.domain.calendar.service.SchoolScheduleQueryService;
+import com.gachi.be.domain.calendar.dto.response.ElementaryTimetableCalendarResponse;
+import com.gachi.be.domain.calendar.service.ElementaryTimetableQueryService;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
-import com.gachi.be.domain.school.client.NeisSchoolScheduleClient;
-import com.gachi.be.domain.school.dto.response.NeisSchoolScheduleItem;
+import com.gachi.be.domain.school.client.NeisElementaryTimetableClient;
+import com.gachi.be.domain.school.dto.response.NeisElementaryTimetableItem;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
-public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryService {
-  private static final long MAX_SCHOOL_SCHEDULE_RANGE_DAYS = 366L;
+public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQueryService {
+  private static final long MAX_TIMETABLE_RANGE_DAYS = 366L;
 
   private final SchoolScheduleChildReader schoolScheduleChildReader;
-  private final NeisSchoolScheduleClient neisSchoolScheduleClient;
+  private final NeisElementaryTimetableClient neisElementaryTimetableClient;
 
   @Override
-  public SchoolScheduleCalendarResponse getSchoolSchedules(
+  public ElementaryTimetableCalendarResponse getElementaryTimetables(
       Long userId, LocalDate fromDate, LocalDate toDate) {
     validateRange(fromDate, toDate);
 
     Map<SchoolIdentity, List<SchoolScheduleChild>> childrenBySchool =
         groupBySchoolIdentity(schoolScheduleChildReader.findChildren(userId));
-    List<SchoolScheduleCalendarResponse.SchoolScheduleGroup> groups = new ArrayList<>();
+    List<ElementaryTimetableCalendarResponse.TimetableGroup> groups = new ArrayList<>();
     for (Map.Entry<SchoolIdentity, List<SchoolScheduleChild>> entry : childrenBySchool.entrySet()) {
       SchoolIdentity identity = entry.getKey();
       List<SchoolScheduleChild> schoolChildren = entry.getValue();
-      List<NeisSchoolScheduleItem> schedules =
-          neisSchoolScheduleClient.search(
-              identity.officeCode(), identity.schoolCode(), fromDate, toDate);
-      groups.add(toGroup(identity, schoolChildren, schedules));
+      List<NeisElementaryTimetableItem> timetables =
+          schoolChildren.stream()
+              .map(SchoolScheduleChild::grade)
+              .filter(Objects::nonNull)
+              .distinct()
+              .flatMap(
+                  grade ->
+                      neisElementaryTimetableClient
+                          .search(
+                              identity.officeCode(), identity.schoolCode(), fromDate, toDate, grade)
+                          .stream())
+              .sorted(timetableComparator())
+              .toList();
+      groups.add(toGroup(identity, schoolChildren, timetables));
     }
 
-    return new SchoolScheduleCalendarResponse(groups);
+    return new ElementaryTimetableCalendarResponse(groups);
   }
 
   private void validateRange(LocalDate fromDate, LocalDate toDate) {
@@ -51,7 +63,7 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
       throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "종료일은 시작일보다 빠를 수 없습니다.");
     }
     long requestedDays = ChronoUnit.DAYS.between(fromDate, toDate) + 1;
-    if (requestedDays > MAX_SCHOOL_SCHEDULE_RANGE_DAYS) {
+    if (requestedDays > MAX_TIMETABLE_RANGE_DAYS) {
       throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "최대 1년까지 조회 가능합니다.");
     }
   }
@@ -69,45 +81,56 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
     return grouped;
   }
 
-  private SchoolScheduleCalendarResponse.SchoolScheduleGroup toGroup(
+  private ElementaryTimetableCalendarResponse.TimetableGroup toGroup(
       SchoolIdentity identity,
       List<SchoolScheduleChild> children,
-      List<NeisSchoolScheduleItem> schedules) {
+      List<NeisElementaryTimetableItem> timetables) {
     List<Long> childIds = children.stream().map(SchoolScheduleChild::childId).toList();
-    List<SchoolScheduleCalendarResponse.ChildItem> childItems =
+    List<ElementaryTimetableCalendarResponse.ChildItem> childItems =
         children.stream()
             .map(
                 child ->
-                    new SchoolScheduleCalendarResponse.ChildItem(
+                    new ElementaryTimetableCalendarResponse.ChildItem(
                         child.childId(), child.childName(), child.grade(), child.colorCode()))
             .toList();
-    List<SchoolScheduleCalendarResponse.ScheduleItem> scheduleItems =
-        schedules.stream().map(this::toScheduleItem).toList();
+    List<ElementaryTimetableCalendarResponse.TimetableItem> timetableItems =
+        timetables.stream().map(this::toTimetableItem).toList();
 
-    return new SchoolScheduleCalendarResponse.SchoolScheduleGroup(
+    return new ElementaryTimetableCalendarResponse.TimetableGroup(
         identity.groupKey(),
         identity.officeCode(),
         identity.schoolCode(),
         children.get(0).schoolName(),
         childIds,
         childItems,
-        scheduleItems);
+        timetableItems);
   }
 
-  private SchoolScheduleCalendarResponse.ScheduleItem toScheduleItem(NeisSchoolScheduleItem item) {
-    NeisSchoolScheduleItem.GradeEventYn gradeEventYn = item.gradeEventYn();
-    return new SchoolScheduleCalendarResponse.ScheduleItem(
+  private ElementaryTimetableCalendarResponse.TimetableItem toTimetableItem(
+      NeisElementaryTimetableItem item) {
+    return new ElementaryTimetableCalendarResponse.TimetableItem(
         item.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
         item.academicYear(),
-        item.eventName(),
-        item.eventContent(),
-        new SchoolScheduleCalendarResponse.GradeEventYn(
-            gradeEventYn.grade1(),
-            gradeEventYn.grade2(),
-            gradeEventYn.grade3(),
-            gradeEventYn.grade4(),
-            gradeEventYn.grade5(),
-            gradeEventYn.grade6()));
+        item.semester(),
+        item.grade(),
+        item.className(),
+        item.period(),
+        item.content());
+  }
+
+  private Comparator<NeisElementaryTimetableItem> timetableComparator() {
+    return Comparator.comparing(NeisElementaryTimetableItem::date)
+        .thenComparing(item -> nullSafe(item.grade()))
+        .thenComparing(item -> nullSafe(item.className()))
+        .thenComparing(item -> nullSafe(item.period()));
+  }
+
+  private int nullSafe(Integer value) {
+    return value == null ? Integer.MAX_VALUE : value;
+  }
+
+  private String nullSafe(String value) {
+    return value == null ? "" : value;
   }
 
   private record SchoolIdentity(String officeCode, String schoolCode) {
