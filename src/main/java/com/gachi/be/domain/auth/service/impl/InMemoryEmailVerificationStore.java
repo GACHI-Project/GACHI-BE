@@ -1,6 +1,7 @@
 package com.gachi.be.domain.auth.service.impl;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
+import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
@@ -21,19 +22,23 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
   private static final int LOCK_STRIPE_COUNT = 256;
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-  private final Map<String, ExpiringValue<String>> codeStore = new ConcurrentHashMap<>();
-  private final Map<String, ExpiringValue<Integer>> attemptStore = new ConcurrentHashMap<>();
-  private final Map<String, ExpiringValue<Boolean>> cooldownStore = new ConcurrentHashMap<>();
-  private final Map<String, ExpiringValue<Boolean>> verifiedStore = new ConcurrentHashMap<>();
+  private final Map<VerificationKey, ExpiringValue<String>> codeStore = new ConcurrentHashMap<>();
+  private final Map<VerificationKey, ExpiringValue<Integer>> attemptStore =
+      new ConcurrentHashMap<>();
+  private final Map<VerificationKey, ExpiringValue<Boolean>> cooldownStore =
+      new ConcurrentHashMap<>();
+  private final Map<VerificationKey, ExpiringValue<Boolean>> verifiedStore =
+      new ConcurrentHashMap<>();
   private final Object[] emailLocks = initializeLocks();
   private final AuthProperties authProperties;
 
   @Override
-  public String issueCode(String email) {
+  public String issueCode(String email, EmailVerificationPurpose purpose) {
     String normalizedEmail = normalizeEmail(email);
+    VerificationKey key = new VerificationKey(normalizedEmail, purpose);
     // 메모리 스토어도 동시 요청에서 정책 우회를 막기 위해 이메일 단위로 직렬화한다.
     synchronized (lockFor(normalizedEmail)) {
-      if (isValid(cooldownStore.get(normalizedEmail))) {
+      if (isValid(cooldownStore.get(key))) {
         throw new BusinessException(ErrorCode.AUTH_EMAIL_SEND_COOLDOWN);
       }
 
@@ -43,34 +48,36 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
       OffsetDateTime cooldownExpiresAt =
           OffsetDateTime.now().plusSeconds(authProperties.getEmail().getResendCooldownSeconds());
 
-      codeStore.put(normalizedEmail, new ExpiringValue<>(code, codeExpiresAt));
-      attemptStore.put(normalizedEmail, new ExpiringValue<>(0, codeExpiresAt));
-      cooldownStore.put(normalizedEmail, new ExpiringValue<>(Boolean.TRUE, cooldownExpiresAt));
+      codeStore.put(key, new ExpiringValue<>(code, codeExpiresAt));
+      attemptStore.put(key, new ExpiringValue<>(0, codeExpiresAt));
+      cooldownStore.put(key, new ExpiringValue<>(Boolean.TRUE, cooldownExpiresAt));
       return code;
     }
   }
 
   @Override
-  public void rollbackIssuedCode(String email) {
+  public void rollbackIssuedCode(String email, EmailVerificationPurpose purpose) {
     String normalizedEmail = normalizeEmail(email);
+    VerificationKey key = new VerificationKey(normalizedEmail, purpose);
     synchronized (lockFor(normalizedEmail)) {
-      codeStore.remove(normalizedEmail);
-      attemptStore.remove(normalizedEmail);
-      cooldownStore.remove(normalizedEmail);
+      codeStore.remove(key);
+      attemptStore.remove(key);
+      cooldownStore.remove(key);
     }
   }
 
   @Override
-  public void verifyCode(String email, String code) {
+  public void verifyCode(String email, String code, EmailVerificationPurpose purpose) {
     String normalizedEmail = normalizeEmail(email);
+    VerificationKey key = new VerificationKey(normalizedEmail, purpose);
     synchronized (lockFor(normalizedEmail)) {
-      ExpiringValue<String> storedCode = codeStore.get(normalizedEmail);
+      ExpiringValue<String> storedCode = codeStore.get(key);
       if (!isValid(storedCode)) {
-        cleanupExpired(normalizedEmail);
+        cleanupExpired(key);
         throw new BusinessException(ErrorCode.AUTH_EMAIL_CODE_EXPIRED);
       }
 
-      ExpiringValue<Integer> attemptsValue = attemptStore.get(normalizedEmail);
+      ExpiringValue<Integer> attemptsValue = attemptStore.get(key);
       int attempts = isValid(attemptsValue) ? attemptsValue.value : 0;
       if (attempts >= authProperties.getEmail().getMaxAttempts()) {
         throw new BusinessException(ErrorCode.AUTH_EMAIL_CODE_ATTEMPT_EXCEEDED);
@@ -78,7 +85,7 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
 
       if (!storedCode.value.equals(code)) {
         int nextAttempts = attempts + 1;
-        attemptStore.put(normalizedEmail, new ExpiringValue<>(nextAttempts, storedCode.expiresAt));
+        attemptStore.put(key, new ExpiringValue<>(nextAttempts, storedCode.expiresAt));
         if (nextAttempts >= authProperties.getEmail().getMaxAttempts()) {
           throw new BusinessException(ErrorCode.AUTH_EMAIL_CODE_ATTEMPT_EXCEEDED);
         }
@@ -87,19 +94,20 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
 
       OffsetDateTime verifiedExpiresAt =
           OffsetDateTime.now().plusSeconds(authProperties.getEmail().getVerifiedTtlSeconds());
-      verifiedStore.put(normalizedEmail, new ExpiringValue<>(Boolean.TRUE, verifiedExpiresAt));
-      codeStore.remove(normalizedEmail);
-      attemptStore.remove(normalizedEmail);
+      verifiedStore.put(key, new ExpiringValue<>(Boolean.TRUE, verifiedExpiresAt));
+      codeStore.remove(key);
+      attemptStore.remove(key);
     }
   }
 
   @Override
   public boolean isEmailVerified(String email) {
     String normalizedEmail = normalizeEmail(email);
+    VerificationKey key = new VerificationKey(normalizedEmail, EmailVerificationPurpose.SIGNUP);
     synchronized (lockFor(normalizedEmail)) {
-      ExpiringValue<Boolean> verified = verifiedStore.get(normalizedEmail);
+      ExpiringValue<Boolean> verified = verifiedStore.get(key);
       if (!isValid(verified)) {
-        verifiedStore.remove(normalizedEmail);
+        verifiedStore.remove(key);
         return false;
       }
       return Boolean.TRUE.equals(verified.value);
@@ -109,14 +117,15 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
   @Override
   public void consumeVerifiedEmail(String email) {
     String normalizedEmail = normalizeEmail(email);
+    VerificationKey key = new VerificationKey(normalizedEmail, EmailVerificationPurpose.SIGNUP);
     synchronized (lockFor(normalizedEmail)) {
-      verifiedStore.remove(normalizedEmail);
+      verifiedStore.remove(key);
     }
   }
 
-  private void cleanupExpired(String email) {
-    codeStore.remove(email);
-    attemptStore.remove(email);
+  private void cleanupExpired(VerificationKey key) {
+    codeStore.remove(key);
+    attemptStore.remove(key);
   }
 
   private boolean isValid(ExpiringValue<?> value) {
@@ -154,4 +163,6 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
       this.expiresAt = expiresAt;
     }
   }
+
+  private record VerificationKey(String email, EmailVerificationPurpose purpose) {}
 }

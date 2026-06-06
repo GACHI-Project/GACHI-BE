@@ -8,6 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.service.AuthMailService;
+import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.entity.enums.UserStatus;
+import com.gachi.be.domain.user.repository.UserRepository;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
@@ -20,6 +23,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -47,6 +51,8 @@ class AuthControllerIntegrationTest {
   private MockMvc mockMvc;
   @Autowired private WebApplicationContext webApplicationContext;
   @Autowired private CapturingAuthMailService capturingAuthMailService;
+  @Autowired private UserRepository userRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
 
   @BeforeEach
   void setUp() {
@@ -608,6 +614,68 @@ class AuthControllerIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH2011"));
   }
 
+  @Test
+  void findLoginIdSendsCodeAndReturnsLoginIdWhenCodeMatches() throws Exception {
+    String email = "find-login-id@gachi.com";
+    String loginId = "find_login_user";
+    verifyEmailForSignup(email);
+    signup(
+            signupPayload(
+                "find-login", email, loginId, "Policy12!", "Policy12!", "01010101010", true))
+        .andExpect(status().isCreated());
+
+    sendFindLoginIdEmail(email)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2008"));
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+
+    verifyFindLoginIdEmail(email, code)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2009"))
+        .andExpect(jsonPath("$.result.loginId").value(loginId));
+  }
+
+  @Test
+  void findLoginIdRejectsUnregisteredEmail() throws Exception {
+    sendFindLoginIdEmail("not-registered@gachi.com")
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("AUTH4041"));
+  }
+
+  @Test
+  void findLoginIdRejectsWithdrawnAccount() throws Exception {
+    createUser(
+        "withdrawn_login_user", "withdrawn-find@gachi.com", "01010101011", UserStatus.WITHDRAWN);
+
+    sendFindLoginIdEmail("withdrawn-find@gachi.com")
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("AUTH4031"));
+  }
+
+  @Test
+  void findLoginIdRejectsMismatchedCode() throws Exception {
+    createUser("mismatch_login_user", "mismatch-find@gachi.com", "01010101012", UserStatus.ACTIVE);
+    sendFindLoginIdEmail("mismatch-find@gachi.com").andExpect(status().isOk());
+
+    verifyFindLoginIdEmail("mismatch-find@gachi.com", "000000")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4002"));
+  }
+
+  @Test
+  void findLoginIdCodeDoesNotVerifySignupEmailFlow() throws Exception {
+    String email = "purpose-separated@gachi.com";
+    createUser("purpose_login_user", email, "01010101013", UserStatus.ACTIVE);
+    sendFindLoginIdEmail(email).andExpect(status().isOk());
+    String findLoginIdCode = capturingAuthMailService.getCode(email);
+    assertThat(findLoginIdCode).isNotBlank();
+
+    verifyEmail(email, findLoginIdCode)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4003"));
+  }
+
   private org.springframework.test.web.servlet.ResultActions sendEmail(String email)
       throws Exception {
     return mockMvc.perform(
@@ -620,6 +688,22 @@ class AuthControllerIntegrationTest {
       throws Exception {
     return mockMvc.perform(
         post("/api/v1/auth/email/verify")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("email", email, "code", code))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions sendFindLoginIdEmail(String email)
+      throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/find-login-id/email/send")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("email", email))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions verifyFindLoginIdEmail(
+      String email, String code) throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/find-login-id/email/verify")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(Map.of("email", email, "code", code))));
   }
@@ -698,6 +782,23 @@ class AuthControllerIntegrationTest {
 
   private JsonNode readBody(MvcResult result) throws Exception {
     return objectMapper.readTree(result.getResponse().getContentAsString());
+  }
+
+  private void createUser(String loginId, String email, String phoneNumber, UserStatus status) {
+    OffsetDateTime now = OffsetDateTime.now();
+    userRepository.saveAndFlush(
+        User.builder()
+            .email(email)
+            .loginId(loginId)
+            .passwordHash(passwordEncoder.encode("Policy12!"))
+            .name("find-login-id-user")
+            .phoneNumber(phoneNumber)
+            .status(status)
+            .emailVerifiedAt(now)
+            .consentAgreedAt(now)
+            .consentVersion("2026-04-v1")
+            .passwordUpdatedAt(now)
+            .build());
   }
 
   @TestConfiguration

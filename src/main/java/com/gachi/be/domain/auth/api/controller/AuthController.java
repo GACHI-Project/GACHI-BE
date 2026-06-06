@@ -6,12 +6,15 @@ import com.gachi.be.domain.auth.dto.request.CheckLoginIdRequest;
 import com.gachi.be.domain.auth.dto.request.CheckPhoneNumberRequest;
 import com.gachi.be.domain.auth.dto.request.EmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
+import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
+import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
 import com.gachi.be.domain.auth.dto.request.ReissueRequest;
 import com.gachi.be.domain.auth.dto.request.SignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.dto.response.DuplicateCheckResponse;
 import com.gachi.be.domain.auth.dto.response.EmailSendResponse;
+import com.gachi.be.domain.auth.dto.response.FindLoginIdResponse;
 import com.gachi.be.domain.auth.dto.response.SignupResponse;
 import com.gachi.be.domain.auth.service.AuthRateLimitService;
 import com.gachi.be.domain.auth.service.AuthService;
@@ -103,6 +106,22 @@ public class AuthController {
   public ApiResponse<Void> verifyEmailCode(@Valid @RequestBody EmailVerifyRequest request) {
     authService.verifyEmailCode(request);
     return ApiResponse.success(SuccessCode.AUTH_EMAIL_VERIFIED, null);
+  }
+
+  @PostMapping("/find-login-id/email/send")
+  public ApiResponse<EmailSendResponse> sendFindLoginIdEmailVerificationCode(
+      @Valid @RequestBody FindLoginIdEmailSendRequest request, HttpServletRequest servletRequest) {
+    authRateLimitService.checkEmailSendRateLimit(extractClientIp(servletRequest), request.email());
+    return ApiResponse.success(
+        SuccessCode.AUTH_FIND_LOGIN_ID_EMAIL_CODE_SENT,
+        authService.sendFindLoginIdEmailVerificationCode(request));
+  }
+
+  @PostMapping("/find-login-id/email/verify")
+  public ApiResponse<FindLoginIdResponse> verifyFindLoginIdEmailCode(
+      @Valid @RequestBody FindLoginIdEmailVerifyRequest request) {
+    return ApiResponse.success(
+        SuccessCode.AUTH_FIND_LOGIN_ID_SUCCESS, authService.verifyFindLoginIdEmailCode(request));
   }
 
   private String extractDeviceInfo(HttpServletRequest request) {
