@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import java.time.OffsetDateTime;
@@ -140,6 +141,27 @@ class AuthRateLimitIntegrationTest {
   }
 
   @Test
+  void findLoginIdEmailSendUsesSeparateBucketFromSignupEmailSend() throws Exception {
+    String email = "rate-find-login@gachi.com";
+    String clientIp = "198.51.100.60";
+    createActiveUser("rate_find_login_user", "RateLimit12!", email, "01012345676");
+
+    sendEmailWithForwardedFor(email, clientIp)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4091"));
+    sendEmailWithForwardedFor(email, clientIp)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4091"));
+    sendEmailWithForwardedFor(email, clientIp)
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("AUTH4294"));
+
+    sendFindLoginIdEmailWithForwardedFor(email, clientIp)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2008"));
+  }
+
+  @Test
   void loginBlocksWhenIpLimitExceeded() throws Exception {
     createActiveUser("ratelimit_login_1", "RateLimit12!", "login-limit-1@gachi.com", "01012345670");
     String realIp = "203.0.113.20";
@@ -225,6 +247,16 @@ class AuthRateLimitIntegrationTest {
             .content(objectMapper.writeValueAsString(Map.of("email", email))));
   }
 
+  private ResultActions sendFindLoginIdEmailWithForwardedFor(String email, String forwardedFor)
+      throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/find-login-id/email/send")
+            .with(remoteAddress("127.0.0.1"))
+            .header("X-Forwarded-For", forwardedFor)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("email", email))));
+  }
+
   private ResultActions loginWithRealIp(String loginId, String password, String realIp)
       throws Exception {
     return mockMvc.perform(
@@ -278,10 +310,13 @@ class AuthRateLimitIntegrationTest {
             .name("rate-limit-user")
             .phoneNumber(phoneNumber)
             .status(UserStatus.ACTIVE)
+            .languageCode("KO")
+            .notificationPreference(NotificationPreference.IMPORTANT)
             .emailVerifiedAt(now)
             .consentAgreedAt(now)
             .consentVersion("2026-04-v1")
             .passwordUpdatedAt(now)
+            .passwordChangeRequired(false)
             .build());
   }
 

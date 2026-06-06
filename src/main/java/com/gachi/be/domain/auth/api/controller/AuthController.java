@@ -111,7 +111,8 @@ public class AuthController {
   @PostMapping("/find-login-id/email/send")
   public ApiResponse<EmailSendResponse> sendFindLoginIdEmailVerificationCode(
       @Valid @RequestBody FindLoginIdEmailSendRequest request, HttpServletRequest servletRequest) {
-    authRateLimitService.checkEmailSendRateLimit(extractClientIp(servletRequest), request.email());
+    authRateLimitService.checkFindLoginIdEmailSendRateLimit(
+        extractClientIp(servletRequest), request.email());
     return ApiResponse.success(
         SuccessCode.AUTH_FIND_LOGIN_ID_EMAIL_CODE_SENT,
         authService.sendFindLoginIdEmailVerificationCode(request));

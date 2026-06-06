@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import java.time.OffsetDateTime;
@@ -794,10 +795,13 @@ class AuthControllerIntegrationTest {
             .name("find-login-id-user")
             .phoneNumber(phoneNumber)
             .status(status)
+            .languageCode("KO")
+            .notificationPreference(NotificationPreference.IMPORTANT)
             .emailVerifiedAt(now)
             .consentAgreedAt(now)
             .consentVersion("2026-04-v1")
             .passwordUpdatedAt(now)
+            .passwordChangeRequired(false)
             .build());
   }
 

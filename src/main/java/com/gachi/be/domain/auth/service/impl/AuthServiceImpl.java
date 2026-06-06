@@ -239,7 +239,9 @@ public class AuthServiceImpl implements AuthService {
   @Transactional
   public void verifyEmailCode(EmailVerifyRequest request) {
     emailVerificationStore.verifyCode(
-        normalizeEmail(request.email()), normalizeText(request.code()));
+        normalizeEmail(request.email()),
+        normalizeText(request.code()),
+        EmailVerificationPurpose.SIGNUP);
   }
 
   @Override
