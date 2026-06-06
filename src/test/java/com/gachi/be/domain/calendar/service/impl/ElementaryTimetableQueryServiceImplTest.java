@@ -84,11 +84,37 @@ class ElementaryTimetableQueryServiceImplTest {
   }
 
   @Test
+  void getElementaryTimetablesAllowsLeapYearRangeWithinLimit() {
+    SchoolScheduleChild child = child(1L, "첫째", "화랑초등학교", "7051173", "B10", 4, "#22CC88");
+    LocalDate fromDate = LocalDate.of(2024, 1, 1);
+    LocalDate toDate = LocalDate.of(2024, 12, 31);
+    when(schoolScheduleChildReader.findChildren(10L)).thenReturn(List.of(child));
+    when(neisElementaryTimetableClient.search("B10", "7051173", fromDate, toDate, 4))
+        .thenReturn(List.of());
+
+    var response = service.getElementaryTimetables(10L, fromDate, toDate);
+
+    assertThat(response.schoolTimetables()).hasSize(1);
+    verify(neisElementaryTimetableClient, times(1)).search("B10", "7051173", fromDate, toDate, 4);
+  }
+
+  @Test
   void getElementaryTimetablesThrowsWhenDateRangeExceedsOneYear() {
     assertThatThrownBy(
             () ->
                 service.getElementaryTimetables(
                     10L, LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 2)))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorCode")
+        .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+  }
+
+  @Test
+  void getElementaryTimetablesThrowsWhenLeapYearRangeExceedsLimit() {
+    assertThatThrownBy(
+            () ->
+                service.getElementaryTimetables(
+                    10L, LocalDate.of(2024, 1, 1), LocalDate.of(2025, 1, 1)))
         .isInstanceOf(BusinessException.class)
         .extracting("errorCode")
         .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);

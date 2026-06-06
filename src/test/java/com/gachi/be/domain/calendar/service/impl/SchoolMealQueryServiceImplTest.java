@@ -77,9 +77,32 @@ class SchoolMealQueryServiceImplTest {
   }
 
   @Test
+  void getSchoolMealsAllowsLeapYearRangeWithinLimit() {
+    SchoolScheduleChild child = child(1L, "첫째", "화랑초등학교", "7051173", "B10", 4, "#22CC88");
+    LocalDate fromDate = LocalDate.of(2024, 1, 1);
+    LocalDate toDate = LocalDate.of(2024, 12, 31);
+    when(schoolScheduleChildReader.findChildren(10L)).thenReturn(List.of(child));
+    when(neisSchoolMealClient.search("B10", "7051173", fromDate, toDate)).thenReturn(List.of());
+
+    var response = service.getSchoolMeals(10L, fromDate, toDate);
+
+    assertThat(response.schoolMeals()).hasSize(1);
+    verify(neisSchoolMealClient, times(1)).search("B10", "7051173", fromDate, toDate);
+  }
+
+  @Test
   void getSchoolMealsThrowsWhenDateRangeExceedsOneYear() {
     assertThatThrownBy(
             () -> service.getSchoolMeals(10L, LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 2)))
+        .isInstanceOf(BusinessException.class)
+        .extracting("errorCode")
+        .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+  }
+
+  @Test
+  void getSchoolMealsThrowsWhenLeapYearRangeExceedsLimit() {
+    assertThatThrownBy(
+            () -> service.getSchoolMeals(10L, LocalDate.of(2024, 1, 1), LocalDate.of(2025, 1, 1)))
         .isInstanceOf(BusinessException.class)
         .extracting("errorCode")
         .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
