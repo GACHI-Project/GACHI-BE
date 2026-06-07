@@ -239,13 +239,23 @@ public class AuthServiceImpl implements AuthService {
     String refreshToken = normalizeText(request.refreshToken());
     JwtTokenProvider.RefreshTokenClaims claims = jwtTokenProvider.parseRefreshToken(refreshToken);
     String tokenHash = tokenHashService.sha256(refreshToken);
+    RefreshTokenStatus tokenStatus =
+        authRefreshTokenRepository
+            .findStatusByJtiAndTokenHash(claims.getJti(), tokenHash)
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
+    ensureRefreshTokenUsable(tokenStatus.getRevokedAt(), tokenStatus.getExpiresAt());
+
+    User user =
+        userRepository
+            .findByIdWithLock(tokenStatus.getUserId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
 
     AuthRefreshToken existingToken =
         authRefreshTokenRepository
             .findByJtiAndTokenHash(claims.getJti(), tokenHash)
             .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
     ensureRefreshTokenUsable(existingToken.getRevokedAt(), existingToken.getExpiresAt());
-    ensureRefreshTokenIssuedAfterPasswordUpdate(existingToken, existingToken.getUser());
+    ensureRefreshTokenIssuedAfterPasswordUpdate(existingToken, user);
 
     existingToken.revoke();
   }

@@ -215,7 +215,7 @@ class AuthControllerIntegrationTest {
             .andExpect(status().isOk())
             .andReturn();
     String refreshToken = readBody(loginResult).path("result").path("refreshToken").asText();
-    logout(refreshToken).andExpect(status().isOk());
+    logout(refreshToken).andExpect(status().isOk()).andExpect(jsonPath("$.code").value("AUTH2014"));
 
     logout(refreshToken)
         .andExpect(status().isUnauthorized())
