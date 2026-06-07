@@ -9,6 +9,7 @@ import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
+import com.gachi.be.domain.auth.dto.request.LogoutRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetRequest;
@@ -230,6 +231,23 @@ public class AuthServiceImpl implements AuthService {
     String nextDeviceInfo = mergeNullable(deviceInfo, existingToken.getDeviceInfo());
     String nextIpAddress = mergeNullable(ipAddress, existingToken.getIpAddress());
     return issueTokens(user, existingToken.isRememberMe(), nextDeviceInfo, nextIpAddress);
+  }
+
+  @Override
+  @Transactional
+  public void logout(LogoutRequest request) {
+    String refreshToken = normalizeText(request.refreshToken());
+    JwtTokenProvider.RefreshTokenClaims claims = jwtTokenProvider.parseRefreshToken(refreshToken);
+    String tokenHash = tokenHashService.sha256(refreshToken);
+
+    AuthRefreshToken existingToken =
+        authRefreshTokenRepository
+            .findByJtiAndTokenHash(claims.getJti(), tokenHash)
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
+    ensureRefreshTokenUsable(existingToken.getRevokedAt(), existingToken.getExpiresAt());
+    ensureRefreshTokenIssuedAfterPasswordUpdate(existingToken, existingToken.getUser());
+
+    existingToken.revoke();
   }
 
   @Override
