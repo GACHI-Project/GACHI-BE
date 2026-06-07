@@ -180,7 +180,7 @@ public class AuthServiceImpl implements AuthService {
 
     User user =
         userRepository
-            .findByLoginId(loginId)
+            .findByLoginIdWithLock(loginId)
             .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS));
 
     if (!user.isActive()) {
@@ -202,6 +202,14 @@ public class AuthServiceImpl implements AuthService {
     String refreshToken = normalizeText(request.refreshToken());
     JwtTokenProvider.RefreshTokenClaims claims = jwtTokenProvider.parseRefreshToken(refreshToken);
     String tokenHash = tokenHashService.sha256(refreshToken);
+    Long userId =
+        authRefreshTokenRepository
+            .findUserIdByJtiAndTokenHash(claims.getJti(), tokenHash)
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
+    User user =
+        userRepository
+            .findByIdWithLock(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
 
     AuthRefreshToken existingToken =
         authRefreshTokenRepository
@@ -215,11 +223,11 @@ public class AuthServiceImpl implements AuthService {
       throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_EXPIRED);
     }
 
-    User user = existingToken.getUser();
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
     }
     ensurePasswordChangeNotRequired(user);
+    ensureRefreshTokenIssuedAfterPasswordUpdate(existingToken, user);
 
     existingToken.revoke();
     String nextDeviceInfo = mergeNullable(deviceInfo, existingToken.getDeviceInfo());
@@ -294,7 +302,7 @@ public class AuthServiceImpl implements AuthService {
   public void resetPassword(PasswordResetRequest request) {
     String loginId = normalizeText(request.loginId());
     String email = normalizeEmail(request.email());
-    User user = findActiveUserForPasswordReset(loginId, email);
+    User user = findActiveUserForPasswordResetWithLock(loginId, email);
 
     if (!emailVerificationStore.isEmailVerified(email, EmailVerificationPurpose.RESET_PASSWORD)) {
       throw new BusinessException(ErrorCode.AUTH_EMAIL_NOT_VERIFIED);
@@ -347,9 +355,29 @@ public class AuthServiceImpl implements AuthService {
     return user;
   }
 
+  private User findActiveUserForPasswordResetWithLock(String loginId, String email) {
+    User user =
+        userRepository
+            .findByLoginIdWithLock(loginId)
+            .orElseThrow(
+                () -> new BusinessException(ErrorCode.AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND));
+    if (!email.equals(user.getEmail()) || !user.isActive()) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND);
+    }
+    return user;
+  }
+
   private void ensureActiveAccount(User user) {
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
+    }
+  }
+
+  private void ensureRefreshTokenIssuedAfterPasswordUpdate(
+      AuthRefreshToken refreshToken, User user) {
+    if (!refreshToken.getCreatedAt().isAfter(user.getPasswordUpdatedAt())) {
+      // 비밀번호 재설정과 토큰 재발급이 겹친 경우에도 이전 비밀번호 기준 세션을 차단한다.
+      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_REVOKED);
     }
   }
 

@@ -8,10 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.service.AuthMailService;
+import com.gachi.be.domain.auth.service.TokenHashService;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
+import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
@@ -24,6 +26,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
@@ -54,6 +57,9 @@ class AuthControllerIntegrationTest {
   @Autowired private CapturingAuthMailService capturingAuthMailService;
   @Autowired private UserRepository userRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private TokenHashService tokenHashService;
+  @Autowired private EntityManager entityManager;
 
   @BeforeEach
   void setUp() {
@@ -709,6 +715,11 @@ class AuthControllerIntegrationTest {
     login(loginPayload(loginId, "Recover12ab"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("AUTH2001"));
+    entityManager.flush();
+    jdbcTemplate.update(
+        "update auth_refresh_tokens set revoked_at = null where token_hash = ?",
+        tokenHashService.sha256(oldRefreshToken));
+    entityManager.clear();
     reissue(oldRefreshToken)
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("AUTH4014"));
