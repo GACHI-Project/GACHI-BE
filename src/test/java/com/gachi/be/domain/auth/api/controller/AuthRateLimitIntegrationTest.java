@@ -162,6 +162,28 @@ class AuthRateLimitIntegrationTest {
   }
 
   @Test
+  void passwordResetEmailSendUsesSeparateBucketFromSignupEmailSend() throws Exception {
+    String email = "rate-password-reset@gachi.com";
+    String loginId = "rate_password_reset_user";
+    String clientIp = "198.51.100.61";
+    createActiveUser(loginId, "RateLimit12!", email, "01012345677");
+
+    sendEmailWithForwardedFor(email, clientIp)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4091"));
+    sendEmailWithForwardedFor(email, clientIp)
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.code").value("AUTH4091"));
+    sendEmailWithForwardedFor(email, clientIp)
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("AUTH4294"));
+
+    sendPasswordResetEmailWithForwardedFor(loginId, email, clientIp)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2010"));
+  }
+
+  @Test
   void loginBlocksWhenIpLimitExceeded() throws Exception {
     createActiveUser("ratelimit_login_1", "RateLimit12!", "login-limit-1@gachi.com", "01012345670");
     String realIp = "203.0.113.20";
@@ -255,6 +277,16 @@ class AuthRateLimitIntegrationTest {
             .header("X-Forwarded-For", forwardedFor)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(Map.of("email", email))));
+  }
+
+  private ResultActions sendPasswordResetEmailWithForwardedFor(
+      String loginId, String email, String forwardedFor) throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/password-reset/email/send")
+            .with(remoteAddress("127.0.0.1"))
+            .header("X-Forwarded-For", forwardedFor)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("loginId", loginId, "email", email))));
   }
 
   private ResultActions loginWithRealIp(String loginId, String password, String realIp)

@@ -28,6 +28,7 @@ import org.springframework.util.StringUtils;
 public class AuthRateLimitService {
   private static final String EMAIL_SEND_SCOPE = "email-send";
   private static final String FIND_LOGIN_ID_EMAIL_SEND_SCOPE = "find-login-id-email-send";
+  private static final String PASSWORD_RESET_EMAIL_SEND_SCOPE = "password-reset-email-send";
   private static final String LOGIN_SCOPE = "login";
   private static final RedisScript<List<Long>> FIXED_WINDOW_RATE_LIMIT_SCRIPT =
       createFixedWindowRateLimitScript();
@@ -57,6 +58,18 @@ public class AuthRateLimitService {
       return;
     }
     checkEmailSendRateLimit(clientIp, email, FIND_LOGIN_ID_EMAIL_SEND_SCOPE);
+  }
+
+  /**
+   * 비밀번호 재설정 인증코드 발송 엔드포인트 호출 한도를 점검한다.
+   *
+   * <p>회원가입/아이디 찾기와 UX가 서로 막히지 않도록 별도 scope를 사용한다.
+   */
+  public void checkPasswordResetEmailSendRateLimit(String clientIp, String email) {
+    if (!isRateLimitEnabled()) {
+      return;
+    }
+    checkEmailSendRateLimit(clientIp, email, PASSWORD_RESET_EMAIL_SEND_SCOPE);
   }
 
   private void checkEmailSendRateLimit(String clientIp, String email, String scope) {

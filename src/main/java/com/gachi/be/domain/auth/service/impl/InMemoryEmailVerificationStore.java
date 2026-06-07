@@ -101,9 +101,9 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
   }
 
   @Override
-  public boolean isEmailVerified(String email) {
+  public boolean isEmailVerified(String email, EmailVerificationPurpose purpose) {
     String normalizedEmail = normalizeEmail(email);
-    VerificationKey key = new VerificationKey(normalizedEmail, EmailVerificationPurpose.SIGNUP);
+    VerificationKey key = new VerificationKey(normalizedEmail, purpose);
     synchronized (lockFor(normalizedEmail)) {
       ExpiringValue<Boolean> verified = verifiedStore.get(key);
       if (!isValid(verified)) {
@@ -115,9 +115,9 @@ public class InMemoryEmailVerificationStore implements EmailVerificationStore {
   }
 
   @Override
-  public void consumeVerifiedEmail(String email) {
+  public void consumeVerifiedEmail(String email, EmailVerificationPurpose purpose) {
     String normalizedEmail = normalizeEmail(email);
-    VerificationKey key = new VerificationKey(normalizedEmail, EmailVerificationPurpose.SIGNUP);
+    VerificationKey key = new VerificationKey(normalizedEmail, purpose);
     synchronized (lockFor(normalizedEmail)) {
       verifiedStore.remove(key);
     }

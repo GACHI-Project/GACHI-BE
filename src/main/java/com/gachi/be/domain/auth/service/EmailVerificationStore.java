@@ -28,8 +28,18 @@ public interface EmailVerificationStore {
   void verifyCode(String email, String code, EmailVerificationPurpose purpose);
 
   /** 이메일 인증 완료 여부를 조회한다. */
-  boolean isEmailVerified(String email);
+  default boolean isEmailVerified(String email) {
+    return isEmailVerified(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  /** 인증 목적별 이메일 인증 완료 여부를 조회한다. */
+  boolean isEmailVerified(String email, EmailVerificationPurpose purpose);
 
   /** 회원가입 완료 시 인증 완료 상태를 소모한다. */
-  void consumeVerifiedEmail(String email);
+  default void consumeVerifiedEmail(String email) {
+    consumeVerifiedEmail(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  /** 인증 목적별 인증 완료 상태를 소모한다. */
+  void consumeVerifiedEmail(String email, EmailVerificationPurpose purpose);
 }

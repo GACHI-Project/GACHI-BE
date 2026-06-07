@@ -8,10 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.service.AuthMailService;
+import com.gachi.be.domain.auth.service.TokenHashService;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
+import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
@@ -24,6 +26,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
@@ -54,6 +57,9 @@ class AuthControllerIntegrationTest {
   @Autowired private CapturingAuthMailService capturingAuthMailService;
   @Autowired private UserRepository userRepository;
   @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private TokenHashService tokenHashService;
+  @Autowired private EntityManager entityManager;
 
   @BeforeEach
   void setUp() {
@@ -677,6 +683,92 @@ class AuthControllerIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH4003"));
   }
 
+  @Test
+  void passwordResetCompletesAndAllowsLoginWithNewPassword() throws Exception {
+    String email = "reset-password@gachi.com";
+    String loginId = "reset_password_user";
+    createUser(loginId, email, "01010101014", UserStatus.ACTIVE);
+    MvcResult loginResult =
+        login(loginPayload(loginId, "Policy12!"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("AUTH2001"))
+            .andReturn();
+    String oldRefreshToken = readBody(loginResult).path("result").path("refreshToken").asText();
+
+    sendPasswordResetEmail(loginId, email)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2010"));
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+
+    verifyPasswordResetEmail(loginId, email, code)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2012"));
+
+    resetPassword(loginId, email, "Recover12ab", "Recover12ab")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2013"));
+
+    login(loginPayload(loginId, "Policy12!"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4011"));
+    login(loginPayload(loginId, "Recover12ab"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("AUTH2001"));
+    entityManager.flush();
+    jdbcTemplate.update(
+        "update auth_refresh_tokens set revoked_at = null where token_hash = ?",
+        tokenHashService.sha256(oldRefreshToken));
+    entityManager.clear();
+    reissue(oldRefreshToken)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4014"));
+  }
+
+  @Test
+  void passwordResetRejectsMismatchedLoginIdAndEmail() throws Exception {
+    createUser("reset_mismatch_user", "reset-mismatch@gachi.com", "01010101015", UserStatus.ACTIVE);
+
+    sendPasswordResetEmail("reset_mismatch_user", "other-reset@gachi.com")
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.code").value("AUTH4042"));
+  }
+
+  @Test
+  void passwordResetRejectsWhenEmailCodeIsNotVerified() throws Exception {
+    String email = "reset-not-verified@gachi.com";
+    String loginId = "reset_not_verified_user";
+    createUser(loginId, email, "01010101016", UserStatus.ACTIVE);
+
+    resetPassword(loginId, email, "Reset12ab", "Reset12ab")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4001"));
+  }
+
+  @Test
+  void passwordResetRejectsDangerousPasswordStrength() throws Exception {
+    String email = "reset-danger@gachi.com";
+    String loginId = "reset_danger_user";
+    createUser(loginId, email, "01010101017", UserStatus.ACTIVE);
+    verifyPasswordResetFlow(loginId, email);
+
+    resetPassword(loginId, email, "Qa1x2w3e", "Qa1x2w3e")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4009"));
+  }
+
+  @Test
+  void passwordResetRejectsPasswordConfirmMismatch() throws Exception {
+    String email = "reset-confirm@gachi.com";
+    String loginId = "reset_confirm_user";
+    createUser(loginId, email, "01010101018", UserStatus.ACTIVE);
+    verifyPasswordResetFlow(loginId, email);
+
+    resetPassword(loginId, email, "Recover12ab", "Recover34cd")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4004"));
+  }
+
   private org.springframework.test.web.servlet.ResultActions sendEmail(String email)
       throws Exception {
     return mockMvc.perform(
@@ -707,6 +799,38 @@ class AuthControllerIntegrationTest {
         post("/api/v1/auth/find-login-id/email/verify")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(Map.of("email", email, "code", code))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions sendPasswordResetEmail(
+      String loginId, String email) throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/password-reset/email/send")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("loginId", loginId, "email", email))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions verifyPasswordResetEmail(
+      String loginId, String email, String code) throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/password-reset/email/verify")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                objectMapper.writeValueAsString(
+                    Map.of("loginId", loginId, "email", email, "code", code))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions resetPassword(
+      String loginId, String email, String password, String passwordConfirm) throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/password-reset")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                objectMapper.writeValueAsString(
+                    Map.of(
+                        "loginId", loginId,
+                        "email", email,
+                        "password", password,
+                        "passwordConfirm", passwordConfirm))));
   }
 
   private org.springframework.test.web.servlet.ResultActions signup(String payload)
@@ -779,6 +903,18 @@ class AuthControllerIntegrationTest {
         post("/api/v1/auth/reissue")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(Map.of("refreshToken", refreshToken))));
+  }
+
+  private String loginPayload(String loginId, String password) throws Exception {
+    return objectMapper.writeValueAsString(
+        Map.of("loginId", loginId, "password", password, "rememberMe", false));
+  }
+
+  private void verifyPasswordResetFlow(String loginId, String email) throws Exception {
+    sendPasswordResetEmail(loginId, email).andExpect(status().isOk());
+    String code = capturingAuthMailService.getCode(email);
+    assertThat(code).isNotBlank();
+    verifyPasswordResetEmail(loginId, email, code).andExpect(status().isOk());
   }
 
   private JsonNode readBody(MvcResult result) throws Exception {

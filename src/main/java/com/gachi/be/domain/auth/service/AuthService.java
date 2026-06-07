@@ -8,6 +8,9 @@ import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetEmailSendRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetEmailVerifyRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetRequest;
 import com.gachi.be.domain.auth.dto.request.ReissueRequest;
 import com.gachi.be.domain.auth.dto.request.SignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
@@ -37,4 +40,10 @@ public interface AuthService {
   EmailSendResponse sendFindLoginIdEmailVerificationCode(FindLoginIdEmailSendRequest request);
 
   FindLoginIdResponse verifyFindLoginIdEmailCode(FindLoginIdEmailVerifyRequest request);
+
+  EmailSendResponse sendPasswordResetEmailVerificationCode(PasswordResetEmailSendRequest request);
+
+  void verifyPasswordResetEmailCode(PasswordResetEmailVerifyRequest request);
+
+  void resetPassword(PasswordResetRequest request);
 }

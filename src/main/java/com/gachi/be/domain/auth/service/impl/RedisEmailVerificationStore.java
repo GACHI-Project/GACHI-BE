@@ -120,16 +120,14 @@ public class RedisEmailVerificationStore implements EmailVerificationStore {
   }
 
   @Override
-  public boolean isEmailVerified(String email) {
+  public boolean isEmailVerified(String email, EmailVerificationPurpose purpose) {
     return StringUtils.hasText(
-        redisTemplate
-            .opsForValue()
-            .get(verifiedKey(normalizeEmail(email), EmailVerificationPurpose.SIGNUP)));
+        redisTemplate.opsForValue().get(verifiedKey(normalizeEmail(email), purpose)));
   }
 
   @Override
-  public void consumeVerifiedEmail(String email) {
-    redisTemplate.delete(verifiedKey(normalizeEmail(email), EmailVerificationPurpose.SIGNUP));
+  public void consumeVerifiedEmail(String email, EmailVerificationPurpose purpose) {
+    redisTemplate.delete(verifiedKey(normalizeEmail(email), purpose));
   }
 
   private String generateCode() {

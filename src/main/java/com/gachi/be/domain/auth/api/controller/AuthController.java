@@ -9,6 +9,9 @@ import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetEmailSendRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetEmailVerifyRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetRequest;
 import com.gachi.be.domain.auth.dto.request.ReissueRequest;
 import com.gachi.be.domain.auth.dto.request.SignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
@@ -123,6 +126,30 @@ public class AuthController {
       @Valid @RequestBody FindLoginIdEmailVerifyRequest request) {
     return ApiResponse.success(
         SuccessCode.AUTH_FIND_LOGIN_ID_SUCCESS, authService.verifyFindLoginIdEmailCode(request));
+  }
+
+  @PostMapping("/password-reset/email/send")
+  public ApiResponse<EmailSendResponse> sendPasswordResetEmailVerificationCode(
+      @Valid @RequestBody PasswordResetEmailSendRequest request,
+      HttpServletRequest servletRequest) {
+    authRateLimitService.checkPasswordResetEmailSendRateLimit(
+        extractClientIp(servletRequest), request.email());
+    return ApiResponse.success(
+        SuccessCode.AUTH_PASSWORD_RESET_EMAIL_CODE_SENT,
+        authService.sendPasswordResetEmailVerificationCode(request));
+  }
+
+  @PostMapping("/password-reset/email/verify")
+  public ApiResponse<Void> verifyPasswordResetEmailCode(
+      @Valid @RequestBody PasswordResetEmailVerifyRequest request) {
+    authService.verifyPasswordResetEmailCode(request);
+    return ApiResponse.success(SuccessCode.AUTH_PASSWORD_RESET_EMAIL_VERIFIED, null);
+  }
+
+  @PostMapping("/password-reset")
+  public ApiResponse<Void> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
+    authService.resetPassword(request);
+    return ApiResponse.success(SuccessCode.AUTH_PASSWORD_RESET_SUCCESS, null);
   }
 
   private String extractDeviceInfo(HttpServletRequest request) {

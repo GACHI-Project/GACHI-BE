@@ -9,6 +9,9 @@ import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetEmailSendRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetEmailVerifyRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetRequest;
 import com.gachi.be.domain.auth.dto.request.ReissueRequest;
 import com.gachi.be.domain.auth.dto.request.SignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
@@ -18,6 +21,7 @@ import com.gachi.be.domain.auth.dto.response.FindLoginIdResponse;
 import com.gachi.be.domain.auth.dto.response.SignupResponse;
 import com.gachi.be.domain.auth.entity.AuthRefreshToken;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
+import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository.RefreshTokenStatus;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.auth.service.AuthService;
 import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
@@ -177,7 +181,7 @@ public class AuthServiceImpl implements AuthService {
 
     User user =
         userRepository
-            .findByLoginId(loginId)
+            .findByLoginIdWithLock(loginId)
             .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS));
 
     if (!user.isActive()) {
@@ -199,24 +203,28 @@ public class AuthServiceImpl implements AuthService {
     String refreshToken = normalizeText(request.refreshToken());
     JwtTokenProvider.RefreshTokenClaims claims = jwtTokenProvider.parseRefreshToken(refreshToken);
     String tokenHash = tokenHashService.sha256(refreshToken);
+    RefreshTokenStatus tokenStatus =
+        authRefreshTokenRepository
+            .findStatusByJtiAndTokenHash(claims.getJti(), tokenHash)
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
+    ensureRefreshTokenUsable(tokenStatus.getRevokedAt(), tokenStatus.getExpiresAt());
+
+    User user =
+        userRepository
+            .findByIdWithLock(tokenStatus.getUserId())
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
 
     AuthRefreshToken existingToken =
         authRefreshTokenRepository
             .findByJtiAndTokenHash(claims.getJti(), tokenHash)
             .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
+    ensureRefreshTokenUsable(existingToken.getRevokedAt(), existingToken.getExpiresAt());
 
-    if (existingToken.getRevokedAt() != null) {
-      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_REVOKED);
-    }
-    if (existingToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
-      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_EXPIRED);
-    }
-
-    User user = existingToken.getUser();
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
     }
     ensurePasswordChangeNotRequired(user);
+    ensureRefreshTokenIssuedAfterPasswordUpdate(existingToken, user);
 
     existingToken.revoke();
     String nextDeviceInfo = mergeNullable(deviceInfo, existingToken.getDeviceInfo());
@@ -266,6 +274,47 @@ public class AuthServiceImpl implements AuthService {
     return new FindLoginIdResponse(user.getLoginId());
   }
 
+  @Override
+  @Transactional
+  public EmailSendResponse sendPasswordResetEmailVerificationCode(
+      PasswordResetEmailSendRequest request) {
+    User user =
+        findActiveUserForPasswordReset(
+            normalizeText(request.loginId()), normalizeEmail(request.email()));
+    return issueAndSendEmailCode(user.getEmail(), EmailVerificationPurpose.RESET_PASSWORD);
+  }
+
+  @Override
+  @Transactional
+  public void verifyPasswordResetEmailCode(PasswordResetEmailVerifyRequest request) {
+    User user =
+        findActiveUserForPasswordReset(
+            normalizeText(request.loginId()), normalizeEmail(request.email()));
+    emailVerificationStore.verifyCode(
+        user.getEmail(), normalizeText(request.code()), EmailVerificationPurpose.RESET_PASSWORD);
+  }
+
+  @Override
+  @Transactional
+  public void resetPassword(PasswordResetRequest request) {
+    String loginId = normalizeText(request.loginId());
+    String email = normalizeEmail(request.email());
+    User user = findActiveUserForPasswordResetWithLock(loginId, email);
+
+    if (!emailVerificationStore.isEmailVerified(email, EmailVerificationPurpose.RESET_PASSWORD)) {
+      throw new BusinessException(ErrorCode.AUTH_EMAIL_NOT_VERIFIED);
+    }
+    if (!request.password().equals(request.passwordConfirm())) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_CONFIRM_MISMATCH);
+    }
+
+    validatePasswordPolicy(request.password(), loginId, email, user.getPhoneNumber());
+    enforcePasswordStrength(request.password());
+    user.resetPassword(passwordEncoder.encode(request.password()), OffsetDateTime.now());
+    revokeActiveRefreshTokens(user.getId());
+    consumeVerifiedEmailAfterCommit(email, EmailVerificationPurpose.RESET_PASSWORD);
+  }
+
   private EmailSendResponse issueAndSendEmailCode(String email, EmailVerificationPurpose purpose) {
     String code = emailVerificationStore.issueCode(email, purpose);
     try {
@@ -291,10 +340,57 @@ public class AuthServiceImpl implements AuthService {
         .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_EMAIL_NOT_REGISTERED));
   }
 
+  private User findActiveUserForPasswordReset(String loginId, String email) {
+    User user =
+        userRepository
+            .findByLoginId(loginId)
+            .orElseThrow(
+                () -> new BusinessException(ErrorCode.AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND));
+    if (!email.equals(user.getEmail()) || !user.isActive()) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND);
+    }
+    return user;
+  }
+
+  private User findActiveUserForPasswordResetWithLock(String loginId, String email) {
+    User user =
+        userRepository
+            .findByLoginIdWithLock(loginId)
+            .orElseThrow(
+                () -> new BusinessException(ErrorCode.AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND));
+    if (!email.equals(user.getEmail()) || !user.isActive()) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND);
+    }
+    return user;
+  }
+
   private void ensureActiveAccount(User user) {
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
     }
+  }
+
+  private void ensureRefreshTokenUsable(OffsetDateTime revokedAt, OffsetDateTime expiresAt) {
+    if (revokedAt != null) {
+      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_REVOKED);
+    }
+    if (expiresAt.isBefore(OffsetDateTime.now())) {
+      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_EXPIRED);
+    }
+  }
+
+  private void ensureRefreshTokenIssuedAfterPasswordUpdate(
+      AuthRefreshToken refreshToken, User user) {
+    if (!refreshToken.getCreatedAt().isAfter(user.getPasswordUpdatedAt())) {
+      // 비밀번호 재설정과 토큰 재발급이 겹친 경우에도 이전 비밀번호 기준 세션을 차단한다.
+      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_REVOKED);
+    }
+  }
+
+  private void revokeActiveRefreshTokens(Long userId) {
+    authRefreshTokenRepository
+        .findAllByUserIdAndRevokedAtIsNull(userId)
+        .forEach(AuthRefreshToken::revoke);
   }
 
   /** 로그인/재발급 공통 토큰 발급 + refresh token 세션 저장 로직. */
@@ -506,15 +602,19 @@ public class AuthServiceImpl implements AuthService {
   }
 
   private void consumeVerifiedEmailAfterCommit(String email) {
+    consumeVerifiedEmailAfterCommit(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  private void consumeVerifiedEmailAfterCommit(String email, EmailVerificationPurpose purpose) {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(
           new TransactionSynchronization() {
             @Override
             public void afterCommit() {
               try {
-                emailVerificationStore.consumeVerifiedEmail(email);
+                emailVerificationStore.consumeVerifiedEmail(email, purpose);
               } catch (Exception e) {
-                // 가입 자체는 커밋된 상태이므로 후처리 실패만 별도로 로깅하고 요청은 실패시키지 않는다.
+                // 본 작업은 이미 커밋된 상태이므로 후처리 실패만 별도로 로깅하고 요청은 실패시키지 않는다.
                 log.warn("Failed to consume verified email mark after commit.", e);
               }
             }
@@ -522,7 +622,7 @@ public class AuthServiceImpl implements AuthService {
       return;
     }
     try {
-      emailVerificationStore.consumeVerifiedEmail(email);
+      emailVerificationStore.consumeVerifiedEmail(email, purpose);
     } catch (Exception e) {
       log.warn("Failed to consume verified email mark without tx sync.", e);
     }
