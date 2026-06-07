@@ -1,6 +1,7 @@
 package com.gachi.be.domain.auth.service.impl;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
+import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
@@ -63,9 +64,9 @@ public class RedisEmailVerificationStore implements EmailVerificationStore {
   private final AuthProperties authProperties;
 
   @Override
-  public String issueCode(String email) {
+  public String issueCode(String email, EmailVerificationPurpose purpose) {
     String normalizedEmail = normalizeEmail(email);
-    String cooldownKey = cooldownKey(normalizedEmail);
+    String cooldownKey = cooldownKey(normalizedEmail, purpose);
     Duration cooldownTtl = Duration.ofSeconds(authProperties.getEmail().getResendCooldownSeconds());
     Boolean acquired = redisTemplate.opsForValue().setIfAbsent(cooldownKey, "1", cooldownTtl);
     if (!Boolean.TRUE.equals(acquired)) {
@@ -75,30 +76,30 @@ public class RedisEmailVerificationStore implements EmailVerificationStore {
     String code = generateCode();
     Duration codeTtl = Duration.ofSeconds(authProperties.getEmail().getCodeTtlSeconds());
 
-    redisTemplate.opsForValue().set(codeKey(normalizedEmail), code, codeTtl);
-    redisTemplate.opsForValue().set(attemptKey(normalizedEmail), "0", codeTtl);
+    redisTemplate.opsForValue().set(codeKey(normalizedEmail, purpose), code, codeTtl);
+    redisTemplate.opsForValue().set(attemptKey(normalizedEmail, purpose), "0", codeTtl);
     return code;
   }
 
   @Override
-  public void rollbackIssuedCode(String email) {
+  public void rollbackIssuedCode(String email, EmailVerificationPurpose purpose) {
     String normalizedEmail = normalizeEmail(email);
-    redisTemplate.delete(codeKey(normalizedEmail));
-    redisTemplate.delete(attemptKey(normalizedEmail));
-    redisTemplate.delete(cooldownKey(normalizedEmail));
+    redisTemplate.delete(codeKey(normalizedEmail, purpose));
+    redisTemplate.delete(attemptKey(normalizedEmail, purpose));
+    redisTemplate.delete(cooldownKey(normalizedEmail, purpose));
   }
 
   @Override
-  public void verifyCode(String email, String code) {
+  public void verifyCode(String email, String code, EmailVerificationPurpose purpose) {
     String normalizedEmail = normalizeEmail(email);
     // 검증/시도횟수 증가/성공 소모를 한 번에 처리해 병렬 요청 우회를 방지한다.
     Long result =
         redisTemplate.execute(
             VERIFY_CODE_SCRIPT,
             List.of(
-                codeKey(normalizedEmail),
-                attemptKey(normalizedEmail),
-                verifiedKey(normalizedEmail)),
+                codeKey(normalizedEmail, purpose),
+                attemptKey(normalizedEmail, purpose),
+                verifiedKey(normalizedEmail, purpose)),
             code,
             String.valueOf(authProperties.getEmail().getMaxAttempts()),
             String.valueOf(authProperties.getEmail().getVerifiedTtlSeconds()));
@@ -119,13 +120,14 @@ public class RedisEmailVerificationStore implements EmailVerificationStore {
   }
 
   @Override
-  public boolean isEmailVerified(String email) {
-    return StringUtils.hasText(redisTemplate.opsForValue().get(verifiedKey(normalizeEmail(email))));
+  public boolean isEmailVerified(String email, EmailVerificationPurpose purpose) {
+    return StringUtils.hasText(
+        redisTemplate.opsForValue().get(verifiedKey(normalizeEmail(email), purpose)));
   }
 
   @Override
-  public void consumeVerifiedEmail(String email) {
-    redisTemplate.delete(verifiedKey(normalizeEmail(email)));
+  public void consumeVerifiedEmail(String email, EmailVerificationPurpose purpose) {
+    redisTemplate.delete(verifiedKey(normalizeEmail(email), purpose));
   }
 
   private String generateCode() {
@@ -137,19 +139,26 @@ public class RedisEmailVerificationStore implements EmailVerificationStore {
     return email.trim().toLowerCase(Locale.ROOT);
   }
 
-  private String codeKey(String email) {
-    return KEY_PREFIX + "code:" + email;
+  private String codeKey(String email, EmailVerificationPurpose purpose) {
+    return purposePrefix(purpose) + "code:" + email;
   }
 
-  private String attemptKey(String email) {
-    return KEY_PREFIX + "attempt:" + email;
+  private String attemptKey(String email, EmailVerificationPurpose purpose) {
+    return purposePrefix(purpose) + "attempt:" + email;
   }
 
-  private String cooldownKey(String email) {
-    return KEY_PREFIX + "cooldown:" + email;
+  private String cooldownKey(String email, EmailVerificationPurpose purpose) {
+    return purposePrefix(purpose) + "cooldown:" + email;
   }
 
-  private String verifiedKey(String email) {
-    return KEY_PREFIX + "verified:" + email;
+  private String verifiedKey(String email, EmailVerificationPurpose purpose) {
+    return purposePrefix(purpose) + "verified:" + email;
+  }
+
+  private String purposePrefix(EmailVerificationPurpose purpose) {
+    if (purpose == EmailVerificationPurpose.SIGNUP) {
+      return KEY_PREFIX;
+    }
+    return KEY_PREFIX + purpose.keySegment() + ":";
   }
 }

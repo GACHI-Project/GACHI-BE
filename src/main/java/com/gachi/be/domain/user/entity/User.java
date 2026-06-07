@@ -123,6 +123,40 @@ public class User {
     return status == UserStatus.ACTIVE;
   }
 
+  public void resetPassword(String passwordHash, OffsetDateTime passwordUpdatedAt) {
+    if (passwordHash == null || passwordHash.isBlank()) {
+      throw new IllegalArgumentException("passwordHash는 비어 있을 수 없습니다.");
+    }
+    if (passwordUpdatedAt == null) {
+      throw new IllegalArgumentException("passwordUpdatedAt은 비어 있을 수 없습니다.");
+    }
+    this.passwordHash = passwordHash;
+    this.passwordUpdatedAt = passwordUpdatedAt;
+    this.passwordChangeRequired = false;
+  }
+
+  public void updateProfile(String name, String phoneNumber) {
+    if (name == null || name.isBlank()) {
+      throw new IllegalArgumentException("name은 비어 있을 수 없습니다.");
+    }
+    if (phoneNumber == null || phoneNumber.isBlank()) {
+      throw new IllegalArgumentException("phoneNumber는 비어 있을 수 없습니다.");
+    }
+    this.name = name;
+    this.phoneNumber = phoneNumber;
+  }
+
+  public void changeEmail(String email, OffsetDateTime emailVerifiedAt) {
+    if (email == null || email.isBlank()) {
+      throw new IllegalArgumentException("email은 비어 있을 수 없습니다.");
+    }
+    if (emailVerifiedAt == null) {
+      throw new IllegalArgumentException("emailVerifiedAt은 비어 있을 수 없습니다.");
+    }
+    this.email = email;
+    this.emailVerifiedAt = emailVerifiedAt;
+  }
+
   public void updateLanguage(String languageCode) {
     if (languageCode == null || languageCode.isBlank()) {
       throw new IllegalArgumentException("languageCode는 비어 있을 수 없습니다.");

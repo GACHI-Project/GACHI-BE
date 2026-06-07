@@ -7,7 +7,7 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
-/** NEIS 학교기본정보 Open API 호출에 필요한 서버 설정을 관리한다. */
+/** NEIS Open API 호출에 필요한 서버 설정을 관리한다. */
 @Getter
 @Setter
 @Validated
@@ -16,10 +16,17 @@ public class NeisProperties {
   private String apiKey;
   private String schoolApiKey;
   private String scheduleApiKey;
+  private String mealApiKey;
+  private String timetableApiKey;
 
   @NotBlank private String schoolInfoUrl = "https://open.neis.go.kr/hub/schoolInfo";
 
   @NotBlank private String schoolScheduleUrl = "https://open.neis.go.kr/hub/SchoolSchedule";
+
+  @NotBlank
+  private String mealServiceDietInfoUrl = "https://open.neis.go.kr/hub/mealServiceDietInfo";
+
+  @NotBlank private String elementaryTimetableUrl = "https://open.neis.go.kr/hub/elsTimetable";
 
   @Min(1)
   private int connectTimeoutSeconds = 5;
@@ -33,6 +40,14 @@ public class NeisProperties {
 
   public String getScheduleApiKey() {
     return hasText(scheduleApiKey) ? scheduleApiKey : apiKey;
+  }
+
+  public String getMealApiKey() {
+    return hasText(mealApiKey) ? mealApiKey.trim() : null;
+  }
+
+  public String getTimetableApiKey() {
+    return hasText(timetableApiKey) ? timetableApiKey.trim() : null;
   }
 
   private boolean hasText(String value) {

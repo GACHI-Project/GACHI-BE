@@ -4,17 +4,42 @@ package com.gachi.be.domain.auth.service;
 public interface EmailVerificationStore {
 
   /** 인증 코드를 발급한다. */
-  String issueCode(String email);
+  default String issueCode(String email) {
+    return issueCode(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  /** 인증 목적별로 분리된 인증 코드를 발급한다. */
+  String issueCode(String email, EmailVerificationPurpose purpose);
 
   /** 메일 발송 실패 시 발급된 인증 정보를 되돌린다. */
-  void rollbackIssuedCode(String email);
+  default void rollbackIssuedCode(String email) {
+    rollbackIssuedCode(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  /** 메일 발송 실패 시 인증 목적별로 발급된 인증 정보를 되돌린다. */
+  void rollbackIssuedCode(String email, EmailVerificationPurpose purpose);
 
   /** 입력된 인증 코드를 검증한다. */
-  void verifyCode(String email, String code);
+  default void verifyCode(String email, String code) {
+    verifyCode(email, code, EmailVerificationPurpose.SIGNUP);
+  }
+
+  /** 인증 목적별로 분리된 인증 코드를 검증한다. */
+  void verifyCode(String email, String code, EmailVerificationPurpose purpose);
 
   /** 이메일 인증 완료 여부를 조회한다. */
-  boolean isEmailVerified(String email);
+  default boolean isEmailVerified(String email) {
+    return isEmailVerified(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  /** 인증 목적별 이메일 인증 완료 여부를 조회한다. */
+  boolean isEmailVerified(String email, EmailVerificationPurpose purpose);
 
   /** 회원가입 완료 시 인증 완료 상태를 소모한다. */
-  void consumeVerifiedEmail(String email);
+  default void consumeVerifiedEmail(String email) {
+    consumeVerifiedEmail(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  /** 인증 목적별 인증 완료 상태를 소모한다. */
+  void consumeVerifiedEmail(String email, EmailVerificationPurpose purpose);
 }

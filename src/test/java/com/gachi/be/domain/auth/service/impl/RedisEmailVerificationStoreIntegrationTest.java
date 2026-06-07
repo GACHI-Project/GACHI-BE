@@ -3,6 +3,7 @@ package com.gachi.be.domain.auth.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
@@ -77,5 +78,36 @@ class RedisEmailVerificationStoreIntegrationTest {
 
     String secondCode = emailVerificationStore.issueCode(email);
     assertThat(secondCode).hasSize(6);
+  }
+
+  @Test
+  void purposeSeparatesCooldownAndVerifiedState() {
+    String email = "redis-purpose@gachi.com";
+
+    String signupCode = emailVerificationStore.issueCode(email, EmailVerificationPurpose.SIGNUP);
+    String findLoginIdCode =
+        emailVerificationStore.issueCode(email, EmailVerificationPurpose.FIND_LOGIN_ID);
+    String passwordResetCode =
+        emailVerificationStore.issueCode(email, EmailVerificationPurpose.RESET_PASSWORD);
+    String changeEmailCode =
+        emailVerificationStore.issueCode(email, EmailVerificationPurpose.CHANGE_EMAIL);
+
+    assertThat(signupCode).hasSize(6);
+    assertThat(findLoginIdCode).hasSize(6);
+    assertThat(passwordResetCode).hasSize(6);
+    assertThat(changeEmailCode).hasSize(6);
+
+    emailVerificationStore.verifyCode(
+        email, changeEmailCode, EmailVerificationPurpose.CHANGE_EMAIL);
+
+    assertThat(emailVerificationStore.isEmailVerified(email)).isFalse();
+    assertThat(
+            emailVerificationStore.isEmailVerified(email, EmailVerificationPurpose.FIND_LOGIN_ID))
+        .isFalse();
+    assertThat(
+            emailVerificationStore.isEmailVerified(email, EmailVerificationPurpose.RESET_PASSWORD))
+        .isFalse();
+    assertThat(emailVerificationStore.isEmailVerified(email, EmailVerificationPurpose.CHANGE_EMAIL))
+        .isTrue();
   }
 }

@@ -27,6 +27,9 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AuthRateLimitService {
   private static final String EMAIL_SEND_SCOPE = "email-send";
+  private static final String FIND_LOGIN_ID_EMAIL_SEND_SCOPE = "find-login-id-email-send";
+  private static final String PASSWORD_RESET_EMAIL_SEND_SCOPE = "password-reset-email-send";
+  private static final String PROFILE_EMAIL_CHANGE_SEND_SCOPE = "profile-email-change-send";
   private static final String LOGIN_SCOPE = "login";
   private static final RedisScript<List<Long>> FIXED_WINDOW_RATE_LIMIT_SCRIPT =
       createFixedWindowRateLimitScript();
@@ -43,9 +46,45 @@ public class AuthRateLimitService {
     if (!isRateLimitEnabled()) {
       return;
     }
+    checkEmailSendRateLimit(clientIp, email, EMAIL_SEND_SCOPE);
+  }
+
+  /**
+   * 아이디 찾기 인증코드 발송 엔드포인트 호출 한도를 점검한다.
+   *
+   * <p>회원가입 이메일 인증과 UX가 서로 막히지 않도록 별도 scope를 사용한다.
+   */
+  public void checkFindLoginIdEmailSendRateLimit(String clientIp, String email) {
+    if (!isRateLimitEnabled()) {
+      return;
+    }
+    checkEmailSendRateLimit(clientIp, email, FIND_LOGIN_ID_EMAIL_SEND_SCOPE);
+  }
+
+  /**
+   * 비밀번호 재설정 인증코드 발송 엔드포인트 호출 한도를 점검한다.
+   *
+   * <p>회원가입/아이디 찾기와 UX가 서로 막히지 않도록 별도 scope를 사용한다.
+   */
+  public void checkPasswordResetEmailSendRateLimit(String clientIp, String email) {
+    if (!isRateLimitEnabled()) {
+      return;
+    }
+    checkEmailSendRateLimit(clientIp, email, PASSWORD_RESET_EMAIL_SEND_SCOPE);
+  }
+
+  /** 프로필 이메일 변경 인증번호 발송 rate limit은 다른 이메일 인증 흐름과 별도 scope로 분리한다. */
+  public void checkProfileEmailChangeSendRateLimit(String clientIp, String email) {
+    if (!isRateLimitEnabled()) {
+      return;
+    }
+    checkEmailSendRateLimit(clientIp, email, PROFILE_EMAIL_CHANGE_SEND_SCOPE);
+  }
+
+  private void checkEmailSendRateLimit(String clientIp, String email, String scope) {
     String normalizedEmail = normalizeEmail(email);
     String hashedEmail = hmacSha256Hex(normalizedEmail);
-    String key = buildKey(EMAIL_SEND_SCOPE, normalizeIp(clientIp) + ":" + hashedEmail);
+    String key = buildKey(scope, normalizeIp(clientIp) + ":" + hashedEmail);
     enforceOrThrow(
         key, authProperties.getRateLimit().getEmailSend(), ErrorCode.AUTH_EMAIL_SEND_RATE_LIMITED);
   }
