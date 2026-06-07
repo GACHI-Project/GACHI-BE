@@ -9,6 +9,9 @@ import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetEmailSendRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetEmailVerifyRequest;
+import com.gachi.be.domain.auth.dto.request.PasswordResetRequest;
 import com.gachi.be.domain.auth.dto.request.ReissueRequest;
 import com.gachi.be.domain.auth.dto.request.SignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
@@ -266,6 +269,47 @@ public class AuthServiceImpl implements AuthService {
     return new FindLoginIdResponse(user.getLoginId());
   }
 
+  @Override
+  @Transactional
+  public EmailSendResponse sendPasswordResetEmailVerificationCode(
+      PasswordResetEmailSendRequest request) {
+    User user =
+        findActiveUserForPasswordReset(
+            normalizeText(request.loginId()), normalizeEmail(request.email()));
+    return issueAndSendEmailCode(user.getEmail(), EmailVerificationPurpose.RESET_PASSWORD);
+  }
+
+  @Override
+  @Transactional
+  public void verifyPasswordResetEmailCode(PasswordResetEmailVerifyRequest request) {
+    User user =
+        findActiveUserForPasswordReset(
+            normalizeText(request.loginId()), normalizeEmail(request.email()));
+    emailVerificationStore.verifyCode(
+        user.getEmail(), normalizeText(request.code()), EmailVerificationPurpose.RESET_PASSWORD);
+  }
+
+  @Override
+  @Transactional
+  public void resetPassword(PasswordResetRequest request) {
+    String loginId = normalizeText(request.loginId());
+    String email = normalizeEmail(request.email());
+    User user = findActiveUserForPasswordReset(loginId, email);
+
+    if (!emailVerificationStore.isEmailVerified(email, EmailVerificationPurpose.RESET_PASSWORD)) {
+      throw new BusinessException(ErrorCode.AUTH_EMAIL_NOT_VERIFIED);
+    }
+    if (!request.password().equals(request.passwordConfirm())) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_CONFIRM_MISMATCH);
+    }
+
+    validatePasswordPolicy(request.password(), loginId, email, user.getPhoneNumber());
+    enforcePasswordStrength(request.password());
+    user.resetPassword(passwordEncoder.encode(request.password()), OffsetDateTime.now());
+    revokeActiveRefreshTokens(user.getId());
+    consumeVerifiedEmailAfterCommit(email, EmailVerificationPurpose.RESET_PASSWORD);
+  }
+
   private EmailSendResponse issueAndSendEmailCode(String email, EmailVerificationPurpose purpose) {
     String code = emailVerificationStore.issueCode(email, purpose);
     try {
@@ -291,10 +335,28 @@ public class AuthServiceImpl implements AuthService {
         .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_EMAIL_NOT_REGISTERED));
   }
 
+  private User findActiveUserForPasswordReset(String loginId, String email) {
+    User user =
+        userRepository
+            .findByLoginId(loginId)
+            .orElseThrow(
+                () -> new BusinessException(ErrorCode.AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND));
+    if (!email.equals(user.getEmail()) || !user.isActive()) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND);
+    }
+    return user;
+  }
+
   private void ensureActiveAccount(User user) {
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
     }
+  }
+
+  private void revokeActiveRefreshTokens(Long userId) {
+    authRefreshTokenRepository
+        .findAllByUserIdAndRevokedAtIsNull(userId)
+        .forEach(AuthRefreshToken::revoke);
   }
 
   /** 로그인/재발급 공통 토큰 발급 + refresh token 세션 저장 로직. */
@@ -506,15 +568,19 @@ public class AuthServiceImpl implements AuthService {
   }
 
   private void consumeVerifiedEmailAfterCommit(String email) {
+    consumeVerifiedEmailAfterCommit(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  private void consumeVerifiedEmailAfterCommit(String email, EmailVerificationPurpose purpose) {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(
           new TransactionSynchronization() {
             @Override
             public void afterCommit() {
               try {
-                emailVerificationStore.consumeVerifiedEmail(email);
+                emailVerificationStore.consumeVerifiedEmail(email, purpose);
               } catch (Exception e) {
-                // 가입 자체는 커밋된 상태이므로 후처리 실패만 별도로 로깅하고 요청은 실패시키지 않는다.
+                // 본 작업은 이미 커밋된 상태이므로 후처리 실패만 별도로 로깅하고 요청은 실패시키지 않는다.
                 log.warn("Failed to consume verified email mark after commit.", e);
               }
             }
@@ -522,7 +588,7 @@ public class AuthServiceImpl implements AuthService {
       return;
     }
     try {
-      emailVerificationStore.consumeVerifiedEmail(email);
+      emailVerificationStore.consumeVerifiedEmail(email, purpose);
     } catch (Exception e) {
       log.warn("Failed to consume verified email mark without tx sync.", e);
     }

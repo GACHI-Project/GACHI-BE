@@ -41,11 +41,17 @@ public enum ErrorCode {
       "가입된 이메일을 찾을 수 없습니다.",
       "아이디 찾기 요청 이메일에 해당하는 계정 없음",
       ErrorLogLevel.INFO),
+  AUTH_PASSWORD_RESET_ACCOUNT_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "AUTH4042",
+      "일치하는 계정을 찾을 수 없습니다.",
+      "비밀번호 재설정 요청 loginId/email 조합에 해당하는 활성 계정 없음",
+      ErrorLogLevel.INFO),
   AUTH_EMAIL_NOT_VERIFIED(
       HttpStatus.BAD_REQUEST,
       "AUTH4001",
       "이메일 인증이 완료되지 않았습니다.",
-      "회원가입 전 이메일 인증 필요",
+      "회원가입/비밀번호 재설정 전 이메일 인증 필요",
       ErrorLogLevel.WARN),
   AUTH_EMAIL_SEND_COOLDOWN(
       HttpStatus.TOO_MANY_REQUESTS,

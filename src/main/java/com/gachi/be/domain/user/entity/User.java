@@ -123,6 +123,18 @@ public class User {
     return status == UserStatus.ACTIVE;
   }
 
+  public void resetPassword(String passwordHash, OffsetDateTime passwordUpdatedAt) {
+    if (passwordHash == null || passwordHash.isBlank()) {
+      throw new IllegalArgumentException("passwordHash는 비어 있을 수 없습니다.");
+    }
+    if (passwordUpdatedAt == null) {
+      throw new IllegalArgumentException("passwordUpdatedAt은 비어 있을 수 없습니다.");
+    }
+    this.passwordHash = passwordHash;
+    this.passwordUpdatedAt = passwordUpdatedAt;
+    this.passwordChangeRequired = false;
+  }
+
   public void updateLanguage(String languageCode) {
     if (languageCode == null || languageCode.isBlank()) {
       throw new IllegalArgumentException("languageCode는 비어 있을 수 없습니다.");

@@ -87,13 +87,22 @@ class RedisEmailVerificationStoreIntegrationTest {
     String signupCode = emailVerificationStore.issueCode(email, EmailVerificationPurpose.SIGNUP);
     String findLoginIdCode =
         emailVerificationStore.issueCode(email, EmailVerificationPurpose.FIND_LOGIN_ID);
+    String passwordResetCode =
+        emailVerificationStore.issueCode(email, EmailVerificationPurpose.RESET_PASSWORD);
 
     assertThat(signupCode).hasSize(6);
     assertThat(findLoginIdCode).hasSize(6);
+    assertThat(passwordResetCode).hasSize(6);
 
     emailVerificationStore.verifyCode(
-        email, findLoginIdCode, EmailVerificationPurpose.FIND_LOGIN_ID);
+        email, passwordResetCode, EmailVerificationPurpose.RESET_PASSWORD);
 
     assertThat(emailVerificationStore.isEmailVerified(email)).isFalse();
+    assertThat(
+            emailVerificationStore.isEmailVerified(email, EmailVerificationPurpose.FIND_LOGIN_ID))
+        .isFalse();
+    assertThat(
+            emailVerificationStore.isEmailVerified(email, EmailVerificationPurpose.RESET_PASSWORD))
+        .isTrue();
   }
 }
