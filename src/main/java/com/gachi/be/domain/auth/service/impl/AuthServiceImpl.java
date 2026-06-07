@@ -21,6 +21,7 @@ import com.gachi.be.domain.auth.dto.response.FindLoginIdResponse;
 import com.gachi.be.domain.auth.dto.response.SignupResponse;
 import com.gachi.be.domain.auth.entity.AuthRefreshToken;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
+import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository.RefreshTokenStatus;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.auth.service.AuthService;
 import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
@@ -202,26 +203,22 @@ public class AuthServiceImpl implements AuthService {
     String refreshToken = normalizeText(request.refreshToken());
     JwtTokenProvider.RefreshTokenClaims claims = jwtTokenProvider.parseRefreshToken(refreshToken);
     String tokenHash = tokenHashService.sha256(refreshToken);
-    Long userId =
+    RefreshTokenStatus tokenStatus =
         authRefreshTokenRepository
-            .findUserIdByJtiAndTokenHash(claims.getJti(), tokenHash)
+            .findStatusByJtiAndTokenHash(claims.getJti(), tokenHash)
             .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
+    ensureRefreshTokenUsable(tokenStatus.getRevokedAt(), tokenStatus.getExpiresAt());
+
     User user =
         userRepository
-            .findByIdWithLock(userId)
+            .findByIdWithLock(tokenStatus.getUserId())
             .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
 
     AuthRefreshToken existingToken =
         authRefreshTokenRepository
             .findByJtiAndTokenHash(claims.getJti(), tokenHash)
             .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_INVALID));
-
-    if (existingToken.getRevokedAt() != null) {
-      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_REVOKED);
-    }
-    if (existingToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
-      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_EXPIRED);
-    }
+    ensureRefreshTokenUsable(existingToken.getRevokedAt(), existingToken.getExpiresAt());
 
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
@@ -370,6 +367,15 @@ public class AuthServiceImpl implements AuthService {
   private void ensureActiveAccount(User user) {
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
+    }
+  }
+
+  private void ensureRefreshTokenUsable(OffsetDateTime revokedAt, OffsetDateTime expiresAt) {
+    if (revokedAt != null) {
+      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_REVOKED);
+    }
+    if (expiresAt.isBefore(OffsetDateTime.now())) {
+      throw new BusinessException(ErrorCode.AUTH_REFRESH_TOKEN_EXPIRED);
     }
   }
 

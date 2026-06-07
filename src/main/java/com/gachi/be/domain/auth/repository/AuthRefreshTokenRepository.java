@@ -14,11 +14,24 @@ public interface AuthRefreshTokenRepository extends JpaRepository<AuthRefreshTok
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   Optional<AuthRefreshToken> findByJtiAndTokenHash(String jti, String tokenHash);
 
-  @Query("select t.user.id from AuthRefreshToken t where t.jti = :jti and t.tokenHash = :tokenHash")
-  Optional<Long> findUserIdByJtiAndTokenHash(
+  @Query(
+      """
+      select t.user.id as userId, t.revokedAt as revokedAt, t.expiresAt as expiresAt
+      from AuthRefreshToken t
+      where t.jti = :jti and t.tokenHash = :tokenHash
+      """)
+  Optional<RefreshTokenStatus> findStatusByJtiAndTokenHash(
       @Param("jti") String jti, @Param("tokenHash") String tokenHash);
 
   List<AuthRefreshToken> findAllByUserIdAndRevokedAtIsNull(Long userId);
 
   long deleteByRevokedAtIsNotNullAndUpdatedAtBefore(OffsetDateTime threshold);
+
+  interface RefreshTokenStatus {
+    Long getUserId();
+
+    OffsetDateTime getRevokedAt();
+
+    OffsetDateTime getExpiresAt();
+  }
 }
