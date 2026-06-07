@@ -57,7 +57,10 @@ public class UserProfileService {
     try {
       userRepository.saveAndFlush(currentUser);
     } catch (DataIntegrityViolationException e) {
-      throw new BusinessException(ErrorCode.AUTH_DUPLICATE_PHONE_NUMBER);
+      if (isUniqueConstraintViolation(e, "uk_users_phone_number")) {
+        throw new BusinessException(ErrorCode.AUTH_DUPLICATE_PHONE_NUMBER);
+      }
+      throw e;
     }
     return new ProfileUpdateResponse(currentUser.getName(), currentUser.getPhoneNumber());
   }
@@ -85,7 +88,7 @@ public class UserProfileService {
     } catch (Exception e) {
       rollbackIssuedEmailChangeCodeSafely(verificationSubject);
       throw new ExternalApiException(
-          ErrorCode.EXTERNAL_API_ERROR, "Failed to send email change verification code.");
+          ErrorCode.EXTERNAL_API_ERROR, "Failed to send email change verification code.", e);
     }
 
     return new EmailSendResponse(
@@ -124,7 +127,10 @@ public class UserProfileService {
     try {
       userRepository.saveAndFlush(currentUser);
     } catch (DataIntegrityViolationException e) {
-      throw new BusinessException(ErrorCode.AUTH_DUPLICATE_EMAIL);
+      if (isUniqueConstraintViolation(e, "users_email_key")) {
+        throw new BusinessException(ErrorCode.AUTH_DUPLICATE_EMAIL);
+      }
+      throw e;
     }
     revokeActiveRefreshTokens(currentUser.getId());
     consumeVerifiedEmailAfterCommit(verificationSubject);
@@ -194,6 +200,13 @@ public class UserProfileService {
     } catch (Exception rollbackException) {
       log.warn("Failed to rollback issued email change verification code.", rollbackException);
     }
+  }
+
+  private boolean isUniqueConstraintViolation(
+      DataIntegrityViolationException exception, String constraintName) {
+    Throwable cause = exception.getMostSpecificCause();
+    String message = cause != null ? normalizeText(cause.getMessage()) : "";
+    return message.toLowerCase(Locale.ROOT).contains(constraintName);
   }
 
   /**

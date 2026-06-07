@@ -48,9 +48,9 @@ import org.springframework.web.context.WebApplicationContext;
       "app.auth.jwt.secret=test-secret-key-that-is-longer-than-32-bytes"
     })
 class UserControllerIntegrationTest {
-  private final ObjectMapper objectMapper = new ObjectMapper();
   private MockMvc mockMvc;
 
+  @Autowired private ObjectMapper objectMapper;
   @Autowired private WebApplicationContext webApplicationContext;
   @Autowired private UserRepository userRepository;
   @Autowired private PasswordEncoder passwordEncoder;
@@ -235,7 +235,7 @@ class UserControllerIntegrationTest {
             .email(email)
             .loginId(loginId)
             .passwordHash(passwordEncoder.encode("Policy12!"))
-            .name("profile-user")
+            .name(loginId)
             .phoneNumber(phoneNumber)
             .status(status)
             .languageCode("KO")
