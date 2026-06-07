@@ -29,6 +29,7 @@ public class AuthRateLimitService {
   private static final String EMAIL_SEND_SCOPE = "email-send";
   private static final String FIND_LOGIN_ID_EMAIL_SEND_SCOPE = "find-login-id-email-send";
   private static final String PASSWORD_RESET_EMAIL_SEND_SCOPE = "password-reset-email-send";
+  private static final String PROFILE_EMAIL_CHANGE_SEND_SCOPE = "profile-email-change-send";
   private static final String LOGIN_SCOPE = "login";
   private static final RedisScript<List<Long>> FIXED_WINDOW_RATE_LIMIT_SCRIPT =
       createFixedWindowRateLimitScript();
@@ -70,6 +71,14 @@ public class AuthRateLimitService {
       return;
     }
     checkEmailSendRateLimit(clientIp, email, PASSWORD_RESET_EMAIL_SEND_SCOPE);
+  }
+
+  /** 프로필 이메일 변경 인증번호 발송 rate limit은 다른 이메일 인증 흐름과 별도 scope로 분리한다. */
+  public void checkProfileEmailChangeSendRateLimit(String clientIp, String email) {
+    if (!isRateLimitEnabled()) {
+      return;
+    }
+    checkEmailSendRateLimit(clientIp, email, PROFILE_EMAIL_CHANGE_SEND_SCOPE);
   }
 
   private void checkEmailSendRateLimit(String clientIp, String email, String scope) {

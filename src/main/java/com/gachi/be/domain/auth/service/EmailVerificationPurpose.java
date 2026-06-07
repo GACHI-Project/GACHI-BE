@@ -4,7 +4,8 @@ package com.gachi.be.domain.auth.service;
 public enum EmailVerificationPurpose {
   SIGNUP("signup"),
   FIND_LOGIN_ID("find-login-id"),
-  RESET_PASSWORD("reset-password");
+  RESET_PASSWORD("reset-password"),
+  CHANGE_EMAIL("change-email");
 
   private final String keySegment;
 
