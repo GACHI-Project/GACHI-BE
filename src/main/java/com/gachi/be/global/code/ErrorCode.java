@@ -51,7 +51,7 @@ public enum ErrorCode {
       HttpStatus.BAD_REQUEST,
       "AUTH4001",
       "이메일 인증이 완료되지 않았습니다.",
-      "회원가입/비밀번호 재설정 전 이메일 인증 필요",
+      "회원가입/비밀번호 재설정/이메일 변경 전 이메일 인증 필요",
       ErrorLogLevel.WARN),
   AUTH_EMAIL_SEND_COOLDOWN(
       HttpStatus.TOO_MANY_REQUESTS,
