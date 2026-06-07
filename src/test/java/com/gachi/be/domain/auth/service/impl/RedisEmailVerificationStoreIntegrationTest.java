@@ -3,6 +3,7 @@ package com.gachi.be.domain.auth.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
@@ -77,5 +78,22 @@ class RedisEmailVerificationStoreIntegrationTest {
 
     String secondCode = emailVerificationStore.issueCode(email);
     assertThat(secondCode).hasSize(6);
+  }
+
+  @Test
+  void purposeSeparatesCooldownAndVerifiedState() {
+    String email = "redis-purpose@gachi.com";
+
+    String signupCode = emailVerificationStore.issueCode(email, EmailVerificationPurpose.SIGNUP);
+    String findLoginIdCode =
+        emailVerificationStore.issueCode(email, EmailVerificationPurpose.FIND_LOGIN_ID);
+
+    assertThat(signupCode).hasSize(6);
+    assertThat(findLoginIdCode).hasSize(6);
+
+    emailVerificationStore.verifyCode(
+        email, findLoginIdCode, EmailVerificationPurpose.FIND_LOGIN_ID);
+
+    assertThat(emailVerificationStore.isEmailVerified(email)).isFalse();
   }
 }

@@ -7,6 +7,7 @@
 ## 대상 엔드포인트
 
 - `POST /api/v1/auth/email/send`
+- `POST /api/v1/auth/find-login-id/email/send`
 - `POST /api/v1/auth/login`
 
 ## 클라이언트 IP 추출 규칙
@@ -20,7 +21,8 @@
 
 ## 식별자 정책
 
-- 이메일 발송 제한(`email/send`): `clientIp + HMAC_SHA256(normalizedEmail)`
+- 회원가입 이메일 발송 제한(`email/send`): `clientIp + HMAC_SHA256(normalizedEmail)`
+- 아이디 찾기 이메일 발송 제한(`find-login-id/email/send`): `clientIp + HMAC_SHA256(normalizedEmail)`
 - 로그인 제한(`login`): `clientIp`
 - `normalizedEmail`: `trim + lowercase(Locale.ROOT)`
 
@@ -30,6 +32,8 @@
 
 - 이메일 발송:
   - 패턴: `{prefix}email-send:{clientIp}:{emailHash}`
+- 아이디 찾기 이메일 발송:
+  - 패턴: `{prefix}find-login-id-email-send:{clientIp}:{emailHash}`
 - 로그인:
   - 패턴: `{prefix}login:{clientIp}`
 

@@ -27,6 +27,7 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class AuthRateLimitService {
   private static final String EMAIL_SEND_SCOPE = "email-send";
+  private static final String FIND_LOGIN_ID_EMAIL_SEND_SCOPE = "find-login-id-email-send";
   private static final String LOGIN_SCOPE = "login";
   private static final RedisScript<List<Long>> FIXED_WINDOW_RATE_LIMIT_SCRIPT =
       createFixedWindowRateLimitScript();
@@ -43,9 +44,25 @@ public class AuthRateLimitService {
     if (!isRateLimitEnabled()) {
       return;
     }
+    checkEmailSendRateLimit(clientIp, email, EMAIL_SEND_SCOPE);
+  }
+
+  /**
+   * 아이디 찾기 인증코드 발송 엔드포인트 호출 한도를 점검한다.
+   *
+   * <p>회원가입 이메일 인증과 UX가 서로 막히지 않도록 별도 scope를 사용한다.
+   */
+  public void checkFindLoginIdEmailSendRateLimit(String clientIp, String email) {
+    if (!isRateLimitEnabled()) {
+      return;
+    }
+    checkEmailSendRateLimit(clientIp, email, FIND_LOGIN_ID_EMAIL_SEND_SCOPE);
+  }
+
+  private void checkEmailSendRateLimit(String clientIp, String email, String scope) {
     String normalizedEmail = normalizeEmail(email);
     String hashedEmail = hmacSha256Hex(normalizedEmail);
-    String key = buildKey(EMAIL_SEND_SCOPE, normalizeIp(clientIp) + ":" + hashedEmail);
+    String key = buildKey(scope, normalizeIp(clientIp) + ":" + hashedEmail);
     enforceOrThrow(
         key, authProperties.getRateLimit().getEmailSend(), ErrorCode.AUTH_EMAIL_SEND_RATE_LIMITED);
   }

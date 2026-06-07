@@ -35,6 +35,12 @@ public enum ErrorCode {
       HttpStatus.CONFLICT, "AUTH4092", "이미 사용 중인 아이디입니다.", "회원가입 login_id 중복", ErrorLogLevel.WARN),
   AUTH_DUPLICATE_PHONE_NUMBER(
       HttpStatus.CONFLICT, "AUTH4093", "이미 사용 중인 전화번호입니다.", "회원가입 전화번호 중복", ErrorLogLevel.WARN),
+  AUTH_EMAIL_NOT_REGISTERED(
+      HttpStatus.NOT_FOUND,
+      "AUTH4041",
+      "가입된 이메일을 찾을 수 없습니다.",
+      "아이디 찾기 요청 이메일에 해당하는 계정 없음",
+      ErrorLogLevel.INFO),
   AUTH_EMAIL_NOT_VERIFIED(
       HttpStatus.BAD_REQUEST,
       "AUTH4001",

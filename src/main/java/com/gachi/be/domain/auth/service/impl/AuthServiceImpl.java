@@ -6,17 +6,21 @@ import com.gachi.be.domain.auth.dto.request.CheckLoginIdRequest;
 import com.gachi.be.domain.auth.dto.request.CheckPhoneNumberRequest;
 import com.gachi.be.domain.auth.dto.request.EmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
+import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
+import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
 import com.gachi.be.domain.auth.dto.request.ReissueRequest;
 import com.gachi.be.domain.auth.dto.request.SignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.dto.response.DuplicateCheckResponse;
 import com.gachi.be.domain.auth.dto.response.EmailSendResponse;
+import com.gachi.be.domain.auth.dto.response.FindLoginIdResponse;
 import com.gachi.be.domain.auth.dto.response.SignupResponse;
 import com.gachi.be.domain.auth.entity.AuthRefreshToken;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.auth.service.AuthService;
+import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
 import com.gachi.be.domain.auth.service.TokenHashService;
@@ -228,14 +232,49 @@ public class AuthServiceImpl implements AuthService {
       throw new BusinessException(ErrorCode.AUTH_DUPLICATE_EMAIL);
     }
 
-    String code = emailVerificationStore.issueCode(email);
+    return issueAndSendEmailCode(email, EmailVerificationPurpose.SIGNUP);
+  }
+
+  @Override
+  @Transactional
+  public void verifyEmailCode(EmailVerifyRequest request) {
+    emailVerificationStore.verifyCode(
+        normalizeEmail(request.email()),
+        normalizeText(request.code()),
+        EmailVerificationPurpose.SIGNUP);
+  }
+
+  @Override
+  @Transactional
+  public EmailSendResponse sendFindLoginIdEmailVerificationCode(
+      FindLoginIdEmailSendRequest request) {
+    String email = normalizeEmail(request.email());
+    User user = findUserByEmailOrThrow(email);
+    ensureActiveAccount(user);
+    return issueAndSendEmailCode(email, EmailVerificationPurpose.FIND_LOGIN_ID);
+  }
+
+  @Override
+  @Transactional
+  public FindLoginIdResponse verifyFindLoginIdEmailCode(FindLoginIdEmailVerifyRequest request) {
+    String email = normalizeEmail(request.email());
+    User user = findUserByEmailOrThrow(email);
+    ensureActiveAccount(user);
+
+    emailVerificationStore.verifyCode(
+        email, normalizeText(request.code()), EmailVerificationPurpose.FIND_LOGIN_ID);
+    return new FindLoginIdResponse(user.getLoginId());
+  }
+
+  private EmailSendResponse issueAndSendEmailCode(String email, EmailVerificationPurpose purpose) {
+    String code = emailVerificationStore.issueCode(email, purpose);
     try {
       authMailService.sendVerificationCode(email, code);
     } catch (AppException e) {
-      rollbackIssuedCodeSafely(email);
+      rollbackIssuedCodeSafely(email, purpose);
       throw e;
     } catch (Exception e) {
-      rollbackIssuedCodeSafely(email);
+      rollbackIssuedCodeSafely(email, purpose);
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "Failed to send verification code.");
     }
@@ -246,11 +285,16 @@ public class AuthServiceImpl implements AuthService {
         shouldExposeVerificationCodeForLocalTest() ? code : null);
   }
 
-  @Override
-  @Transactional
-  public void verifyEmailCode(EmailVerifyRequest request) {
-    emailVerificationStore.verifyCode(
-        normalizeEmail(request.email()), normalizeText(request.code()));
+  private User findUserByEmailOrThrow(String email) {
+    return userRepository
+        .findByEmail(email)
+        .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_EMAIL_NOT_REGISTERED));
+  }
+
+  private void ensureActiveAccount(User user) {
+    if (!user.isActive()) {
+      throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
+    }
   }
 
   /** 로그인/재발급 공통 토큰 발급 + refresh token 세션 저장 로직. */
@@ -484,9 +528,9 @@ public class AuthServiceImpl implements AuthService {
     }
   }
 
-  private void rollbackIssuedCodeSafely(String email) {
+  private void rollbackIssuedCodeSafely(String email, EmailVerificationPurpose purpose) {
     try {
-      emailVerificationStore.rollbackIssuedCode(email);
+      emailVerificationStore.rollbackIssuedCode(email, purpose);
     } catch (Exception rollbackException) {
       log.warn("Failed to rollback issued email verification code.", rollbackException);
     }
