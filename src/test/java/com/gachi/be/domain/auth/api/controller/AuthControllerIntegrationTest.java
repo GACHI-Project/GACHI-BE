@@ -191,6 +191,58 @@ class AuthControllerIntegrationTest {
   }
 
   @Test
+  void logoutRevokesRefreshToken() throws Exception {
+    createUser("logout_user", "logout@gachi.com", "01010101020", UserStatus.ACTIVE);
+    MvcResult loginResult =
+        login(loginPayload("logout_user", "Policy12!"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("AUTH2001"))
+            .andReturn();
+    String refreshToken = readBody(loginResult).path("result").path("refreshToken").asText();
+
+    logout(refreshToken).andExpect(status().isOk()).andExpect(jsonPath("$.code").value("AUTH2014"));
+
+    reissue(refreshToken)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4014"));
+  }
+
+  @Test
+  void logoutRejectsAlreadyRevokedRefreshToken() throws Exception {
+    createUser("logout_revoked_user", "logout-revoked@gachi.com", "01010101021", UserStatus.ACTIVE);
+    MvcResult loginResult =
+        login(loginPayload("logout_revoked_user", "Policy12!"))
+            .andExpect(status().isOk())
+            .andReturn();
+    String refreshToken = readBody(loginResult).path("result").path("refreshToken").asText();
+    logout(refreshToken).andExpect(status().isOk()).andExpect(jsonPath("$.code").value("AUTH2014"));
+
+    logout(refreshToken)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4014"));
+  }
+
+  @Test
+  void logoutRejectsExpiredRefreshToken() throws Exception {
+    createUser("logout_expired_user", "logout-expired@gachi.com", "01010101022", UserStatus.ACTIVE);
+    MvcResult loginResult =
+        login(loginPayload("logout_expired_user", "Policy12!"))
+            .andExpect(status().isOk())
+            .andReturn();
+    String refreshToken = readBody(loginResult).path("result").path("refreshToken").asText();
+    entityManager.flush();
+    jdbcTemplate.update(
+        "update auth_refresh_tokens set expires_at = ? where token_hash = ?",
+        OffsetDateTime.now().minusSeconds(1),
+        tokenHashService.sha256(refreshToken));
+    entityManager.clear();
+
+    logout(refreshToken)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4013"));
+  }
+
+  @Test
   void signupDuplicateChecksBeforeEmailVerified() throws Exception {
     String registeredEmail = "priority-base@gachi.com";
     String registeredLoginId = "priority_login";
@@ -901,6 +953,14 @@ class AuthControllerIntegrationTest {
       throws Exception {
     return mockMvc.perform(
         post("/api/v1/auth/reissue")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("refreshToken", refreshToken))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions logout(String refreshToken)
+      throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/auth/logout")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(Map.of("refreshToken", refreshToken))));
   }

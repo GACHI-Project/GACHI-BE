@@ -8,6 +8,7 @@ import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
+import com.gachi.be.domain.auth.dto.request.LogoutRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetRequest;
@@ -32,6 +33,8 @@ public interface AuthService {
   AuthTokenResponse login(LoginRequest request, String deviceInfo, String ipAddress);
 
   AuthTokenResponse reissue(ReissueRequest request, String deviceInfo, String ipAddress);
+
+  void logout(LogoutRequest request);
 
   EmailSendResponse sendEmailVerificationCode(EmailSendRequest request);
 

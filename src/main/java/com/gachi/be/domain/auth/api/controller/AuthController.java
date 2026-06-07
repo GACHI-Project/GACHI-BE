@@ -8,6 +8,7 @@ import com.gachi.be.domain.auth.dto.request.EmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.FindLoginIdEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.LoginRequest;
+import com.gachi.be.domain.auth.dto.request.LogoutRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetEmailSendRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetEmailVerifyRequest;
 import com.gachi.be.domain.auth.dto.request.PasswordResetRequest;
@@ -88,6 +89,12 @@ public class AuthController {
             request,
             extractDeviceInfo(servletRequest),
             clientIpExtractor.extractClientIp(servletRequest)));
+  }
+
+  @PostMapping("/logout")
+  public ApiResponse<Void> logout(@Valid @RequestBody LogoutRequest request) {
+    authService.logout(request);
+    return ApiResponse.success(SuccessCode.AUTH_LOGOUT_SUCCESS, null);
   }
 
   @PostMapping("/email/send")

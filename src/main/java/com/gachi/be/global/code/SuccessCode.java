@@ -22,6 +22,7 @@ public enum SuccessCode {
   AUTH_PASSWORD_RESET_EMAIL_CODE_SENT(HttpStatus.OK, "AUTH2010", "비밀번호 재설정 인증 코드가 발송되었습니다."),
   AUTH_PASSWORD_RESET_EMAIL_VERIFIED(HttpStatus.OK, "AUTH2012", "비밀번호 재설정 이메일 인증이 완료되었습니다."),
   AUTH_PASSWORD_RESET_SUCCESS(HttpStatus.OK, "AUTH2013", "비밀번호 재설정이 완료되었습니다."),
+  AUTH_LOGOUT_SUCCESS(HttpStatus.OK, "AUTH2014", "로그아웃에 성공하였습니다."),
   CHILD_CREATE_SUCCESS(HttpStatus.CREATED, "CHILD2011", "자녀 정보 등록에 성공하였습니다."),
   CHILD_GET_LIST_SUCCESS(HttpStatus.OK, "CHILD2001", "내 자녀 목록 조회에 성공하였습니다."),
   CHILD_UPDATE_SUCCESS(HttpStatus.OK, "CHILD2002", "자녀 정보 수정에 성공하였습니다."),
