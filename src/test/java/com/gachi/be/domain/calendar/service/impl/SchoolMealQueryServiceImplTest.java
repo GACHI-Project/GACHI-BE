@@ -116,7 +116,8 @@ class SchoolMealQueryServiceImplTest {
       String officeCode,
       int grade,
       String colorCode) {
-    return new SchoolScheduleChild(id, name, schoolName, schoolCode, officeCode, grade, colorCode);
+    return new SchoolScheduleChild(
+        id, name, schoolName, schoolCode, officeCode, grade, "1", colorCode);
   }
 
   private NeisSchoolMealItem meal(LocalDate date, String mealName, String dishName) {

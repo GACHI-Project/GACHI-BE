@@ -15,7 +15,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -41,14 +40,19 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
       List<SchoolScheduleChild> schoolChildren = entry.getValue();
       List<NeisElementaryTimetableItem> timetables =
           schoolChildren.stream()
-              .map(SchoolScheduleChild::grade)
-              .filter(Objects::nonNull)
+              .map(child -> new ClassIdentity(child.grade(), child.className()))
+              .filter(ClassIdentity::isComplete)
               .distinct()
               .flatMap(
-                  grade ->
+                  classIdentity ->
                       neisElementaryTimetableClient
                           .search(
-                              identity.officeCode(), identity.schoolCode(), fromDate, toDate, grade)
+                              identity.officeCode(),
+                              identity.schoolCode(),
+                              fromDate,
+                              toDate,
+                              classIdentity.grade(),
+                              classIdentity.className())
                           .stream())
               .sorted(timetableComparator())
               .toList();
@@ -75,6 +79,9 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
       if (!StringUtils.hasText(child.officeCode()) || !StringUtils.hasText(child.schoolCode())) {
         throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "자녀 학교의 교육청 코드와 학교 코드가 필요합니다.");
       }
+      if (child.grade() == null || !StringUtils.hasText(child.className())) {
+        throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "시간표 조회에는 자녀의 학년과 반 정보가 필요합니다.");
+      }
       SchoolIdentity identity = new SchoolIdentity(child.officeCode(), child.schoolCode());
       grouped.computeIfAbsent(identity, ignored -> new ArrayList<>()).add(child);
     }
@@ -91,7 +98,11 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
             .map(
                 child ->
                     new ElementaryTimetableCalendarResponse.ChildItem(
-                        child.childId(), child.childName(), child.grade(), child.colorCode()))
+                        child.childId(),
+                        child.childName(),
+                        child.grade(),
+                        child.className(),
+                        child.colorCode()))
             .toList();
     List<ElementaryTimetableCalendarResponse.TimetableItem> timetableItems =
         timetables.stream().map(this::toTimetableItem).toList();
@@ -136,6 +147,16 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
   private record SchoolIdentity(String officeCode, String schoolCode) {
     String groupKey() {
       return officeCode + ":" + schoolCode;
+    }
+  }
+
+  private record ClassIdentity(Integer grade, String className) {
+    ClassIdentity {
+      className = StringUtils.hasText(className) ? className.trim() : className;
+    }
+
+    boolean isComplete() {
+      return grade != null && StringUtils.hasText(className);
     }
   }
 }

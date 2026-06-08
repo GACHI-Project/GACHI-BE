@@ -13,6 +13,7 @@ public record ChildCreateRequest(
     @NotBlank @Size(max = 64) String schoolCode,
     @NotBlank @Size(max = 20) String officeCode,
     @NotNull @Min(1) @Max(6) Integer grade,
+    @NotBlank @Size(max = 20) String className,
     @NotBlank
         @Pattern(
             regexp = "^#[A-Fa-f0-9]{6}$",

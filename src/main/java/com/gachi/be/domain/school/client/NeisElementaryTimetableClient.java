@@ -39,16 +39,22 @@ public class NeisElementaryTimetableClient {
     this.objectMapper = objectMapper;
   }
 
-  /** 학교 식별값, 기간, 학년으로 NEIS 초등학교 시간표를 조회한다. */
+  /** 학교 식별값, 기간, 학년, 반으로 NEIS 초등학교 시간표를 조회한다. */
   public List<NeisElementaryTimetableItem> search(
-      String officeCode, String schoolCode, LocalDate fromDate, LocalDate toDate, Integer grade) {
+      String officeCode,
+      String schoolCode,
+      LocalDate fromDate,
+      LocalDate toDate,
+      Integer grade,
+      String className) {
     List<NeisElementaryTimetableItem> timetables = new ArrayList<>();
     int pageIndex = 1;
     int totalCount = Integer.MAX_VALUE;
 
     try {
       while (timetables.size() < totalCount) {
-        URI uri = buildSearchUri(officeCode, schoolCode, fromDate, toDate, grade, pageIndex);
+        URI uri =
+            buildSearchUri(officeCode, schoolCode, fromDate, toDate, grade, className, pageIndex);
         NeisHttpResponse response = executeGet(uri);
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
           log.error(
@@ -84,6 +90,7 @@ public class NeisElementaryTimetableClient {
       LocalDate fromDate,
       LocalDate toDate,
       Integer grade,
+      String className,
       int pageIndex) {
     String apiKey = neisProperties.getTimetableApiKey();
     if (!StringUtils.hasText(apiKey)) {
@@ -101,6 +108,9 @@ public class NeisElementaryTimetableClient {
     queryParams.put("TI_TO_YMD", toDate.format(NEIS_DATE_FORMATTER));
     if (grade != null) {
       queryParams.put("GRADE", String.valueOf(grade));
+    }
+    if (StringUtils.hasText(className)) {
+      queryParams.put("CLASS_NM", className.trim());
     }
     queryParams.put("KEY", apiKey);
 

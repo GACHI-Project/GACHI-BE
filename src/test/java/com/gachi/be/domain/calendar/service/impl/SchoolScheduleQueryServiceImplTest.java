@@ -85,7 +85,8 @@ class SchoolScheduleQueryServiceImplTest {
       String officeCode,
       int grade,
       String colorCode) {
-    return new SchoolScheduleChild(id, name, schoolName, schoolCode, officeCode, grade, colorCode);
+    return new SchoolScheduleChild(
+        id, name, schoolName, schoolCode, officeCode, grade, "1", colorCode);
   }
 
   private NeisSchoolScheduleItem schedule(String eventName, LocalDate date) {

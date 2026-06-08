@@ -14,5 +14,7 @@ public record ChildUpdateRequest(
     @Size(max = 20) @Pattern(regexp = ".*\\S.*", message = "officeCode는 공백만 입력할 수 없습니다.")
         String officeCode,
     @Min(1) @Max(6) Integer grade,
+    @Size(max = 20) @Pattern(regexp = ".*\\S.*", message = "className은 공백만 입력할 수 없습니다.")
+        String className,
     @Pattern(regexp = "^#[A-Fa-f0-9]{6}$", message = "colorCode는 #RRGGBB 형식(예: #FF5A5A)만 허용합니다.")
         String colorCode) {}

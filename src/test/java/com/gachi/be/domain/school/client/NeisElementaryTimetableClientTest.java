@@ -74,7 +74,8 @@ class NeisElementaryTimetableClientTest {
     NeisElementaryTimetableClient client = newClient("timetable-key");
 
     var timetables =
-        client.search("B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), 4);
+        client.search(
+            "B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), 4, "1");
 
     assertThat(rawQuery.get())
         .contains(
@@ -86,10 +87,12 @@ class NeisElementaryTimetableClientTest {
             "SD_SCHUL_CODE=7051173",
             "TI_FROM_YMD=20260301",
             "TI_TO_YMD=20260331",
-            "GRADE=4");
+            "GRADE=4",
+            "CLASS_NM=1");
     assertThat(timetables).hasSize(1);
     assertThat(timetables.get(0).date()).isEqualTo(LocalDate.of(2026, 3, 2));
     assertThat(timetables.get(0).grade()).isEqualTo(4);
+    assertThat(timetables.get(0).className()).isEqualTo("1");
     assertThat(timetables.get(0).period()).isEqualTo(2);
     assertThat(timetables.get(0).content()).isEqualTo("수학");
   }
@@ -111,7 +114,8 @@ class NeisElementaryTimetableClientTest {
     NeisElementaryTimetableClient client = newClient("timetable-key");
 
     var timetables =
-        client.search("B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), 4);
+        client.search(
+            "B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), 4, "1");
 
     assertThat(timetables).isEmpty();
   }
@@ -123,7 +127,7 @@ class NeisElementaryTimetableClientTest {
     assertThatThrownBy(
             () ->
                 client.search(
-                    "B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), 4))
+                    "B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), 4, "1"))
         .isInstanceOf(ExternalApiException.class)
         .extracting("errorCode")
         .isEqualTo(ErrorCode.EXTERNAL_API_ERROR);
@@ -148,7 +152,7 @@ class NeisElementaryTimetableClientTest {
     assertThatThrownBy(
             () ->
                 client.search(
-                    "B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), 4))
+                    "B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31), 4, "1"))
         .isInstanceOf(ExternalApiException.class)
         .extracting("errorCode")
         .isEqualTo(ErrorCode.EXTERNAL_API_ERROR);
