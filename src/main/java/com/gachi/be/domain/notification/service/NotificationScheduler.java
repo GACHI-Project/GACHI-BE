@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -170,16 +171,28 @@ public class NotificationScheduler {
     List<User> users = userRepository.findAllByStatus(UserStatus.ACTIVE);
 
     for (User user : users) {
+      long calendarEventCount =
+          calendarEventRepository.countByUserIdAndStartAtGreaterThanEqualAndStartAtLessThan(
+              user.getId(), rangeStart, rangeEnd);
       long newsletterCount =
           newsletterRepository.countByUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
               user.getId(), rangeStart, rangeEnd);
       long incompleteCount =
           checklistRepository.countByUserIdAndTypeAndCompletedFalse(
               user.getId(), ChecklistType.CHECKLIST);
+      if (hasNoWeeklySummaryItems(calendarEventCount, newsletterCount, incompleteCount)) {
+        log.info(
+            "[Scheduler] 주간 요약 대상 항목이 없어 알림 생성을 건너뜁니다. userId={}, rangeStart={}, rangeEnd={}",
+            user.getId(),
+            rangeStartDate,
+            rangeEndDate.minusDays(1));
+        continue;
+      }
 
       Map<String, Object> payload = payload();
       payload.put("rangeStart", rangeStartDate.toString());
       payload.put("rangeEnd", rangeEndDate.minusDays(1).toString());
+      payload.put("calendarEventCount", calendarEventCount);
       payload.put("newsletterCount", newsletterCount);
       payload.put("incompleteChecklistCount", incompleteCount);
 
@@ -188,7 +201,7 @@ public class NotificationScheduler {
           new NotificationCreateCommand(
               NotificationType.WEEKLY_SUMMARY,
               "이번 주 요약이 도착했어요",
-              "이번 주 가정통신문 " + newsletterCount + "개와 미완료 할 일 " + incompleteCount + "개를 확인해보세요",
+              buildWeeklySummaryBody(calendarEventCount, newsletterCount, incompleteCount),
               payload,
               "weekly-summary:" + user.getId() + ":" + rangeStartDate,
               NotificationLevel.NORMAL,
@@ -196,6 +209,26 @@ public class NotificationScheduler {
               null),
           "weekly-summary:" + user.getId());
     }
+  }
+
+  private boolean hasNoWeeklySummaryItems(
+      long calendarEventCount, long newsletterCount, long incompleteCount) {
+    return calendarEventCount == 0 && newsletterCount == 0 && incompleteCount == 0;
+  }
+
+  private String buildWeeklySummaryBody(
+      long calendarEventCount, long newsletterCount, long incompleteCount) {
+    List<String> summaryItems = new ArrayList<>();
+    if (calendarEventCount > 0) {
+      summaryItems.add("일정 " + calendarEventCount + "개");
+    }
+    if (newsletterCount > 0) {
+      summaryItems.add("가정통신문 " + newsletterCount + "개");
+    }
+    if (incompleteCount > 0) {
+      summaryItems.add("미완료 할 일 " + incompleteCount + "개");
+    }
+    return "이번 주 " + String.join(", ", summaryItems) + "를 확인해보세요";
   }
 
   private TimeRange dayRange(LocalDate targetDate) {
