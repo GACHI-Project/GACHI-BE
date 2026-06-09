@@ -169,6 +169,70 @@ class UserControllerIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH4093"));
   }
 
+  @Test
+  void passwordChangeUpdatesPasswordAndRevokesRefreshToken() throws Exception {
+    String loginId = "password_change_user";
+    createUser(loginId, "password-change@gachi.com", "01010001008", UserStatus.ACTIVE);
+    JsonNode loginBody = login(loginId, "Policy12!");
+    String accessToken = loginBody.path("result").path("accessToken").asText();
+    String refreshToken = loginBody.path("result").path("refreshToken").asText();
+
+    changePassword(accessToken, "Policy12!", "Changed12ab", "Changed12ab")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("USER2007"));
+
+    reissue(refreshToken)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4014"));
+
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        Map.of("loginId", loginId, "password", "Policy12!", "rememberMe", false))))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4011"));
+    login(loginId, "Changed12ab");
+  }
+
+  @Test
+  void passwordChangeRejectsWrongCurrentPassword() throws Exception {
+    createUser(
+        "password_wrong_current",
+        "password-wrong-current@gachi.com",
+        "01010001009",
+        UserStatus.ACTIVE);
+    String accessToken = loginAccessToken("password_wrong_current", "Policy12!");
+
+    changePassword(accessToken, "Wrong12!", "Changed12ab", "Changed12ab")
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4011"));
+  }
+
+  @Test
+  void passwordChangeRejectsConfirmMismatch() throws Exception {
+    createUser(
+        "password_mismatch", "password-mismatch@gachi.com", "01010001010", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken("password_mismatch", "Policy12!");
+
+    changePassword(accessToken, "Policy12!", "Changed12ab", "Changed34cd")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4004"));
+  }
+
+  @Test
+  void passwordChangeRejectsDangerousPasswordStrength() throws Exception {
+    createUser(
+        "password_dangerous", "password-dangerous@gachi.com", "01010001011", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken("password_dangerous", "Policy12!");
+
+    changePassword(accessToken, "Policy12!", "Qa1x2w3e", "Qa1x2w3e")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("AUTH4009"));
+  }
+
   private org.springframework.test.web.servlet.ResultActions sendEmailChangeCode(
       String accessToken, String email, String currentPassword) throws Exception {
     return mockMvc.perform(
@@ -196,6 +260,24 @@ class UserControllerIntegrationTest {
             .header("Authorization", bearer(accessToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(Map.of("email", email))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions changePassword(
+      String accessToken, String currentPassword, String newPassword, String newPasswordConfirm)
+      throws Exception {
+    return mockMvc.perform(
+        patch("/api/v1/users/me/password")
+            .header("Authorization", bearer(accessToken))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                objectMapper.writeValueAsString(
+                    Map.of(
+                        "currentPassword",
+                        currentPassword,
+                        "newPassword",
+                        newPassword,
+                        "newPasswordConfirm",
+                        newPasswordConfirm))));
   }
 
   private org.springframework.test.web.servlet.ResultActions reissue(String refreshToken)

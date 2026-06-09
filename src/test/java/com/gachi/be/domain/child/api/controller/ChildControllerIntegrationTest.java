@@ -60,10 +60,12 @@ class ChildControllerIntegrationTest {
                 "schoolCode", "7130118",
                 "officeCode", "B10",
                 "grade", 1,
+                "className", "1",
                 "colorCode", "#FF5A5A"))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.code").value("CHILD2011"))
-        .andExpect(jsonPath("$.result.grade").value(1));
+        .andExpect(jsonPath("$.result.grade").value(1))
+        .andExpect(jsonPath("$.result.className").value("1"));
 
     postChild(
             parentAToken,
@@ -73,6 +75,7 @@ class ChildControllerIntegrationTest {
                 "schoolCode", "7130118",
                 "officeCode", "B10",
                 "grade", 6,
+                "className", "2",
                 "colorCode", "#00AAFF"))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.result.grade").value(6));
@@ -85,6 +88,7 @@ class ChildControllerIntegrationTest {
                 "schoolCode", "7551233",
                 "officeCode", "J10",
                 "grade", 3,
+                "className", "1",
                 "colorCode", "#22CC88"))
         .andExpect(status().isCreated());
 
@@ -120,6 +124,7 @@ class ChildControllerIntegrationTest {
                 "schoolCode", "7130118",
                 "officeCode", "B10",
                 "grade", 2,
+                "className", "1",
                 "colorCode", "#FF5A5A"))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("AUTH4015"));
@@ -135,6 +140,7 @@ class ChildControllerIntegrationTest {
                 "schoolCode", "7130118",
                 "officeCode", "B10",
                 "grade", 2,
+                "className", "1",
                 "colorCode", "#FF5A5A"))
         .andExpect(status().isUnauthorized())
         .andExpect(jsonPath("$.code").value("AUTH4016"));
@@ -153,6 +159,7 @@ class ChildControllerIntegrationTest {
                 "schoolCode", "",
                 "officeCode", "",
                 "grade", 0,
+                "className", "",
                 "colorCode", "FF5A5A"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("COMMON4001"))
@@ -160,6 +167,7 @@ class ChildControllerIntegrationTest {
         .andExpect(jsonPath("$.result.schoolCode").exists())
         .andExpect(jsonPath("$.result.officeCode").exists())
         .andExpect(jsonPath("$.result.grade").exists())
+        .andExpect(jsonPath("$.result.className").exists())
         .andExpect(jsonPath("$.result.colorCode").exists());
 
     postChild(
@@ -170,6 +178,7 @@ class ChildControllerIntegrationTest {
                 "schoolCode", "7130118",
                 "officeCode", "B10",
                 "grade", 7,
+                "className", "1",
                 "colorCode", "#00AAFF"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("COMMON4001"))

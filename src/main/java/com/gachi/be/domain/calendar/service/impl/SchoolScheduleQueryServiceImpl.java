@@ -2,6 +2,7 @@ package com.gachi.be.domain.calendar.service.impl;
 
 import com.gachi.be.domain.calendar.dto.response.SchoolScheduleCalendarResponse;
 import com.gachi.be.domain.calendar.service.SchoolScheduleQueryService;
+import com.gachi.be.domain.calendar.service.impl.NeisCalendarTranslationService.TranslationContext;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
 import com.gachi.be.domain.school.client.NeisSchoolScheduleClient;
 import com.gachi.be.domain.school.dto.response.NeisSchoolScheduleItem;
@@ -12,8 +13,10 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -22,9 +25,15 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryService {
   private static final long MAX_SCHOOL_SCHEDULE_RANGE_DAYS = 366L;
+  private static final Set<String> EXCLUDED_EVENT_NAMES = Set.of("토요휴업일", "토요공휴일", "토요휴무일");
+  private static final Set<String> COMMON_HOLIDAY_KEYWORDS =
+      Set.of(
+          "공휴일", "대체공휴일", "대체휴일", "어린이날", "삼일절", "3·1절", "3.1절", "현충일", "광복절", "개천절", "한글날", "성탄절",
+          "석가탄신일", "부처님오신날", "신정", "설날", "추석");
 
   private final SchoolScheduleChildReader schoolScheduleChildReader;
   private final NeisSchoolScheduleClient neisSchoolScheduleClient;
+  private final NeisCalendarTranslationService translationService;
 
   @Override
   public SchoolScheduleCalendarResponse getSchoolSchedules(
@@ -33,17 +42,39 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
 
     Map<SchoolIdentity, List<SchoolScheduleChild>> childrenBySchool =
         groupBySchoolIdentity(schoolScheduleChildReader.findChildren(userId));
+    TranslationContext translationContext = translationService.contextFor(userId);
     List<SchoolScheduleCalendarResponse.SchoolScheduleGroup> groups = new ArrayList<>();
+    Map<ScheduleIdentity, SchoolScheduleCalendarResponse.ScheduleItem> commonHolidays =
+        new LinkedHashMap<>();
     for (Map.Entry<SchoolIdentity, List<SchoolScheduleChild>> entry : childrenBySchool.entrySet()) {
       SchoolIdentity identity = entry.getKey();
       List<SchoolScheduleChild> schoolChildren = entry.getValue();
       List<NeisSchoolScheduleItem> schedules =
           neisSchoolScheduleClient.search(
               identity.officeCode(), identity.schoolCode(), fromDate, toDate);
-      groups.add(toGroup(identity, schoolChildren, schedules));
+      List<NeisSchoolScheduleItem> schoolSpecificSchedules = new ArrayList<>();
+      for (NeisSchoolScheduleItem schedule : schedules) {
+        if (isExcludedEvent(schedule)) {
+          continue;
+        }
+        if (isCommonHoliday(schedule)) {
+          SchoolScheduleCalendarResponse.ScheduleItem scheduleItem =
+              toScheduleItem(schedule, translationContext);
+          commonHolidays.putIfAbsent(
+              new ScheduleIdentity(
+                  schedule.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
+                  normalizeText(schedule.eventName())),
+              scheduleItem);
+          continue;
+        }
+        if (appliesToAnyChildGrade(schedule, schoolChildren)) {
+          schoolSpecificSchedules.add(schedule);
+        }
+      }
+      groups.add(toGroup(identity, schoolChildren, schoolSpecificSchedules, translationContext));
     }
 
-    return new SchoolScheduleCalendarResponse(groups);
+    return new SchoolScheduleCalendarResponse(new ArrayList<>(commonHolidays.values()), groups);
   }
 
   private void validateRange(LocalDate fromDate, LocalDate toDate) {
@@ -72,7 +103,8 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
   private SchoolScheduleCalendarResponse.SchoolScheduleGroup toGroup(
       SchoolIdentity identity,
       List<SchoolScheduleChild> children,
-      List<NeisSchoolScheduleItem> schedules) {
+      List<NeisSchoolScheduleItem> schedules,
+      TranslationContext translationContext) {
     List<Long> childIds = children.stream().map(SchoolScheduleChild::childId).toList();
     List<SchoolScheduleCalendarResponse.ChildItem> childItems =
         children.stream()
@@ -82,7 +114,7 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
                         child.childId(), child.childName(), child.grade(), child.colorCode()))
             .toList();
     List<SchoolScheduleCalendarResponse.ScheduleItem> scheduleItems =
-        schedules.stream().map(this::toScheduleItem).toList();
+        schedules.stream().map(item -> toScheduleItem(item, translationContext)).toList();
 
     return new SchoolScheduleCalendarResponse.SchoolScheduleGroup(
         identity.groupKey(),
@@ -94,13 +126,14 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
         scheduleItems);
   }
 
-  private SchoolScheduleCalendarResponse.ScheduleItem toScheduleItem(NeisSchoolScheduleItem item) {
+  private SchoolScheduleCalendarResponse.ScheduleItem toScheduleItem(
+      NeisSchoolScheduleItem item, TranslationContext translationContext) {
     NeisSchoolScheduleItem.GradeEventYn gradeEventYn = item.gradeEventYn();
     return new SchoolScheduleCalendarResponse.ScheduleItem(
         item.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
         item.academicYear(),
-        item.eventName(),
-        item.eventContent(),
+        translationService.translateScheduleText(translationContext, item.eventName()),
+        translationService.translateScheduleText(translationContext, item.eventContent()),
         new SchoolScheduleCalendarResponse.GradeEventYn(
             gradeEventYn.grade1(),
             gradeEventYn.grade2(),
@@ -110,9 +143,59 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
             gradeEventYn.grade6()));
   }
 
+  private boolean isExcludedEvent(NeisSchoolScheduleItem item) {
+    return EXCLUDED_EVENT_NAMES.contains(normalizeText(item.eventName()));
+  }
+
+  private boolean isCommonHoliday(NeisSchoolScheduleItem item) {
+    String eventName = normalizeText(item.eventName());
+    String eventContent = normalizeText(item.eventContent());
+    return COMMON_HOLIDAY_KEYWORDS.stream()
+        .anyMatch(keyword -> eventName.contains(keyword) || eventContent.contains(keyword));
+  }
+
+  private boolean appliesToAnyChildGrade(
+      NeisSchoolScheduleItem item, List<SchoolScheduleChild> children) {
+    Set<Integer> childGrades = new LinkedHashSet<>();
+    for (SchoolScheduleChild child : children) {
+      if (child.grade() != null) {
+        childGrades.add(child.grade());
+      }
+    }
+    if (childGrades.isEmpty()) {
+      return true;
+    }
+    return childGrades.stream().anyMatch(grade -> isGradeTarget(item.gradeEventYn(), grade));
+  }
+
+  private boolean isGradeTarget(NeisSchoolScheduleItem.GradeEventYn gradeEventYn, int grade) {
+    if (gradeEventYn == null) {
+      return true;
+    }
+    return switch (grade) {
+      case 1 -> isYes(gradeEventYn.grade1());
+      case 2 -> isYes(gradeEventYn.grade2());
+      case 3 -> isYes(gradeEventYn.grade3());
+      case 4 -> isYes(gradeEventYn.grade4());
+      case 5 -> isYes(gradeEventYn.grade5());
+      case 6 -> isYes(gradeEventYn.grade6());
+      default -> false;
+    };
+  }
+
+  private boolean isYes(String value) {
+    return "Y".equalsIgnoreCase(normalizeText(value));
+  }
+
+  private String normalizeText(String value) {
+    return value == null ? "" : value.replaceAll("\\s+", "").trim();
+  }
+
   private record SchoolIdentity(String officeCode, String schoolCode) {
     String groupKey() {
       return officeCode + ":" + schoolCode;
     }
   }
+
+  private record ScheduleIdentity(String date, String normalizedEventName) {}
 }
