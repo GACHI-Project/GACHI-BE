@@ -11,6 +11,7 @@ import com.gachi.be.domain.user.dto.request.ChangeNotificationRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeCodeSendRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeVerifyRequest;
+import com.gachi.be.domain.user.dto.request.PasswordChangeRequest;
 import com.gachi.be.domain.user.dto.request.ProfileUpdateRequest;
 import com.gachi.be.domain.user.dto.response.EmailChangeResponse;
 import com.gachi.be.domain.user.dto.response.ProfileUpdateResponse;
@@ -166,5 +167,15 @@ public class UserController {
     User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
     return ApiResponse.success(
         SuccessCode.USER_EMAIL_UPDATED, userProfileService.changeEmail(user, request));
+  }
+
+  @Operation(summary = "비밀번호 변경", description = "마이페이지에서 현재 비밀번호 확인 후 새 비밀번호로 변경합니다.")
+  @PatchMapping("/me/password")
+  public ApiResponse<Void> changePassword(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @RequestBody @Valid PasswordChangeRequest request) {
+    User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
+    userProfileService.changePassword(user, request);
+    return ApiResponse.success(SuccessCode.USER_PASSWORD_UPDATED, null);
   }
 }

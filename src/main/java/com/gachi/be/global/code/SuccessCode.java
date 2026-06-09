@@ -64,6 +64,7 @@ public enum SuccessCode {
   USER_EMAIL_CHANGE_CODE_SENT(HttpStatus.OK, "USER2004", "이메일 변경 인증 코드가 발송되었습니다."),
   USER_EMAIL_CHANGE_VERIFIED(HttpStatus.OK, "USER2005", "이메일 변경 인증이 완료되었습니다."),
   USER_EMAIL_UPDATED(HttpStatus.OK, "USER2006", "이메일이 변경되었습니다."),
+  USER_PASSWORD_UPDATED(HttpStatus.OK, "USER2007", "비밀번호가 변경되었습니다."),
   NOTIFICATION_LIST_SUCCESS(HttpStatus.OK, "NOTI2001", "알림 목록 조회에 성공하였습니다."),
   NOTIFICATION_UNREAD_COUNT_SUCCESS(HttpStatus.OK, "NOTI2002", "미읽음 알림 수 조회에 성공하였습니다."),
   NOTIFICATION_READ_SUCCESS(HttpStatus.OK, "NOTI2003", "알림 읽음 처리에 성공하였습니다."),

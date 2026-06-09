@@ -8,9 +8,11 @@ import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.auth.service.impl.NoopAuthMailService;
+import com.gachi.be.domain.auth.service.password.PasswordPolicyValidator;
 import com.gachi.be.domain.user.dto.request.EmailChangeCodeSendRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeVerifyRequest;
+import com.gachi.be.domain.user.dto.request.PasswordChangeRequest;
 import com.gachi.be.domain.user.dto.request.ProfileUpdateRequest;
 import com.gachi.be.domain.user.dto.response.EmailChangeResponse;
 import com.gachi.be.domain.user.dto.response.ProfileUpdateResponse;
@@ -42,6 +44,7 @@ public class UserProfileService {
   private final AuthMailService authMailService;
   private final EmailVerificationStore emailVerificationStore;
   private final AuthProperties authProperties;
+  private final PasswordPolicyValidator passwordPolicyValidator;
 
   @Transactional
   public ProfileUpdateResponse updateProfile(User user, ProfileUpdateRequest request) {
@@ -63,6 +66,25 @@ public class UserProfileService {
       throw e;
     }
     return new ProfileUpdateResponse(currentUser.getName(), currentUser.getPhoneNumber());
+  }
+
+  @Transactional
+  public void changePassword(User user, PasswordChangeRequest request) {
+    User currentUser = findActiveUserWithLock(user.getId());
+    if (!passwordEncoder.matches(request.currentPassword(), currentUser.getPasswordHash())) {
+      throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
+    }
+    if (!request.newPassword().equals(request.newPasswordConfirm())) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_CONFIRM_MISMATCH);
+    }
+
+    passwordPolicyValidator.validate(
+        request.newPassword(),
+        currentUser.getLoginId(),
+        currentUser.getEmail(),
+        currentUser.getPhoneNumber());
+    currentUser.resetPassword(passwordEncoder.encode(request.newPassword()), OffsetDateTime.now());
+    revokeActiveRefreshTokens(currentUser.getId());
   }
 
   @Transactional
