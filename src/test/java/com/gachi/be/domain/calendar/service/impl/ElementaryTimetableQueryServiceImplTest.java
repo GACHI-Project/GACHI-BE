@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
@@ -81,17 +82,19 @@ class ElementaryTimetableQueryServiceImplTest {
   }
 
   @Test
-  void getElementaryTimetablesThrowsWhenChildClassNameIsMissing() {
+  void getElementaryTimetablesSkipsNeisCallWhenChildClassNameIsMissing() {
     SchoolScheduleChild child = child(1L, "첫째", "화랑초등학교", "7051173", "B10", 4, null, "#22CC88");
     when(schoolScheduleChildReader.findChildren(10L)).thenReturn(List.of(child));
 
-    assertThatThrownBy(
-            () ->
-                service.getElementaryTimetables(
-                    10L, LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31)))
-        .isInstanceOf(BusinessException.class)
-        .extracting("errorCode")
-        .isEqualTo(ErrorCode.INVALID_INPUT_VALUE);
+    var response =
+        service.getElementaryTimetables(10L, LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+
+    assertThat(response.schoolTimetables()).hasSize(1);
+    assertThat(response.schoolTimetables().get(0).children())
+        .extracting("childId", "grade", "className")
+        .containsExactly(tuple(1L, 4, null));
+    assertThat(response.schoolTimetables().get(0).timetables()).isEmpty();
+    verifyNoInteractions(neisElementaryTimetableClient);
   }
 
   @Test

@@ -40,6 +40,7 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
       List<SchoolScheduleChild> schoolChildren = entry.getValue();
       List<NeisElementaryTimetableItem> timetables =
           schoolChildren.stream()
+              // 기존 자녀 데이터에는 반이 없을 수 있어, 전체 조회를 막지 않고 보정 필요 상태를 응답에 남긴다.
               .map(child -> new ClassIdentity(child.grade(), child.className()))
               .filter(ClassIdentity::isComplete)
               .distinct()
@@ -78,9 +79,6 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
     for (SchoolScheduleChild child : children) {
       if (!StringUtils.hasText(child.officeCode()) || !StringUtils.hasText(child.schoolCode())) {
         throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "자녀 학교의 교육청 코드와 학교 코드가 필요합니다.");
-      }
-      if (child.grade() == null || !StringUtils.hasText(child.className())) {
-        throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "시간표 조회에는 자녀의 학년과 반 정보가 필요합니다.");
       }
       SchoolIdentity identity = new SchoolIdentity(child.officeCode(), child.schoolCode());
       grouped.computeIfAbsent(identity, ignored -> new ArrayList<>()).add(child);
