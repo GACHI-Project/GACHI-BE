@@ -52,6 +52,7 @@ public class ChildService {
             .schoolCode(normalizeRequiredText(request.schoolCode()))
             .officeCode(normalizeRequiredText(request.officeCode()))
             .grade(request.grade())
+            .className(normalizeRequiredText(request.className()))
             .colorCode(normalizeRequiredText(request.colorCode()).toUpperCase())
             .build();
 
@@ -77,6 +78,7 @@ public class ChildService {
         child.getSchoolCode(),
         child.getOfficeCode(),
         child.getGrade(),
+        child.getClassName(),
         child.getColorCode(),
         child.getCreatedAt());
   }
@@ -104,6 +106,7 @@ public class ChildService {
         request.schoolCode() != null ? request.schoolCode().trim() : null,
         request.officeCode() != null ? request.officeCode().trim() : null,
         request.grade(),
+        normalizeOptionalText(request.className()),
         newColorCode);
 
     // 이름이 변경된 경우 → newsletter, calendar_events child_name 일괄 동기화

@@ -22,7 +22,8 @@ public record ElementaryTimetableCalendarResponse(List<TimetableGroup> schoolTim
     }
   }
 
-  public record ChildItem(Long childId, String childName, Integer grade, String colorCode) {}
+  public record ChildItem(
+      Long childId, String childName, Integer grade, String className, String colorCode) {}
 
   public record TimetableItem(
       String date,

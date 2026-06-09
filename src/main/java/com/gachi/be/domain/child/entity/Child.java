@@ -48,6 +48,9 @@ public class Child {
   @Column(nullable = false)
   private Integer grade;
 
+  @Column(name = "class_name", length = 20)
+  private String className;
+
   @Column(name = "color_code", nullable = false, length = 7)
   private String colorCode;
 
@@ -68,6 +71,7 @@ public class Child {
       String schoolCode,
       String officeCode,
       Integer grade,
+      String className,
       String colorCode) {
     this.user = user;
     this.name = name;
@@ -75,6 +79,7 @@ public class Child {
     this.schoolCode = schoolCode;
     this.officeCode = officeCode;
     this.grade = grade;
+    this.className = className;
     this.colorCode = colorCode;
   }
 
@@ -106,12 +111,14 @@ public class Child {
       String schoolCode,
       String officeCode,
       Integer grade,
+      String className,
       String colorCode) {
     if (name != null) this.name = name;
     if (schoolName != null) this.schoolName = schoolName;
     if (schoolCode != null) this.schoolCode = schoolCode;
     if (officeCode != null) this.officeCode = officeCode;
     if (grade != null) this.grade = grade;
+    if (className != null) this.className = className;
     if (colorCode != null) this.colorCode = colorCode;
   }
 }

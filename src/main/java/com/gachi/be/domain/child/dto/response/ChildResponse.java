@@ -9,5 +9,6 @@ public record ChildResponse(
     String schoolCode,
     String officeCode,
     Integer grade,
+    String className,
     String colorCode,
     LocalDateTime createdAt) {}

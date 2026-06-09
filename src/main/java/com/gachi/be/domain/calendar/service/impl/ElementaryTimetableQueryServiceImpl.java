@@ -15,7 +15,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -41,14 +40,20 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
       List<SchoolScheduleChild> schoolChildren = entry.getValue();
       List<NeisElementaryTimetableItem> timetables =
           schoolChildren.stream()
-              .map(SchoolScheduleChild::grade)
-              .filter(Objects::nonNull)
+              // 기존 자녀 데이터에는 반이 없을 수 있어, 전체 조회를 막지 않고 보정 필요 상태를 응답에 남긴다.
+              .map(child -> new ClassIdentity(child.grade(), child.className()))
+              .filter(ClassIdentity::isComplete)
               .distinct()
               .flatMap(
-                  grade ->
+                  classIdentity ->
                       neisElementaryTimetableClient
                           .search(
-                              identity.officeCode(), identity.schoolCode(), fromDate, toDate, grade)
+                              identity.officeCode(),
+                              identity.schoolCode(),
+                              fromDate,
+                              toDate,
+                              classIdentity.grade(),
+                              classIdentity.className())
                           .stream())
               .sorted(timetableComparator())
               .toList();
@@ -91,7 +96,11 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
             .map(
                 child ->
                     new ElementaryTimetableCalendarResponse.ChildItem(
-                        child.childId(), child.childName(), child.grade(), child.colorCode()))
+                        child.childId(),
+                        child.childName(),
+                        child.grade(),
+                        child.className(),
+                        child.colorCode()))
             .toList();
     List<ElementaryTimetableCalendarResponse.TimetableItem> timetableItems =
         timetables.stream().map(this::toTimetableItem).toList();
@@ -136,6 +145,16 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
   private record SchoolIdentity(String officeCode, String schoolCode) {
     String groupKey() {
       return officeCode + ":" + schoolCode;
+    }
+  }
+
+  private record ClassIdentity(Integer grade, String className) {
+    ClassIdentity {
+      className = StringUtils.hasText(className) ? className.trim() : className;
+    }
+
+    boolean isComplete() {
+      return grade != null && StringUtils.hasText(className);
     }
   }
 }

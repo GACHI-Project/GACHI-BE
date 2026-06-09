@@ -31,6 +31,7 @@ class SchoolScheduleChildReader {
                     child.getSchoolCode(),
                     child.getOfficeCode(),
                     child.getGrade(),
+                    child.getClassName(),
                     child.getColorCode()))
         .toList();
   }
@@ -42,5 +43,6 @@ class SchoolScheduleChildReader {
       String schoolCode,
       String officeCode,
       Integer grade,
+      String className,
       String colorCode) {}
 }
