@@ -4,18 +4,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gachi.be.domain.calendar.service.impl.NeisCalendarTranslationService.TranslationContext;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
 import com.gachi.be.domain.school.client.NeisSchoolScheduleClient;
 import com.gachi.be.domain.school.dto.response.NeisSchoolScheduleItem;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SchoolScheduleQueryServiceImplTest {
@@ -24,8 +28,20 @@ class SchoolScheduleQueryServiceImplTest {
       mock(SchoolScheduleChildReader.class);
   private final NeisSchoolScheduleClient neisSchoolScheduleClient =
       mock(NeisSchoolScheduleClient.class);
+  private final NeisCalendarTranslationService translationService =
+      mock(NeisCalendarTranslationService.class);
+  private final TranslationContext translationContext =
+      new TranslationContext("KO", new HashMap<>());
   private final SchoolScheduleQueryServiceImpl service =
-      new SchoolScheduleQueryServiceImpl(schoolScheduleChildReader, neisSchoolScheduleClient);
+      new SchoolScheduleQueryServiceImpl(
+          schoolScheduleChildReader, neisSchoolScheduleClient, translationService);
+
+  @BeforeEach
+  void setUpTranslation() {
+    when(translationService.contextFor(10L)).thenReturn(translationContext);
+    when(translationService.translate(eq(translationContext), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(1));
+  }
 
   @Test
   void getSchoolSchedulesSeparatesCommonHolidaysAndFiltersByChildGrades() {
@@ -69,6 +85,29 @@ class SchoolScheduleQueryServiceImplTest {
         .extracting("eventName")
         .containsExactly("재량휴업일");
     verify(neisSchoolScheduleClient, times(2)).search(any(), any(), eq(fromDate), eq(toDate));
+  }
+
+  @Test
+  void getSchoolSchedulesTranslatesCommonHolidaysAndSchoolSchedulesByUserLanguage() {
+    TranslationContext englishContext = new TranslationContext("US", new HashMap<>());
+    SchoolScheduleChild child = child(1L, "첫째", "화랑초등학교", "7051173", "B10", 4, "#22CC88");
+    LocalDate fromDate = LocalDate.of(2026, 3, 1);
+    LocalDate toDate = LocalDate.of(2026, 5, 31);
+    when(translationService.contextFor(20L)).thenReturn(englishContext);
+    when(translationService.translate(englishContext, "대체공휴일")).thenReturn("Substitute holiday");
+    when(translationService.translate(englishContext, "시업식")).thenReturn("Opening ceremony");
+    when(schoolScheduleChildReader.findChildren(20L)).thenReturn(List.of(child));
+    when(neisSchoolScheduleClient.search("B10", "7051173", fromDate, toDate))
+        .thenReturn(
+            List.of(
+                schedule("대체공휴일", LocalDate.of(2026, 3, 2)),
+                schedule("시업식", LocalDate.of(2026, 3, 3))));
+
+    var response = service.getSchoolSchedules(20L, fromDate, toDate);
+
+    assertThat(response.commonHolidays().get(0).eventName()).isEqualTo("Substitute holiday");
+    assertThat(response.schoolSchedules().get(0).schedules().get(0).eventName())
+        .isEqualTo("Opening ceremony");
   }
 
   @Test

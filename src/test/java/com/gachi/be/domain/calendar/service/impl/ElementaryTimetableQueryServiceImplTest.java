@@ -3,19 +3,23 @@ package com.gachi.be.domain.calendar.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.gachi.be.domain.calendar.service.impl.NeisCalendarTranslationService.TranslationContext;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
 import com.gachi.be.domain.school.client.NeisElementaryTimetableClient;
 import com.gachi.be.domain.school.dto.response.NeisElementaryTimetableItem;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class ElementaryTimetableQueryServiceImplTest {
@@ -24,9 +28,20 @@ class ElementaryTimetableQueryServiceImplTest {
       mock(SchoolScheduleChildReader.class);
   private final NeisElementaryTimetableClient neisElementaryTimetableClient =
       mock(NeisElementaryTimetableClient.class);
+  private final NeisCalendarTranslationService translationService =
+      mock(NeisCalendarTranslationService.class);
+  private final TranslationContext translationContext =
+      new TranslationContext("KO", new HashMap<>());
   private final ElementaryTimetableQueryServiceImpl service =
       new ElementaryTimetableQueryServiceImpl(
-          schoolScheduleChildReader, neisElementaryTimetableClient);
+          schoolScheduleChildReader, neisElementaryTimetableClient, translationService);
+
+  @BeforeEach
+  void setUpTranslation() {
+    when(translationService.contextFor(10L)).thenReturn(translationContext);
+    when(translationService.translate(eq(translationContext), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(1));
+  }
 
   @Test
   void getElementaryTimetablesQueriesDistinctGradesAndClassesPerSchool() {
@@ -65,6 +80,23 @@ class ElementaryTimetableQueryServiceImplTest {
         .search("B10", "7051173", fromDate, toDate, 4, "2");
     verify(neisElementaryTimetableClient, times(1))
         .search("B10", "7051173", fromDate, toDate, 2, "1");
+  }
+
+  @Test
+  void getElementaryTimetablesTranslatesContentByUserLanguage() {
+    TranslationContext englishContext = new TranslationContext("US", new HashMap<>());
+    SchoolScheduleChild child = child(1L, "첫째", "화랑초등학교", "7051173", "B10", 4, "1", "#22CC88");
+    LocalDate fromDate = LocalDate.of(2026, 3, 1);
+    LocalDate toDate = LocalDate.of(2026, 3, 31);
+    when(translationService.contextFor(20L)).thenReturn(englishContext);
+    when(translationService.translate(englishContext, "수학")).thenReturn("Math");
+    when(schoolScheduleChildReader.findChildren(20L)).thenReturn(List.of(child));
+    when(neisElementaryTimetableClient.search("B10", "7051173", fromDate, toDate, 4, "1"))
+        .thenReturn(List.of(timetable(LocalDate.of(2026, 3, 2), 4, "1", 2, "수학")));
+
+    var response = service.getElementaryTimetables(20L, fromDate, toDate);
+
+    assertThat(response.schoolTimetables().get(0).timetables().get(0).content()).isEqualTo("Math");
   }
 
   @Test

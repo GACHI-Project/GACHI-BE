@@ -2,6 +2,7 @@ package com.gachi.be.domain.calendar.service.impl;
 
 import com.gachi.be.domain.calendar.dto.response.ElementaryTimetableCalendarResponse;
 import com.gachi.be.domain.calendar.service.ElementaryTimetableQueryService;
+import com.gachi.be.domain.calendar.service.impl.NeisCalendarTranslationService.TranslationContext;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
 import com.gachi.be.domain.school.client.NeisElementaryTimetableClient;
 import com.gachi.be.domain.school.dto.response.NeisElementaryTimetableItem;
@@ -26,6 +27,7 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
 
   private final SchoolScheduleChildReader schoolScheduleChildReader;
   private final NeisElementaryTimetableClient neisElementaryTimetableClient;
+  private final NeisCalendarTranslationService translationService;
 
   @Override
   public ElementaryTimetableCalendarResponse getElementaryTimetables(
@@ -34,6 +36,7 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
 
     Map<SchoolIdentity, List<SchoolScheduleChild>> childrenBySchool =
         groupBySchoolIdentity(schoolScheduleChildReader.findChildren(userId));
+    TranslationContext translationContext = translationService.contextFor(userId);
     List<ElementaryTimetableCalendarResponse.TimetableGroup> groups = new ArrayList<>();
     for (Map.Entry<SchoolIdentity, List<SchoolScheduleChild>> entry : childrenBySchool.entrySet()) {
       SchoolIdentity identity = entry.getKey();
@@ -57,7 +60,7 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
                           .stream())
               .sorted(timetableComparator())
               .toList();
-      groups.add(toGroup(identity, schoolChildren, timetables));
+      groups.add(toGroup(identity, schoolChildren, timetables, translationContext));
     }
 
     return new ElementaryTimetableCalendarResponse(groups);
@@ -89,7 +92,8 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
   private ElementaryTimetableCalendarResponse.TimetableGroup toGroup(
       SchoolIdentity identity,
       List<SchoolScheduleChild> children,
-      List<NeisElementaryTimetableItem> timetables) {
+      List<NeisElementaryTimetableItem> timetables,
+      TranslationContext translationContext) {
     List<Long> childIds = children.stream().map(SchoolScheduleChild::childId).toList();
     List<ElementaryTimetableCalendarResponse.ChildItem> childItems =
         children.stream()
@@ -103,7 +107,7 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
                         child.colorCode()))
             .toList();
     List<ElementaryTimetableCalendarResponse.TimetableItem> timetableItems =
-        timetables.stream().map(this::toTimetableItem).toList();
+        timetables.stream().map(item -> toTimetableItem(item, translationContext)).toList();
 
     return new ElementaryTimetableCalendarResponse.TimetableGroup(
         identity.groupKey(),
@@ -116,7 +120,7 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
   }
 
   private ElementaryTimetableCalendarResponse.TimetableItem toTimetableItem(
-      NeisElementaryTimetableItem item) {
+      NeisElementaryTimetableItem item, TranslationContext translationContext) {
     return new ElementaryTimetableCalendarResponse.TimetableItem(
         item.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
         item.academicYear(),
@@ -124,7 +128,7 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
         item.grade(),
         item.className(),
         item.period(),
-        item.content());
+        translationService.translate(translationContext, item.content()));
   }
 
   private Comparator<NeisElementaryTimetableItem> timetableComparator() {
