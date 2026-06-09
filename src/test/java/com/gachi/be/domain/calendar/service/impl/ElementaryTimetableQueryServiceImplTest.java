@@ -39,7 +39,8 @@ class ElementaryTimetableQueryServiceImplTest {
   @BeforeEach
   void setUpTranslation() {
     when(translationService.contextFor(10L)).thenReturn(translationContext);
-    when(translationService.translate(eq(translationContext), nullable(String.class)))
+    when(translationService.translateTimetableContent(
+            eq(translationContext), nullable(String.class)))
         .thenAnswer(invocation -> invocation.getArgument(1));
   }
 
@@ -89,7 +90,7 @@ class ElementaryTimetableQueryServiceImplTest {
     LocalDate fromDate = LocalDate.of(2026, 3, 1);
     LocalDate toDate = LocalDate.of(2026, 3, 31);
     when(translationService.contextFor(20L)).thenReturn(englishContext);
-    when(translationService.translate(englishContext, "수학")).thenReturn("Math");
+    when(translationService.translateTimetableContent(englishContext, "수학")).thenReturn("Math");
     when(schoolScheduleChildReader.findChildren(20L)).thenReturn(List.of(child));
     when(neisElementaryTimetableClient.search("B10", "7051173", fromDate, toDate, 4, "1"))
         .thenReturn(List.of(timetable(LocalDate.of(2026, 3, 2), 4, "1", 2, "수학")));

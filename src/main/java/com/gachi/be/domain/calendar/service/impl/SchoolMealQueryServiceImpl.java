@@ -103,12 +103,12 @@ public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
     return new SchoolMealCalendarResponse.MealItem(
         item.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
         item.mealCode(),
-        translationService.translate(translationContext, item.mealName()),
+        translationService.translateMealName(translationContext, item.mealCode(), item.mealName()),
         item.mealPeopleCount(),
         translationService.translate(translationContext, item.dishName()),
         translationService.translate(translationContext, item.originInfo()),
         item.calorieInfo(),
-        translationService.translate(translationContext, item.nutritionInfo()));
+        translationService.translateNutritionInfo(translationContext, item.nutritionInfo()));
   }
 
   private record SchoolIdentity(String officeCode, String schoolCode) {

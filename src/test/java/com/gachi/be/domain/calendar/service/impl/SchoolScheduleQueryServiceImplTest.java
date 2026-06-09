@@ -39,7 +39,7 @@ class SchoolScheduleQueryServiceImplTest {
   @BeforeEach
   void setUpTranslation() {
     when(translationService.contextFor(10L)).thenReturn(translationContext);
-    when(translationService.translate(eq(translationContext), nullable(String.class)))
+    when(translationService.translateScheduleText(eq(translationContext), nullable(String.class)))
         .thenAnswer(invocation -> invocation.getArgument(1));
   }
 
@@ -94,8 +94,10 @@ class SchoolScheduleQueryServiceImplTest {
     LocalDate fromDate = LocalDate.of(2026, 3, 1);
     LocalDate toDate = LocalDate.of(2026, 5, 31);
     when(translationService.contextFor(20L)).thenReturn(englishContext);
-    when(translationService.translate(englishContext, "대체공휴일")).thenReturn("Substitute holiday");
-    when(translationService.translate(englishContext, "시업식")).thenReturn("Opening ceremony");
+    when(translationService.translateScheduleText(englishContext, "대체공휴일"))
+        .thenReturn("Substitute holiday");
+    when(translationService.translateScheduleText(englishContext, "시업식"))
+        .thenReturn("Opening ceremony");
     when(schoolScheduleChildReader.findChildren(20L)).thenReturn(List.of(child));
     when(neisSchoolScheduleClient.search("B10", "7051173", fromDate, toDate))
         .thenReturn(

@@ -39,6 +39,11 @@ class SchoolMealQueryServiceImplTest {
     when(translationService.contextFor(10L)).thenReturn(translationContext);
     when(translationService.translate(eq(translationContext), nullable(String.class)))
         .thenAnswer(invocation -> invocation.getArgument(1));
+    when(translationService.translateMealName(
+            eq(translationContext), nullable(String.class), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(translationService.translateNutritionInfo(eq(translationContext), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(1));
   }
 
   @Test
@@ -73,8 +78,10 @@ class SchoolMealQueryServiceImplTest {
     LocalDate fromDate = LocalDate.of(2026, 3, 1);
     LocalDate toDate = LocalDate.of(2026, 3, 31);
     when(translationService.contextFor(20L)).thenReturn(englishContext);
-    when(translationService.translate(englishContext, "중식")).thenReturn("Lunch");
+    when(translationService.translateMealName(englishContext, "2", "중식")).thenReturn("Lunch");
     when(translationService.translate(englishContext, "현미밥")).thenReturn("Brown rice");
+    when(translationService.translateNutritionInfo(eq(englishContext), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(1));
     when(schoolScheduleChildReader.findChildren(20L)).thenReturn(List.of(child));
     when(neisSchoolMealClient.search("B10", "7051173", fromDate, toDate))
         .thenReturn(List.of(meal(LocalDate.of(2026, 3, 2), "중식", "현미밥")));

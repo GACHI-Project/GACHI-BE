@@ -132,8 +132,8 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
     return new SchoolScheduleCalendarResponse.ScheduleItem(
         item.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
         item.academicYear(),
-        translationService.translate(translationContext, item.eventName()),
-        translationService.translate(translationContext, item.eventContent()),
+        translationService.translateScheduleText(translationContext, item.eventName()),
+        translationService.translateScheduleText(translationContext, item.eventContent()),
         new SchoolScheduleCalendarResponse.GradeEventYn(
             gradeEventYn.grade1(),
             gradeEventYn.grade2(),

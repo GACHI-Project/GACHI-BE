@@ -128,7 +128,7 @@ public class ElementaryTimetableQueryServiceImpl implements ElementaryTimetableQ
         item.grade(),
         item.className(),
         item.period(),
-        translationService.translate(translationContext, item.content()));
+        translationService.translateTimetableContent(translationContext, item.content()));
   }
 
   private Comparator<NeisElementaryTimetableItem> timetableComparator() {
