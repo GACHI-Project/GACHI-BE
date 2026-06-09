@@ -56,7 +56,9 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
         }
         if (isCommonHoliday(schedule)) {
           SchoolScheduleCalendarResponse.ScheduleItem scheduleItem = toScheduleItem(schedule);
-          commonHolidays.putIfAbsent(ScheduleIdentity.from(scheduleItem), scheduleItem);
+          commonHolidays.putIfAbsent(
+              new ScheduleIdentity(scheduleItem.date(), normalizeText(scheduleItem.eventName())),
+              scheduleItem);
           continue;
         }
         if (appliesToAnyChildGrade(schedule, schoolChildren)) {
@@ -187,9 +189,5 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
     }
   }
 
-  private record ScheduleIdentity(String date, String eventName) {
-    static ScheduleIdentity from(SchoolScheduleCalendarResponse.ScheduleItem item) {
-      return new ScheduleIdentity(item.date(), item.eventName());
-    }
-  }
+  private record ScheduleIdentity(String date, String normalizedEventName) {}
 }

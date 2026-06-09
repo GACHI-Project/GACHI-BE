@@ -47,7 +47,7 @@ class SchoolScheduleQueryServiceImplTest {
     when(neisSchoolScheduleClient.search(eq("J10"), eq("7611076"), eq(fromDate), eq(toDate)))
         .thenReturn(
             List.of(
-                schedule("대체공휴일", LocalDate.of(2026, 3, 2)),
+                schedule("대체 공휴일", LocalDate.of(2026, 3, 2)),
                 schedule("어린이날", LocalDate.of(2026, 5, 5)),
                 schedule("토요공휴일", LocalDate.of(2026, 3, 7)),
                 schedule("재량휴업일", LocalDate.of(2026, 3, 5))));
