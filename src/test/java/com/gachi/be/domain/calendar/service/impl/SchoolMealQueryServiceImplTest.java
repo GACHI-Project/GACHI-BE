@@ -3,18 +3,22 @@ package com.gachi.be.domain.calendar.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.gachi.be.domain.calendar.service.impl.NeisCalendarTranslationService.TranslationContext;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
 import com.gachi.be.domain.school.client.NeisSchoolMealClient;
 import com.gachi.be.domain.school.dto.response.NeisSchoolMealItem;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class SchoolMealQueryServiceImplTest {
@@ -22,8 +26,25 @@ class SchoolMealQueryServiceImplTest {
   private final SchoolScheduleChildReader schoolScheduleChildReader =
       mock(SchoolScheduleChildReader.class);
   private final NeisSchoolMealClient neisSchoolMealClient = mock(NeisSchoolMealClient.class);
+  private final NeisCalendarTranslationService translationService =
+      mock(NeisCalendarTranslationService.class);
+  private final TranslationContext translationContext =
+      new TranslationContext("KO", new HashMap<>());
   private final SchoolMealQueryServiceImpl service =
-      new SchoolMealQueryServiceImpl(schoolScheduleChildReader, neisSchoolMealClient);
+      new SchoolMealQueryServiceImpl(
+          schoolScheduleChildReader, neisSchoolMealClient, translationService);
+
+  @BeforeEach
+  void setUpTranslation() {
+    when(translationService.contextFor(10L)).thenReturn(translationContext);
+    when(translationService.translate(eq(translationContext), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(1));
+    when(translationService.translateMealName(
+            eq(translationContext), nullable(String.class), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(2));
+    when(translationService.translateNutritionInfo(eq(translationContext), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(1));
+  }
 
   @Test
   void getSchoolMealsGroupsChildrenByOfficeCodeAndSchoolCode() {
@@ -48,6 +69,27 @@ class SchoolMealQueryServiceImplTest {
     assertThat(response.schoolMeals().get(1).schoolGroupKey()).isEqualTo("J10:7611076");
     verify(neisSchoolMealClient, times(1)).search("B10", "7051173", fromDate, toDate);
     verify(neisSchoolMealClient, times(1)).search("J10", "7611076", fromDate, toDate);
+  }
+
+  @Test
+  void getSchoolMealsTranslatesMealTextByUserLanguage() {
+    TranslationContext englishContext = new TranslationContext("US", new HashMap<>());
+    SchoolScheduleChild child = child(1L, "첫째", "화랑초등학교", "7051173", "B10", 4, "#22CC88");
+    LocalDate fromDate = LocalDate.of(2026, 3, 1);
+    LocalDate toDate = LocalDate.of(2026, 3, 31);
+    when(translationService.contextFor(20L)).thenReturn(englishContext);
+    when(translationService.translateMealName(englishContext, "2", "중식")).thenReturn("Lunch");
+    when(translationService.translate(englishContext, "현미밥")).thenReturn("Brown rice");
+    when(translationService.translateNutritionInfo(eq(englishContext), nullable(String.class)))
+        .thenAnswer(invocation -> invocation.getArgument(1));
+    when(schoolScheduleChildReader.findChildren(20L)).thenReturn(List.of(child));
+    when(neisSchoolMealClient.search("B10", "7051173", fromDate, toDate))
+        .thenReturn(List.of(meal(LocalDate.of(2026, 3, 2), "중식", "현미밥")));
+
+    var response = service.getSchoolMeals(20L, fromDate, toDate);
+
+    assertThat(response.schoolMeals().get(0).meals().get(0).mealName()).isEqualTo("Lunch");
+    assertThat(response.schoolMeals().get(0).meals().get(0).dishName()).isEqualTo("Brown rice");
   }
 
   @Test

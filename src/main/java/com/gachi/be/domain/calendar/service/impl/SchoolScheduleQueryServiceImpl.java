@@ -2,6 +2,7 @@ package com.gachi.be.domain.calendar.service.impl;
 
 import com.gachi.be.domain.calendar.dto.response.SchoolScheduleCalendarResponse;
 import com.gachi.be.domain.calendar.service.SchoolScheduleQueryService;
+import com.gachi.be.domain.calendar.service.impl.NeisCalendarTranslationService.TranslationContext;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
 import com.gachi.be.domain.school.client.NeisSchoolScheduleClient;
 import com.gachi.be.domain.school.dto.response.NeisSchoolScheduleItem;
@@ -32,6 +33,7 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
 
   private final SchoolScheduleChildReader schoolScheduleChildReader;
   private final NeisSchoolScheduleClient neisSchoolScheduleClient;
+  private final NeisCalendarTranslationService translationService;
 
   @Override
   public SchoolScheduleCalendarResponse getSchoolSchedules(
@@ -40,6 +42,7 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
 
     Map<SchoolIdentity, List<SchoolScheduleChild>> childrenBySchool =
         groupBySchoolIdentity(schoolScheduleChildReader.findChildren(userId));
+    TranslationContext translationContext = translationService.contextFor(userId);
     List<SchoolScheduleCalendarResponse.SchoolScheduleGroup> groups = new ArrayList<>();
     Map<ScheduleIdentity, SchoolScheduleCalendarResponse.ScheduleItem> commonHolidays =
         new LinkedHashMap<>();
@@ -55,9 +58,12 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
           continue;
         }
         if (isCommonHoliday(schedule)) {
-          SchoolScheduleCalendarResponse.ScheduleItem scheduleItem = toScheduleItem(schedule);
+          SchoolScheduleCalendarResponse.ScheduleItem scheduleItem =
+              toScheduleItem(schedule, translationContext);
           commonHolidays.putIfAbsent(
-              new ScheduleIdentity(scheduleItem.date(), normalizeText(scheduleItem.eventName())),
+              new ScheduleIdentity(
+                  schedule.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
+                  normalizeText(schedule.eventName())),
               scheduleItem);
           continue;
         }
@@ -65,7 +71,7 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
           schoolSpecificSchedules.add(schedule);
         }
       }
-      groups.add(toGroup(identity, schoolChildren, schoolSpecificSchedules));
+      groups.add(toGroup(identity, schoolChildren, schoolSpecificSchedules, translationContext));
     }
 
     return new SchoolScheduleCalendarResponse(new ArrayList<>(commonHolidays.values()), groups);
@@ -97,7 +103,8 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
   private SchoolScheduleCalendarResponse.SchoolScheduleGroup toGroup(
       SchoolIdentity identity,
       List<SchoolScheduleChild> children,
-      List<NeisSchoolScheduleItem> schedules) {
+      List<NeisSchoolScheduleItem> schedules,
+      TranslationContext translationContext) {
     List<Long> childIds = children.stream().map(SchoolScheduleChild::childId).toList();
     List<SchoolScheduleCalendarResponse.ChildItem> childItems =
         children.stream()
@@ -107,7 +114,7 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
                         child.childId(), child.childName(), child.grade(), child.colorCode()))
             .toList();
     List<SchoolScheduleCalendarResponse.ScheduleItem> scheduleItems =
-        schedules.stream().map(this::toScheduleItem).toList();
+        schedules.stream().map(item -> toScheduleItem(item, translationContext)).toList();
 
     return new SchoolScheduleCalendarResponse.SchoolScheduleGroup(
         identity.groupKey(),
@@ -119,13 +126,14 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
         scheduleItems);
   }
 
-  private SchoolScheduleCalendarResponse.ScheduleItem toScheduleItem(NeisSchoolScheduleItem item) {
+  private SchoolScheduleCalendarResponse.ScheduleItem toScheduleItem(
+      NeisSchoolScheduleItem item, TranslationContext translationContext) {
     NeisSchoolScheduleItem.GradeEventYn gradeEventYn = item.gradeEventYn();
     return new SchoolScheduleCalendarResponse.ScheduleItem(
         item.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
         item.academicYear(),
-        item.eventName(),
-        item.eventContent(),
+        translationService.translateScheduleText(translationContext, item.eventName()),
+        translationService.translateScheduleText(translationContext, item.eventContent()),
         new SchoolScheduleCalendarResponse.GradeEventYn(
             gradeEventYn.grade1(),
             gradeEventYn.grade2(),

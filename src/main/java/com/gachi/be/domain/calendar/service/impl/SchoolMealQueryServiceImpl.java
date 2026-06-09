@@ -2,6 +2,7 @@ package com.gachi.be.domain.calendar.service.impl;
 
 import com.gachi.be.domain.calendar.dto.response.SchoolMealCalendarResponse;
 import com.gachi.be.domain.calendar.service.SchoolMealQueryService;
+import com.gachi.be.domain.calendar.service.impl.NeisCalendarTranslationService.TranslationContext;
 import com.gachi.be.domain.calendar.service.impl.SchoolScheduleChildReader.SchoolScheduleChild;
 import com.gachi.be.domain.school.client.NeisSchoolMealClient;
 import com.gachi.be.domain.school.dto.response.NeisSchoolMealItem;
@@ -25,6 +26,7 @@ public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
 
   private final SchoolScheduleChildReader schoolScheduleChildReader;
   private final NeisSchoolMealClient neisSchoolMealClient;
+  private final NeisCalendarTranslationService translationService;
 
   @Override
   public SchoolMealCalendarResponse getSchoolMeals(
@@ -33,6 +35,7 @@ public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
 
     Map<SchoolIdentity, List<SchoolScheduleChild>> childrenBySchool =
         groupBySchoolIdentity(schoolScheduleChildReader.findChildren(userId));
+    TranslationContext translationContext = translationService.contextFor(userId);
     List<SchoolMealCalendarResponse.SchoolMealGroup> groups = new ArrayList<>();
     for (Map.Entry<SchoolIdentity, List<SchoolScheduleChild>> entry : childrenBySchool.entrySet()) {
       SchoolIdentity identity = entry.getKey();
@@ -40,7 +43,7 @@ public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
       List<NeisSchoolMealItem> meals =
           neisSchoolMealClient.search(
               identity.officeCode(), identity.schoolCode(), fromDate, toDate);
-      groups.add(toGroup(identity, schoolChildren, meals));
+      groups.add(toGroup(identity, schoolChildren, meals, translationContext));
     }
 
     return new SchoolMealCalendarResponse(groups);
@@ -70,7 +73,10 @@ public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
   }
 
   private SchoolMealCalendarResponse.SchoolMealGroup toGroup(
-      SchoolIdentity identity, List<SchoolScheduleChild> children, List<NeisSchoolMealItem> meals) {
+      SchoolIdentity identity,
+      List<SchoolScheduleChild> children,
+      List<NeisSchoolMealItem> meals,
+      TranslationContext translationContext) {
     List<Long> childIds = children.stream().map(SchoolScheduleChild::childId).toList();
     List<SchoolMealCalendarResponse.ChildItem> childItems =
         children.stream()
@@ -80,7 +86,7 @@ public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
                         child.childId(), child.childName(), child.grade(), child.colorCode()))
             .toList();
     List<SchoolMealCalendarResponse.MealItem> mealItems =
-        meals.stream().map(this::toMealItem).toList();
+        meals.stream().map(item -> toMealItem(item, translationContext)).toList();
 
     return new SchoolMealCalendarResponse.SchoolMealGroup(
         identity.groupKey(),
@@ -92,16 +98,17 @@ public class SchoolMealQueryServiceImpl implements SchoolMealQueryService {
         mealItems);
   }
 
-  private SchoolMealCalendarResponse.MealItem toMealItem(NeisSchoolMealItem item) {
+  private SchoolMealCalendarResponse.MealItem toMealItem(
+      NeisSchoolMealItem item, TranslationContext translationContext) {
     return new SchoolMealCalendarResponse.MealItem(
         item.date().format(DateTimeFormatter.ISO_LOCAL_DATE),
         item.mealCode(),
-        item.mealName(),
+        translationService.translateMealName(translationContext, item.mealCode(), item.mealName()),
         item.mealPeopleCount(),
-        item.dishName(),
-        item.originInfo(),
+        translationService.translate(translationContext, item.dishName()),
+        translationService.translate(translationContext, item.originInfo()),
         item.calorieInfo(),
-        item.nutritionInfo());
+        translationService.translateNutritionInfo(translationContext, item.nutritionInfo()));
   }
 
   private record SchoolIdentity(String officeCode, String schoolCode) {
