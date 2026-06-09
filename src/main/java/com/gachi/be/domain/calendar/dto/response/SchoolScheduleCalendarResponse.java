@@ -2,9 +2,15 @@ package com.gachi.be.domain.calendar.dto.response;
 
 import java.util.List;
 
-public record SchoolScheduleCalendarResponse(List<SchoolScheduleGroup> schoolSchedules) {
+public record SchoolScheduleCalendarResponse(
+    List<ScheduleItem> commonHolidays, List<SchoolScheduleGroup> schoolSchedules) {
   public SchoolScheduleCalendarResponse {
+    commonHolidays = commonHolidays == null ? List.of() : List.copyOf(commonHolidays);
     schoolSchedules = schoolSchedules == null ? List.of() : List.copyOf(schoolSchedules);
+  }
+
+  public SchoolScheduleCalendarResponse(List<SchoolScheduleGroup> schoolSchedules) {
+    this(List.of(), schoolSchedules);
   }
 
   public record SchoolScheduleGroup(
