@@ -23,6 +23,9 @@ public class PasswordPolicyValidator {
   private static final Pattern PASSWORD_NON_DIGIT_PATTERN = Pattern.compile("[^0-9]");
 
   public void validate(String password, String loginId, String email, String phoneNumber) {
+    if (password == null || password.isEmpty()) {
+      throw new BusinessException(ErrorCode.AUTH_PASSWORD_POLICY_LENGTH_INVALID);
+    }
     validatePasswordPolicy(password, loginId, email, phoneNumber);
     enforcePasswordStrength(password);
   }
@@ -71,10 +74,11 @@ public class PasswordPolicyValidator {
       return true;
     }
 
-    String emailLocalPart = email;
-    int emailAtIndex = email.indexOf('@');
+    String normalizedEmail = normalizeText(email);
+    String emailLocalPart = normalizedEmail;
+    int emailAtIndex = normalizedEmail.indexOf('@');
     if (emailAtIndex > 0) {
-      emailLocalPart = email.substring(0, emailAtIndex);
+      emailLocalPart = normalizedEmail.substring(0, emailAtIndex);
     }
     if (emailLocalPart.length() >= 3 && containsIgnoreCase(normalizedPassword, emailLocalPart)) {
       return true;
