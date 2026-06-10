@@ -108,7 +108,8 @@ class NeisCalendarTranslationService {
           entry("여름방학", new FixedTranslations("Summer Vacation", "暑假", "Kỳ nghỉ hè")),
           entry("겨울방학", new FixedTranslations("Winter Vacation", "寒假", "Kỳ nghỉ đông")),
           entry("봄방학", new FixedTranslations("Spring Vacation", "春假", "Kỳ nghỉ xuân")),
-          entry("개학식", new FixedTranslations("Back-to-School Ceremony", "返校典礼", "Lễ tựu trường")),
+          entry("개학식", new FixedTranslations("School Opening Ceremony", "返校典礼", "Lễ tựu trường")),
+          entry("개학일", new FixedTranslations("First Day of School", "返校日", "Ngày tựu trường")),
           entry(
               "개교기념일",
               new FixedTranslations("School Anniversary", "建校纪念日", "Ngày thành lập trường")),

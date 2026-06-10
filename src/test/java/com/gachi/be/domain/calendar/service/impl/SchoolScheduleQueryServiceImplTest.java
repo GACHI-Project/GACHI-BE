@@ -113,6 +113,30 @@ class SchoolScheduleQueryServiceImplTest {
   }
 
   @Test
+  void getSchoolSchedulesSeparatesElectionAndConstitutionDayAndExcludesVacationRanges() {
+    SchoolScheduleChild child = child(1L, "첫째", "서울미아초등학교", "7121303", "B10", 1, "#FFCC2F");
+    LocalDate fromDate = LocalDate.of(2026, 6, 1);
+    LocalDate toDate = LocalDate.of(2026, 8, 31);
+    when(schoolScheduleChildReader.findChildren(10L)).thenReturn(List.of(child));
+    when(neisSchoolScheduleClient.search("B10", "7121303", fromDate, toDate))
+        .thenReturn(
+            List.of(
+                schedule("지방 선거일", LocalDate.of(2026, 6, 3)),
+                schedule("제헌절", LocalDate.of(2026, 7, 17)),
+                schedule("여름방학식", LocalDate.of(2026, 7, 24)),
+                schedule("여름방학", LocalDate.of(2026, 7, 27)),
+                schedule("겨울방학", LocalDate.of(2026, 8, 1)),
+                schedule("개학일", LocalDate.of(2026, 8, 24))));
+
+    var response = service.getSchoolSchedules(10L, fromDate, toDate);
+
+    assertThat(response.commonHolidays()).extracting("eventName").containsExactly("지방 선거일", "제헌절");
+    assertThat(response.schoolSchedules().get(0).schedules())
+        .extracting("eventName")
+        .containsExactly("여름방학식", "개학일");
+  }
+
+  @Test
   void getSchoolSchedulesThrowsWhenChildSchoolIdentityIsMissing() {
     SchoolScheduleChild child = child(1L, "첫째", "화랑초등학교", null, "B10", 4, "#22CC88");
     when(schoolScheduleChildReader.findChildren(10L)).thenReturn(List.of(child));
