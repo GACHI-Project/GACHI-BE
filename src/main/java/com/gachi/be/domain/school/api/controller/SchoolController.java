@@ -1,6 +1,8 @@
 package com.gachi.be.domain.school.api.controller;
 
+import com.gachi.be.domain.school.dto.response.SchoolClassResponse;
 import com.gachi.be.domain.school.dto.response.SchoolSearchResponse;
+import com.gachi.be.domain.school.service.SchoolClassService;
 import com.gachi.be.domain.school.service.SchoolSearchService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/schools")
 public class SchoolController {
   private final SchoolSearchService schoolSearchService;
+  private final SchoolClassService schoolClassService;
 
   @Operation(summary = "학교명 검색", description = "NEIS 학교기본정보를 이용해 학교명을 검색합니다.")
   @GetMapping("/search")
@@ -38,5 +41,21 @@ public class SchoolController {
           Integer size) {
     return ApiResponse.success(
         SuccessCode.SCHOOL_SEARCH_SUCCESS, schoolSearchService.search(keyword, size));
+  }
+
+  @Operation(summary = "학교 반 목록 조회", description = "NEIS 학급정보를 이용해 선택한 학교와 학년의 반 목록을 조회합니다.")
+  @GetMapping("/classes")
+  public ApiResponse<SchoolClassResponse> searchSchoolClasses(
+      @Parameter(description = "시도교육청코드", required = true) @RequestParam @NotBlank
+          String officeCode,
+      @Parameter(description = "학교 행정표준코드", required = true) @RequestParam @NotBlank
+          String schoolCode,
+      @Parameter(description = "학년도(YYYY). 미입력 시 현재 학년도") @RequestParam(required = false)
+          String academicYear,
+      @Parameter(description = "초등학교 학년(1~6)") @RequestParam(required = false) @Min(1) @Max(6)
+          Integer grade) {
+    return ApiResponse.success(
+        SuccessCode.SCHOOL_CLASS_LIST_SUCCESS,
+        schoolClassService.search(officeCode, schoolCode, academicYear, grade));
   }
 }

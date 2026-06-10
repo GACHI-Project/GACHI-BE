@@ -18,6 +18,7 @@ public class NeisProperties {
   private String scheduleApiKey;
   private String mealApiKey;
   private String timetableApiKey;
+  private String classInfoApiKey;
 
   @NotBlank private String schoolInfoUrl = "https://open.neis.go.kr/hub/schoolInfo";
 
@@ -27,6 +28,8 @@ public class NeisProperties {
   private String mealServiceDietInfoUrl = "https://open.neis.go.kr/hub/mealServiceDietInfo";
 
   @NotBlank private String elementaryTimetableUrl = "https://open.neis.go.kr/hub/elsTimetable";
+
+  @NotBlank private String classInfoUrl = "https://open.neis.go.kr/hub/classInfo";
 
   @Min(1)
   private int connectTimeoutSeconds = 5;
@@ -48,6 +51,10 @@ public class NeisProperties {
 
   public String getTimetableApiKey() {
     return hasText(timetableApiKey) ? timetableApiKey.trim() : null;
+  }
+
+  public String getClassInfoApiKey() {
+    return hasText(classInfoApiKey) ? classInfoApiKey.trim() : null;
   }
 
   private boolean hasText(String value) {

@@ -75,10 +75,12 @@ app:
     schedule-api-key: ${NEIS_SCHEDULE_API_KEY:${NEIS_API_KEY:}}
     meal-api-key: ${NEIS_MEAL_API_KEY:}
     timetable-api-key: ${NEIS_TIMETABLE_API_KEY:}
+    class-info-api-key: ${NEIS_CLASS_INFO_API_KEY:}
     school-info-url: ${NEIS_SCHOOL_INFO_URL:https://open.neis.go.kr/hub/schoolInfo}
     school-schedule-url: ${NEIS_SCHOOL_SCHEDULE_URL:https://open.neis.go.kr/hub/SchoolSchedule}
     meal-service-diet-info-url: ${NEIS_MEAL_SERVICE_DIET_INFO_URL:https://open.neis.go.kr/hub/mealServiceDietInfo}
     elementary-timetable-url: ${NEIS_ELEMENTARY_TIMETABLE_URL:https://open.neis.go.kr/hub/elsTimetable}
+    class-info-url: ${NEIS_CLASS_INFO_URL:https://open.neis.go.kr/hub/classInfo}
     connect-timeout-seconds: ${NEIS_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${NEIS_READ_TIMEOUT_SECONDS:10}
   notification:
