@@ -110,6 +110,8 @@ class NeisCalendarTranslationServiceTest {
         .isEqualTo("Independence Movement Day");
     assertThat(service.translateScheduleText(context, "대체공휴일")).isEqualTo("Substitute Holiday");
     assertThat(service.translateScheduleText(context, "제헌절")).isEqualTo("Constitution Day");
+    assertThat(service.translateScheduleText(context, "개학일"))
+        .isEqualTo("Opening Ceremony of School");
     verifyNoInteractions(papagoTranslateClient);
   }
 }

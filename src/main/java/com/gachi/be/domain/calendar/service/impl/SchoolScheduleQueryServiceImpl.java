@@ -25,11 +25,32 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryService {
   private static final long MAX_SCHOOL_SCHEDULE_RANGE_DAYS = 366L;
-  private static final Set<String> EXCLUDED_EVENT_NAMES = Set.of("토요휴업일", "토요공휴일", "토요휴무일");
+  private static final Set<String> EXCLUDED_EVENT_NAMES =
+      Set.of("토요휴업일", "토요공휴일", "토요휴무일", "여름방학", "겨울방학", "봄방학");
   private static final Set<String> COMMON_HOLIDAY_KEYWORDS =
       Set.of(
-          "공휴일", "대체공휴일", "대체휴일", "어린이날", "삼일절", "3·1절", "3.1절", "현충일", "광복절", "개천절", "한글날", "성탄절",
-          "석가탄신일", "부처님오신날", "신정", "설날", "추석");
+          "공휴일",
+          "대체공휴일",
+          "대체휴일",
+          "어린이날",
+          "삼일절",
+          "3·1절",
+          "3.1절",
+          "현충일",
+          "광복절",
+          "개천절",
+          "한글날",
+          "성탄절",
+          "석가탄신일",
+          "부처님오신날",
+          "신정",
+          "설날",
+          "추석",
+          "제헌절",
+          "지방선거",
+          "지방선거일",
+          "전국동시지방선거",
+          "전국동시지방선거일");
 
   private final SchoolScheduleChildReader schoolScheduleChildReader;
   private final NeisSchoolScheduleClient neisSchoolScheduleClient;
