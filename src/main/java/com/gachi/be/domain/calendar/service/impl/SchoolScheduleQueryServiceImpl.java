@@ -47,10 +47,8 @@ public class SchoolScheduleQueryServiceImpl implements SchoolScheduleQueryServic
           "설날",
           "추석",
           "제헌절",
-          "지방선거",
-          "지방선거일",
-          "전국동시지방선거",
-          "전국동시지방선거일");
+          // 단독 "선거일"은 학교 선거 일정과 충돌할 수 있어 지방선거 표현만 공통 휴일로 본다.
+          "지방선거");
 
   private final SchoolScheduleChildReader schoolScheduleChildReader;
   private final NeisSchoolScheduleClient neisSchoolScheduleClient;
