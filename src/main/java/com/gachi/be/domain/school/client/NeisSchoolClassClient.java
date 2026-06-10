@@ -41,9 +41,10 @@ public class NeisSchoolClassClient {
     List<NeisSchoolClassItem> classes = new ArrayList<>();
     int pageIndex = 1;
     int totalCount = Integer.MAX_VALUE;
+    int fetchedRowCount = 0;
 
     try {
-      while (classes.size() < totalCount) {
+      while (fetchedRowCount < totalCount) {
         URI uri = buildSearchUri(officeCode, schoolCode, academicYear, grade, pageIndex);
         NeisHttpResponse response = executeGet(uri);
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -61,6 +62,7 @@ public class NeisSchoolClassClient {
         if (parsedPage.rowCount() == 0) {
           break;
         }
+        fetchedRowCount += parsedPage.rowCount();
         classes.addAll(parsedPage.classes());
         pageIndex++;
       }

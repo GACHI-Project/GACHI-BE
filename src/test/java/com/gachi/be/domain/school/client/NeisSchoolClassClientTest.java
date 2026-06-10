@@ -13,6 +13,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -115,6 +116,71 @@ class NeisSchoolClassClientTest {
     NeisSchoolClassClient client = newClient("class-key");
 
     assertThat(client.search("B10", "7051173", "2026", 4)).isEmpty();
+  }
+
+  @Test
+  void searchContinuesPaginationWhenRowsAreFilteredOut() throws IOException {
+    AtomicInteger requestCount = new AtomicInteger();
+    startServer();
+    server.createContext(
+        "/hub/classInfo",
+        exchange -> {
+          int currentRequest = requestCount.incrementAndGet();
+          String rows =
+              currentRequest == 1
+                  ? """
+                    {
+                      "row": [
+                        {
+                          "ATPT_OFCDC_SC_CODE": "B10",
+                          "SD_SCHUL_CODE": "7051173",
+                          "AY": "2026",
+                          "GRADE": "",
+                          "CLASS_NM": ""
+                        }
+                      ]
+                    }
+                    """
+                  : """
+                    {
+                      "row": [
+                        {
+                          "ATPT_OFCDC_SC_CODE": "B10",
+                          "SD_SCHUL_CODE": "7051173",
+                          "AY": "2026",
+                          "GRADE": "4",
+                          "CLASS_NM": "1"
+                        }
+                      ]
+                    }
+                    """;
+          sendResponse(
+              exchange,
+              200,
+              ("""
+              {
+                "classInfo": [
+                  {
+                    "head": [
+                      {"list_total_count": 2},
+                      {"RESULT": {"CODE": "INFO-000", "MESSAGE": "정상 처리되었습니다."}}
+                    ]
+                  },
+                  %s
+                ]
+              }
+              """
+                      .formatted(rows))
+                  .getBytes(StandardCharsets.UTF_8));
+        });
+
+    NeisSchoolClassClient client = newClient("class-key");
+
+    var classes = client.search("B10", "7051173", "2026", 4);
+
+    assertThat(requestCount).hasValue(2);
+    assertThat(classes).hasSize(1);
+    assertThat(classes.get(0).className()).isEqualTo("1");
   }
 
   @Test

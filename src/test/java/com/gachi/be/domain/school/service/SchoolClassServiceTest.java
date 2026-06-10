@@ -11,7 +11,12 @@ import static org.mockito.Mockito.when;
 import com.gachi.be.domain.school.client.NeisSchoolClassClient;
 import com.gachi.be.domain.school.dto.response.NeisSchoolClassItem;
 import com.gachi.be.global.exception.BusinessException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class SchoolClassServiceTest {
@@ -58,6 +63,39 @@ class SchoolClassServiceTest {
     assertThat(response.classes())
         .extracting("grade", "className")
         .containsExactly(tuple(1, "3"), tuple(2, "1"));
+  }
+
+  @Test
+  void searchFillsSameCacheKeyAtomicallyForConcurrentRequests() throws Exception {
+    AtomicInteger callCount = new AtomicInteger();
+    CountDownLatch clientEntered = new CountDownLatch(1);
+    CountDownLatch releaseClient = new CountDownLatch(1);
+    when(neisSchoolClassClient.search("B10", "7051173", "2026", 4))
+        .thenAnswer(
+            invocation -> {
+              callCount.incrementAndGet();
+              clientEntered.countDown();
+              releaseClient.await(3, TimeUnit.SECONDS);
+              return List.of(new NeisSchoolClassItem("2026", 4, "1", "초등학교"));
+            });
+
+    var executor = Executors.newFixedThreadPool(2);
+    try {
+      List<java.util.concurrent.Future<?>> futures = new ArrayList<>();
+      futures.add(executor.submit(() -> service.search("B10", "7051173", "2026", 4)));
+      assertThat(clientEntered.await(1, TimeUnit.SECONDS)).isTrue();
+      futures.add(executor.submit(() -> service.search("B10", "7051173", "2026", 4)));
+      releaseClient.countDown();
+
+      for (java.util.concurrent.Future<?> future : futures) {
+        future.get(3, TimeUnit.SECONDS);
+      }
+    } finally {
+      executor.shutdownNow();
+    }
+
+    assertThat(callCount).hasValue(1);
+    verify(neisSchoolClassClient, times(1)).search("B10", "7051173", "2026", 4);
   }
 
   @Test

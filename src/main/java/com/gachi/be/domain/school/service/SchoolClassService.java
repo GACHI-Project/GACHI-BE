@@ -40,25 +40,29 @@ public class SchoolClassService {
 
     CacheKey key =
         new CacheKey(normalizedOfficeCode, normalizedSchoolCode, resolvedAcademicYear, grade);
-    CacheEntry cached = cache.get(key);
-    if (cached != null && !cached.isExpired()) {
-      return cached.response();
-    }
-
-    List<SchoolClassItem> classes =
-        normalize(
-            neisSchoolClassClient.search(
-                normalizedOfficeCode, normalizedSchoolCode, resolvedAcademicYear, grade));
-    SchoolClassResponse response =
-        new SchoolClassResponse(
-            normalizedOfficeCode,
-            normalizedSchoolCode,
-            resolvedAcademicYear,
-            grade,
-            classes.size(),
-            classes);
-    cache.put(key, new CacheEntry(response, Instant.now().plus(CACHE_TTL)));
-    return response;
+    Instant now = Instant.now();
+    CacheEntry entry =
+        cache.compute(
+            key,
+            (ignored, existing) -> {
+              if (existing != null && !existing.isExpired(now)) {
+                return existing;
+              }
+              List<SchoolClassItem> classes =
+                  normalize(
+                      neisSchoolClassClient.search(
+                          normalizedOfficeCode, normalizedSchoolCode, resolvedAcademicYear, grade));
+              SchoolClassResponse response =
+                  new SchoolClassResponse(
+                      normalizedOfficeCode,
+                      normalizedSchoolCode,
+                      resolvedAcademicYear,
+                      grade,
+                      classes.size(),
+                      classes);
+              return new CacheEntry(response, now.plus(CACHE_TTL));
+            });
+    return entry.response();
   }
 
   private List<SchoolClassItem> normalize(List<NeisSchoolClassItem> items) {
@@ -118,8 +122,8 @@ public class SchoolClassService {
   private record ClassKey(Integer grade, String className) {}
 
   private record CacheEntry(SchoolClassResponse response, Instant expiresAt) {
-    boolean isExpired() {
-      return Instant.now().isAfter(expiresAt);
+    boolean isExpired(Instant now) {
+      return now.isAfter(expiresAt);
     }
   }
 }
