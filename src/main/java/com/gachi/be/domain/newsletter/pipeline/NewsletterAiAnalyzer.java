@@ -87,89 +87,90 @@ public class NewsletterAiAnalyzer {
   private static final String FIELD_ID_SUMMARY = "summary";
 
   /**
-     * 1차 분석 응답(한국어)에서 화면에 노출되는 텍스트(title/summary/items[].title/
-     * checklistItems[].content,detail/conversationTopics[].topic)를 모아 id를 부여하고,
-     * KO가 아니면 Papago로 1차 번역 → AI 서버로 2차 검증을 거쳐 최종 텍스트 맵을 반환한다.
-     *
-     * language=KO이거나 번역 대상 텍스트가 없으면 한국어 원본을 그대로 반환한다 (id → 원본 텍스트).
-     */
+   * 1차 분석 응답(한국어)에서 화면에 노출되는 텍스트(title/summary/items[].title/
+   * checklistItems[].content,detail/conversationTopics[].topic)를 모아 id를 부여하고, KO가 아니면 Papago로 1차 번역
+   * → AI 서버로 2차 검증을 거쳐 최종 텍스트 맵을 반환한다.
+   *
+   * <p>language=KO이거나 번역 대상 텍스트가 없으면 한국어 원본을 그대로 반환한다 (id → 원본 텍스트).
+   */
   private Map<String, String> translateAndRefineDisplayTexts(
-      String originalText, String language, AnalysisResponse analysisResponse, List<ExtractedItem> items) {
+      String originalText,
+      String language,
+      AnalysisResponse analysisResponse,
+      List<ExtractedItem> items) {
 
-      Map<String, String> koTextsById = collectKoreanDisplayTexts(analysisResponse, items);
+    Map<String, String> koTextsById = collectKoreanDisplayTexts(analysisResponse, items);
 
-      if ("KO".equals(language)) {
-            // KO 사용자는 한국어 원본을 그대로 사용 (번역/검증 불필요)
-          return koTextsById;
-      }
+    if ("KO".equals(language)) {
+      // KO 사용자는 한국어 원본을 그대로 사용 (번역/검증 불필요)
+      return koTextsById;
+    }
 
-      // 1차: Papago 한국어 → language 번역
-      Map<String, String> papagoTextsById = new LinkedHashMap<>();
-      for (Map.Entry<String, String> entry : koTextsById.entrySet()) {
-          String koText = entry.getValue();
-          String translated = papagoTranslateClient.translate(koText, language);
-          papagoTextsById.put(entry.getKey(), translated != null ? translated : koText);
-      }
+    // 1차: Papago 한국어 → language 번역
+    Map<String, String> papagoTextsById = new LinkedHashMap<>();
+    for (Map.Entry<String, String> entry : koTextsById.entrySet()) {
+      String koText = entry.getValue();
+      String translated = papagoTranslateClient.translate(koText, language);
+      papagoTextsById.put(entry.getKey(), translated != null ? translated : koText);
+    }
 
-        // 2차: AI 서버 검증/교정
-      List<RefineFieldRequest> refineFields = new ArrayList<>();
-      for (Map.Entry<String, String> entry : koTextsById.entrySet()) {
-          refineFields.add(
-              new RefineFieldRequest(
-                  entry.getKey(), entry.getValue(), papagoTextsById.get(entry.getKey())));
-      }
+    // 2차: AI 서버 검증/교정
+    List<RefineFieldRequest> refineFields = new ArrayList<>();
+    for (Map.Entry<String, String> entry : koTextsById.entrySet()) {
+      refineFields.add(
+          new RefineFieldRequest(
+              entry.getKey(), entry.getValue(), papagoTextsById.get(entry.getKey())));
+    }
 
-      try {
-          Map<String, String> refinedById =
-              aiNewsletterClient.refineTranslation(originalText, language, refineFields).toMap();
+    try {
+      Map<String, String> refinedById =
+          aiNewsletterClient.refineTranslation(originalText, language, refineFields).toMap();
 
-          Map<String, String> result = new LinkedHashMap<>(papagoTextsById);
-          result.putAll(refinedById); // 검증 결과로 덮어쓰기. 누락된 id는 파파고 번역값 유지.
-          return result;
-      } catch (RuntimeException e) {
-          // 2차 검증 실패 시 파파고 1차 번역 결과로 폴백 (전체 파이프라인은 계속 진행)
-          log.warn("[AiAnalyzer] 2차 검증 실패. 파파고 1차 번역 결과로 대체합니다. error={}", e.getMessage(), e);
-          return papagoTextsById;
-      }
+      Map<String, String> result = new LinkedHashMap<>(papagoTextsById);
+      result.putAll(refinedById); // 검증 결과로 덮어쓰기. 누락된 id는 파파고 번역값 유지.
+      return result;
+    } catch (RuntimeException e) {
+      // 2차 검증 실패 시 파파고 1차 번역 결과로 폴백 (전체 파이프라인은 계속 진행)
+      log.warn("[AiAnalyzer] 2차 검증 실패. 파파고 1차 번역 결과로 대체합니다. error={}", e.getMessage(), e);
+      return papagoTextsById;
+    }
   }
 
-  /**
-   * 1차 분석 응답(한국어)에서 화면 노출 텍스트를 id → 한국어 텍스트 맵으로 수집한다.
-   */
+  /** 1차 분석 응답(한국어)에서 화면 노출 텍스트를 id → 한국어 텍스트 맵으로 수집한다. */
   private Map<String, String> collectKoreanDisplayTexts(
       AnalysisResponse analysisResponse, List<ExtractedItem> items) {
-      Map<String, String> texts = new LinkedHashMap<>();
+    Map<String, String> texts = new LinkedHashMap<>();
 
-      putIfNotBlank(texts, FIELD_ID_TITLE, analysisResponse.title());
-      putIfNotBlank(texts, FIELD_ID_SUMMARY, analysisResponse.summary());
+    putIfNotBlank(texts, FIELD_ID_TITLE, analysisResponse.title());
+    putIfNotBlank(texts, FIELD_ID_SUMMARY, analysisResponse.summary());
 
-      for (int i = 0; i < items.size(); i++) {
-          ExtractedItem item = items.get(i);
-          putIfNotBlank(texts, "item_" + i + "_title", item.title());
+    for (int i = 0; i < items.size(); i++) {
+      ExtractedItem item = items.get(i);
+      putIfNotBlank(texts, "item_" + i + "_title", item.title());
 
-          if (item.checklistItems() == null) {
-              continue;
-          }
-          for (int j = 0; j < item.checklistItems().size(); j++) {
-              AiNewsletterClient.ChecklistItemDto checklistItem = item.checklistItems().get(j);
-              putIfNotBlank(texts, "item_" + i + "_chk_" + j + "_content", checklistItem.content());
-              putIfNotBlank(texts, "item_" + i + "_chk_" + j + "_detail", checklistItem.detail());
-          }
+      if (item.checklistItems() == null) {
+        continue;
       }
-
-      if (analysisResponse.conversationTopics() != null) {
-            for (int k = 0; k < analysisResponse.conversationTopics().size(); k++) {
-                putIfNotBlank(texts, "topic_" + k, analysisResponse.conversationTopics().get(k).topic());
-            }
+      for (int j = 0; j < item.checklistItems().size(); j++) {
+        AiNewsletterClient.ChecklistItemDto checklistItem = item.checklistItems().get(j);
+        putIfNotBlank(texts, "item_" + i + "_chk_" + j + "_content", checklistItem.content());
+        putIfNotBlank(texts, "item_" + i + "_chk_" + j + "_detail", checklistItem.detail());
       }
+    }
 
-      return texts;
+    if (analysisResponse.conversationTopics() != null) {
+      for (int k = 0; k < analysisResponse.conversationTopics().size(); k++) {
+        putIfNotBlank(texts, "topic_" + k, analysisResponse.conversationTopics().get(k).topic());
+      }
+    }
+
+    return texts;
   }
 
   private void putIfNotBlank(Map<String, String> map, String id, String value) {
-      if (value != null && !value.isBlank()) {
-          map.put(id, value);
-      }
+    if (value != null && !value.isBlank()) {
+      map.put(id, value);
+    }
   }
 
   private List<SavedExtractedItem> saveExtractedItems(
@@ -187,14 +188,18 @@ public class NewsletterAiAnalyzer {
       if (item.checklistItems() == null || item.checklistItems().isEmpty()) {
         continue;
       }
-      for (int checklistIndex = 0; checklistIndex < item.checklistItems().size(); checklistIndex++) {
-          AiNewsletterClient.ChecklistItemDto checklistItem = item.checklistItems().get(checklistIndex);
-          if (checklistItem.content() == null || checklistItem.content().isBlank()) {
-              continue; // 빈 content는 저장하지 않음
-          }
-          entitiesToSave.add(
-              toChecklist(newsletterId, userId, checklistItem, itemIndex, checklistIndex, displayTexts));
-          ownerItemIndex.add(itemIndex);
+      for (int checklistIndex = 0;
+          checklistIndex < item.checklistItems().size();
+          checklistIndex++) {
+        AiNewsletterClient.ChecklistItemDto checklistItem =
+            item.checklistItems().get(checklistIndex);
+        if (checklistItem.content() == null || checklistItem.content().isBlank()) {
+          continue; // 빈 content는 저장하지 않음
+        }
+        entitiesToSave.add(
+            toChecklist(
+                newsletterId, userId, checklistItem, itemIndex, checklistIndex, displayTexts));
+        ownerItemIndex.add(itemIndex);
       }
     }
 
@@ -218,27 +223,32 @@ public class NewsletterAiAnalyzer {
         continue;
       }
       List<Checklist> linkedChecklists = checklistsByItemIndex.getOrDefault(itemIndex, List.of());
-      result.add(new SavedExtractedItem(itemIndex,item, linkedChecklists));
+      result.add(new SavedExtractedItem(itemIndex, item, linkedChecklists));
     }
     return result;
   }
 
-  private Checklist toChecklist(Long newsletterId, Long userId, AiNewsletterClient.ChecklistItemDto checklistItem, int itemIndex, int checklistIndex,
-                                Map<String, String> displayTexts) {
-      String contentKey = "item_" + itemIndex + "_chk_" + checklistIndex + "_content";
-      String detailKey = "item_" + itemIndex + "_chk_" + checklistIndex + "_detail";
+  private Checklist toChecklist(
+      Long newsletterId,
+      Long userId,
+      AiNewsletterClient.ChecklistItemDto checklistItem,
+      int itemIndex,
+      int checklistIndex,
+      Map<String, String> displayTexts) {
+    String contentKey = "item_" + itemIndex + "_chk_" + checklistIndex + "_content";
+    String detailKey = "item_" + itemIndex + "_chk_" + checklistIndex + "_detail";
 
-      String contentSource = displayTexts.getOrDefault(contentKey, checklistItem.content());
-      String content = trimToMax(contentSource.trim(), CHECKLIST_TEXT_MAX_LENGTH);
+    String contentSource = displayTexts.getOrDefault(contentKey, checklistItem.content());
+    String content = trimToMax(contentSource.trim(), CHECKLIST_TEXT_MAX_LENGTH);
 
-      String detail = null;
-      String detailSource = displayTexts.get(detailKey);
-      if (detailSource == null) {
-          detailSource = checklistItem.detail();
-      }
-      if (detailSource != null && !detailSource.isBlank()) {
-          detail = trimNullable(detailSource, CHECKLIST_TEXT_MAX_LENGTH);
-      }
+    String detail = null;
+    String detailSource = displayTexts.get(detailKey);
+    if (detailSource == null) {
+      detailSource = checklistItem.detail();
+    }
+    if (detailSource != null && !detailSource.isBlank()) {
+      detail = trimNullable(detailSource, CHECKLIST_TEXT_MAX_LENGTH);
+    }
 
     return Checklist.builder()
         .newsletterId(newsletterId)
@@ -268,38 +278,38 @@ public class NewsletterAiAnalyzer {
 
   private void saveCalendarPreview(
       Long newsletterId, List<SavedExtractedItem> savedItems, Map<String, String> displayTexts) {
-      List<CalendarPreviewEvent> previewEvents = new ArrayList<>();
+    List<CalendarPreviewEvent> previewEvents = new ArrayList<>();
 
-      for (SavedExtractedItem savedItem : savedItems) {
-          ExtractedItem item = savedItem.item();
-          String extractedDate = normalizePreviewDate(item.datetime());
-          if (!"confirmed".equalsIgnoreCase(item.dateStatus()) || extractedDate == null) {
-              continue;
-          }
-
-          String titleSource =
-              displayTexts.getOrDefault("item_" + savedItem.itemIndex() + "_title", item.title());
-
-          previewEvents.add(
-              new CalendarPreviewEvent(
-                  "ai_evt_" + (previewEvents.size() + 1),
-                  trimToMax(titleSource.trim(), CHECKLIST_TEXT_MAX_LENGTH),
-                  trimI18nValues(item.titleI18n(), CHECKLIST_TEXT_MAX_LENGTH),
-                  extractedDate,
-                  true,
-                  checklistIdList(savedItem.checklists())));
+    for (SavedExtractedItem savedItem : savedItems) {
+      ExtractedItem item = savedItem.item();
+      String extractedDate = normalizePreviewDate(item.datetime());
+      if (!"confirmed".equalsIgnoreCase(item.dateStatus()) || extractedDate == null) {
+        continue;
       }
 
-      if (previewEvents.isEmpty()) {
-          // 재분석 결과에 확정 날짜가 없으면 이전 미리보기 데이터가 남아 잘못 등록될 수 있어 비운다.
-          calendarPreviewRedisService.deletePreview(newsletterId);
-          log.debug("[AiAnalyzer] 캘린더 preview 생성 대상 없음. newsletterId={}", newsletterId);
-          return;
-      }
+      String titleSource =
+          displayTexts.getOrDefault("item_" + savedItem.itemIndex() + "_title", item.title());
 
-      calendarPreviewRedisService.savePreview(newsletterId, previewEvents);
-      log.debug(
-          "[AiAnalyzer] 캘린더 preview {}개 저장 완료. newsletterId={}", previewEvents.size(), newsletterId);
+      previewEvents.add(
+          new CalendarPreviewEvent(
+              "ai_evt_" + (previewEvents.size() + 1),
+              trimToMax(titleSource.trim(), CHECKLIST_TEXT_MAX_LENGTH),
+              trimI18nValues(item.titleI18n(), CHECKLIST_TEXT_MAX_LENGTH),
+              extractedDate,
+              true,
+              checklistIdList(savedItem.checklists())));
+    }
+
+    if (previewEvents.isEmpty()) {
+      // 재분석 결과에 확정 날짜가 없으면 이전 미리보기 데이터가 남아 잘못 등록될 수 있어 비운다.
+      calendarPreviewRedisService.deletePreview(newsletterId);
+      log.debug("[AiAnalyzer] 캘린더 preview 생성 대상 없음. newsletterId={}", newsletterId);
+      return;
+    }
+
+    calendarPreviewRedisService.savePreview(newsletterId, previewEvents);
+    log.debug(
+        "[AiAnalyzer] 캘린더 preview {}개 저장 완료. newsletterId={}", previewEvents.size(), newsletterId);
   }
 
   private String normalizePreviewDate(String value) {
@@ -371,7 +381,8 @@ public class NewsletterAiAnalyzer {
     return value.substring(0, maxLength - 3).stripTrailing() + "...";
   }
 
-  private record SavedExtractedItem(int itemIndex, ExtractedItem item, List<Checklist> checklists) {}
+  private record SavedExtractedItem(
+      int itemIndex, ExtractedItem item, List<Checklist> checklists) {}
 
   public record AiAnalysisResult(String title, Map<String, String> titleI18n, String summary) {}
 
@@ -381,28 +392,27 @@ public class NewsletterAiAnalyzer {
       List<AiNewsletterClient.ConversationTopicItem> topicItems,
       Map<String, String> displayTexts) {
 
-      if (topicItems == null || topicItems.isEmpty()) {
-          log.debug("[AiAnalyzer] 대화 주제 없음. newsletterId={}", newsletterId);
-          return;
+    if (topicItems == null || topicItems.isEmpty()) {
+      log.debug("[AiAnalyzer] 대화 주제 없음. newsletterId={}", newsletterId);
+      return;
+    }
+
+    List<com.gachi.be.domain.newsletter.entity.ConversationTopic> entities = new ArrayList<>();
+    for (int k = 0; k < topicItems.size(); k++) {
+      AiNewsletterClient.ConversationTopicItem item = topicItems.get(k);
+      if (item.topic() == null || item.topic().isBlank()) {
+        continue;
       }
+      String topicSource = displayTexts.getOrDefault("topic_" + k, item.topic());
+      entities.add(
+          com.gachi.be.domain.newsletter.entity.ConversationTopic.builder()
+              .newsletterId(newsletterId)
+              .userId(userId)
+              .topic(topicSource.trim())
+              .build());
+    }
 
-      List<com.gachi.be.domain.newsletter.entity.ConversationTopic> entities = new ArrayList<>();
-      for (int k = 0; k < topicItems.size(); k++) {
-          AiNewsletterClient.ConversationTopicItem item = topicItems.get(k);
-          if (item.topic() == null || item.topic().isBlank()) {
-              continue;
-          }
-          String topicSource = displayTexts.getOrDefault("topic_" + k, item.topic());
-          entities.add(
-              com.gachi.be.domain.newsletter.entity.ConversationTopic.builder()
-                  .newsletterId(newsletterId)
-                  .userId(userId)
-                  .topic(topicSource.trim())
-                  .build());
-      }
-
-
-      if (!entities.isEmpty()) {
+    if (!entities.isEmpty()) {
       conversationTopicRepository.saveAll(entities);
       log.debug("[AiAnalyzer] 대화 주제 {}개 저장 완료. newsletterId={}", entities.size(), newsletterId);
     }
