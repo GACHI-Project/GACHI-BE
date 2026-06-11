@@ -97,8 +97,8 @@ public class NewsletterAiAnalyzer {
     }
 
     if (!entitiesToSave.isEmpty()) {
-        checklistRepository.saveAll(entitiesToSave);
-        log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", entitiesToSave.size());
+      checklistRepository.saveAll(entitiesToSave);
+      log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", entitiesToSave.size());
     }
 
     Map<Integer, List<Checklist>> checklistsByItemIndex = new LinkedHashMap<>();
