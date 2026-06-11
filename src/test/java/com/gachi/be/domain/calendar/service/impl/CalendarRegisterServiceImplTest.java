@@ -40,6 +40,7 @@ class CalendarRegisterServiceImplTest {
                 preview("evt-1", "빠른 일정", "2026-06-01"),
                 preview("evt-4", "시간 포함 일정", "2026-06-03T09:00:00"),
                 preview("evt-5", "KST 오전 일정", "2026-06-03T08:00:00+09:00"),
+                preview("evt-6", "UTC 저녁 일정", "2026-06-03T12:00:00Z"),
                 preview("evt-2", "중간 일정", "2026-06-02")));
 
     var response = service.getPreview(userId, newsletterId);
@@ -51,6 +52,7 @@ class CalendarRegisterServiceImplTest {
             tuple("evt-2", "2026-06-02"),
             tuple("evt-5", "2026-06-03T08:00:00+09:00"),
             tuple("evt-4", "2026-06-03T09:00:00"),
+            tuple("evt-6", "2026-06-03T12:00:00Z"),
             tuple("evt-3", "2026-06-20"));
   }
 
