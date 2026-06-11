@@ -18,7 +18,6 @@ import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisResult;
 import com.gachi.be.domain.newsletter.repository.ConversationTopicRepository;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -68,11 +67,19 @@ class NewsletterAiAnalyzerTest {
             "confirmed",
             0.91,
             false,
-            null);
+            null,
+            List.of(new AiNewsletterClient.ChecklistItemDto("준비물 확인", "체육복을 준비해 주세요.")));
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
-        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), List.of(), Map.of()));
+        .thenReturn(
+            new AnalysisResponse(
+                "AI 제목",
+                Map.of(" us ", " AI English title "),
+                "AI 요약",
+                List.of(item),
+                List.of(),
+                Map.of()));
     when(checklistRepository.saveAll(anyList()))
         .thenAnswer(
             invocation -> {
@@ -84,6 +91,7 @@ class NewsletterAiAnalyzerTest {
     AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO");
 
     assertThat(result.title()).isEqualTo("AI 제목");
+    assertThat(result.titleI18n()).containsEntry("US", "AI English title");
     assertThat(result.summary()).isEqualTo("AI 요약");
 
     verify(checklistRepository).saveAll(checklistsCaptor.capture());
@@ -94,9 +102,8 @@ class NewsletterAiAnalyzerTest {
     assertThat(savedItems.get(0).getUserId()).isEqualTo(20L);
     assertThat(savedItems.get(0).getContent()).isEqualTo("준비물 확인");
     assertThat(savedItems.get(0).getDetail()).isEqualTo("체육복을 준비해 주세요.");
-    assertThat(savedItems.get(0).getTargetDate()).isEqualTo(LocalDate.parse("2026-05-25"));
-    assertThat(savedItems.get(0).getTargetDateLabel()).isEqualTo("5월 25일");
-
+    assertThat(savedItems.get(0).getTargetDate()).isNull();
+    assertThat(savedItems.get(0).getTargetDateLabel()).isNull();
     verify(calendarPreviewRedisService)
         .savePreview(eq(newsletterId), previewEventsCaptor.capture());
     List<CalendarPreviewEvent> previewEvents = previewEventsCaptor.getValue();
@@ -131,14 +138,12 @@ class NewsletterAiAnalyzerTest {
             "ambiguous",
             0.7,
             true,
-            "체험학습 날짜를 확인해 주세요.");
+            "체험학습 날짜를 확인해 주세요.",
+            List.of());
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
         .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), List.of(), Map.of()));
-    when(checklistRepository.saveAll(anyList()))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-
     newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO");
 
     verify(calendarPreviewRedisService).deletePreview(newsletterId);
@@ -167,7 +172,8 @@ class NewsletterAiAnalyzerTest {
             "confirmed",
             0.9,
             false,
-            null);
+            null,
+            List.of(new AiNewsletterClient.ChecklistItemDto("도시락 준비하기", "현장학습 당일 도시락을 준비해 주세요.")));
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))

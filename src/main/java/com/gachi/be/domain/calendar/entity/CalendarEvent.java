@@ -9,10 +9,14 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** 캘린더 일정 엔티티. */
 @Getter
@@ -40,6 +44,10 @@ public class CalendarEvent {
   @Column(nullable = false, length = 200)
   private String title;
 
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "title_i18n", columnDefinition = "jsonb")
+  private Map<String, String> titleI18n;
+
   @Column(columnDefinition = "TEXT")
   private String description;
 
@@ -65,6 +73,7 @@ public class CalendarEvent {
       String childName,
       String childColor,
       String title,
+      Map<String, String> titleI18n,
       String description,
       String externalKey,
       OffsetDateTime startAt,
@@ -74,6 +83,7 @@ public class CalendarEvent {
     this.childName = childName;
     this.childColor = childColor;
     this.title = title;
+    this.titleI18n = titleI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(titleI18n);
     this.description = description;
     this.externalKey = externalKey;
     this.startAt = startAt;
@@ -84,6 +94,7 @@ public class CalendarEvent {
   protected void onCreate() {
     OffsetDateTime now = OffsetDateTime.now();
     if (createdAt == null) createdAt = now;
+    if (titleI18n == null) titleI18n = new LinkedHashMap<>();
     updatedAt = now;
   }
 

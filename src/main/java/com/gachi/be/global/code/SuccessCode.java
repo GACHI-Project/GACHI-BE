@@ -28,6 +28,7 @@ public enum SuccessCode {
   CHILD_UPDATE_SUCCESS(HttpStatus.OK, "CHILD2002", "자녀 정보 수정에 성공하였습니다."),
   CHILD_DELETE_SUCCESS(HttpStatus.OK, "CHILD2003", "자녀 삭제에 성공하였습니다."),
   SCHOOL_SEARCH_SUCCESS(HttpStatus.OK, "SCH2001", "학교 검색 결과 조회에 성공하였습니다."),
+  SCHOOL_CLASS_LIST_SUCCESS(HttpStatus.OK, "SCH2002", "학교 반 목록 조회에 성공하였습니다."),
   SCHOOL_GUIDE_CATEGORY_SUCCESS(HttpStatus.OK, "SG2001", "카테고리별 FAQ 개수 조회에 성공하였습니다."),
   SCHOOL_GUIDE_POPULAR_SUCCESS(HttpStatus.OK, "SG2002", "주간 인기 질문 조회에 성공하였습니다."),
   SCHOOL_GUIDE_LIST_SUCCESS(HttpStatus.OK, "SG2003", "FAQ 목록 조회에 성공하였습니다."),

@@ -126,6 +126,7 @@ public class NewsletterPipelineService {
           originalText,
           translatedText,
           aiResult.title(),
+          aiResult.titleI18n(),
           aiResult.summary());
 
       log.info("[Pipeline] 파이프라인 완료. newsletterId={}", newsletterId);

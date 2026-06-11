@@ -24,6 +24,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -70,7 +71,7 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
         userId,
         newsletterId,
         events.size());
-    return CalendarPreviewResponse.from(events);
+    return CalendarPreviewResponse.from(sortPreviewEvents(events));
   }
 
   /** 캘린더 일정 날짜 수정. Redis에서 기존 preview 데이터를 읽어 tempEventId 기준으로 날짜만 교체하고 다시 저장. TTL이 1시간으로 갱신됨. */
@@ -111,6 +112,7 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                     return new CalendarPreviewEvent(
                         event.tempEventId(),
                         event.title(),
+                        event.titleI18n(),
                         correctedDate,
                         true,
                         event.checklistIds());
@@ -134,6 +136,13 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
     Newsletter newsletter = findNewsletterAndValidateOwner(userId, newsletterId);
 
     List<CalendarEvent> savedEvents = new ArrayList<>();
+
+    List<CalendarPreviewEvent> previewEvents = previewRedisService.getPreview(newsletterId);
+    Map<String, CalendarPreviewEvent> previewByTempId =
+        previewEvents == null
+            ? Map.of()
+            : previewEvents.stream()
+                .collect(Collectors.toMap(CalendarPreviewEvent::tempEventId, e -> e, (a, b) -> a));
 
     // 일정 등록
     for (CalendarRegisterRequest.EventRegister eventReq : request.events()) {
@@ -167,6 +176,8 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                       ? newsletter.getChildColor()
                       : DEFAULT_CHILD_COLOR)
               .title(eventReq.title())
+              .titleI18n(
+                  resolveCalendarTitleI18n(eventReq, previewByTempId.get(eventReq.tempEventId())))
               .externalKey(externalKey)
               .startAt(startAt)
               .endAt(endAt)
@@ -183,7 +194,6 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
 
     // preview 목록 기반으로 체크리스트를 각 일정에 정확하게 연결
     if (!savedEvents.isEmpty()) {
-      List<CalendarPreviewEvent> previewEvents = previewRedisService.getPreview(newsletterId);
       if (previewEvents != null) {
         linkChecklistsToEvents(newsletterId, savedEvents, previewEvents);
       }
@@ -200,6 +210,18 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
         count);
 
     return new CalendarRegisterResponse(count);
+  }
+
+  private Map<String, String> resolveCalendarTitleI18n(
+      CalendarRegisterRequest.EventRegister eventReq, CalendarPreviewEvent preview) {
+    if (preview == null || preview.titleI18n() == null || preview.titleI18n().isEmpty()) {
+      return Map.of();
+    }
+    // 사용자가 preview 제목을 수정했다면 AI가 만든 다국어 제목은 더 이상 같은 의미라고 보장할 수 없습니다.
+    if (!eventReq.title().equals(preview.title())) {
+      return Map.of();
+    }
+    return preview.titleI18n();
   }
 
   /** CHECKLIST 타입 항목들을 등록된 캘린더 일정에 연결. */
@@ -243,6 +265,35 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
   private String extractTempId(String externalKey, Long newsletterId) {
     String prefix = newsletterId + "_";
     return externalKey.startsWith(prefix) ? externalKey.substring(prefix.length()) : externalKey;
+  }
+
+  private List<CalendarPreviewEvent> sortPreviewEvents(List<CalendarPreviewEvent> events) {
+    return events.stream().sorted(Comparator.comparing(this::previewSortKey)).toList();
+  }
+
+  private LocalDateTime previewSortKey(CalendarPreviewEvent event) {
+    String extractedDate = event.extractedDate();
+    if (extractedDate == null || extractedDate.isBlank()) {
+      return LocalDateTime.MAX;
+    }
+
+    String normalized = extractedDate.trim();
+    try {
+      if (normalized.length() == 10) {
+        return LocalDate.parse(normalized, DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay();
+      }
+      try {
+        return OffsetDateTime.parse(normalized).atZoneSameInstant(KST).toLocalDateTime();
+      } catch (DateTimeParseException ignored) {
+        return LocalDateTime.parse(normalized, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+      }
+    } catch (DateTimeParseException e) {
+      log.debug(
+          "[CalendarRegister] preview 날짜 정렬 기준 파싱 실패. tempEventId={}, extractedDate={}",
+          event.tempEventId(),
+          extractedDate);
+      return LocalDateTime.MAX;
+    }
   }
 
   /** 날짜/시간 문자열을 KST 기준 OffsetDateTime으로 변환 */

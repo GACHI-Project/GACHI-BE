@@ -13,7 +13,10 @@ import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,7 +35,6 @@ public class NewsletterAiAnalyzer {
   private final ChecklistRepository checklistRepository;
   private final CalendarPreviewRedisService calendarPreviewRedisService;
   private final NewsletterRepository newsletterRepository;
-  private final PapagoTranslateClient papagoTranslateClient;
   private final ConversationTopicRepository conversationTopicRepository;
 
   public AiAnalysisResult analyze(
@@ -63,14 +65,15 @@ public class NewsletterAiAnalyzer {
     }
 
     saveConversationTopics(
-        newsletterId, newsletter.getUserId(), analysisResponse.conversationTopics(), language);
+        newsletterId, newsletter.getUserId(), analysisResponse.conversationTopics());
     String rawTitle = normalizeTitle(analysisResponse.title(), originalText);
-    String title = translateIfNeeded(rawTitle, language, "title", newsletterId);
     String summary = normalizeSummary(analysisResponse.summary(), translatedText, originalText);
+    Map<String, String> normalizedTitleI18n =
+        trimI18nValues(analysisResponse.titleI18n(), TITLE_MAX_LENGTH);
 
     log.info(
         "[AiAnalyzer] AI 서버 분석 완료. newsletterId={}, extractedItems={}", newsletterId, items.size());
-    return new AiAnalysisResult(title, summary);
+    return new AiAnalysisResult(rawTitle, normalizedTitleI18n, summary);
   }
 
   private List<SavedExtractedItem> saveExtractedItems(
@@ -80,96 +83,68 @@ public class NewsletterAiAnalyzer {
       return List.of();
     }
 
-    List<ExtractedItem> validItems =
-        items.stream().filter(item -> item.title() != null && !item.title().isBlank()).toList();
-    List<Checklist> entities =
-        validItems.stream().map(item -> toChecklist(newsletterId, userId, item, language)).toList();
+    List<Checklist> entitiesToSave = new ArrayList<>();
+    List<Integer> ownerItemIndex = new ArrayList<>();
 
-    if (entities.isEmpty()) {
-      log.warn("[AiAnalyzer] 저장 가능한 항목 없음. newsletterId={}", newsletterId);
-      return List.of();
+    for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+      ExtractedItem item = items.get(itemIndex);
+      if (item.checklistItems() == null || item.checklistItems().isEmpty()) {
+        continue;
+      }
+      for (AiNewsletterClient.ChecklistItemDto checklistItem : item.checklistItems()) {
+        if (checklistItem.content() == null || checklistItem.content().isBlank()) {
+          continue; // 빈 content는 저장하지 않음
+        }
+        entitiesToSave.add(toChecklist(newsletterId, userId, checklistItem));
+        ownerItemIndex.add(itemIndex);
+      }
     }
 
-    List<Checklist> savedEntities = checklistRepository.saveAll(entities);
-    log.debug("[AiAnalyzer] AI 서버 추출 항목 {}개 저장 완료.", entities.size());
-
-    List<SavedExtractedItem> savedItems = new ArrayList<>();
-    for (int i = 0; i < validItems.size(); i++) {
-      savedItems.add(new SavedExtractedItem(validItems.get(i), savedEntities.get(i)));
+    if (!entitiesToSave.isEmpty()) {
+      checklistRepository.saveAll(entitiesToSave);
+      log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", entitiesToSave.size());
     }
-    return savedItems;
+
+    Map<Integer, List<Checklist>> checklistsByItemIndex = new LinkedHashMap<>();
+    for (int i = 0; i < entitiesToSave.size(); i++) {
+      checklistsByItemIndex
+          .computeIfAbsent(ownerItemIndex.get(i), k -> new ArrayList<>())
+          .add(entitiesToSave.get(i));
+    }
+
+    List<SavedExtractedItem> result = new ArrayList<>();
+    for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+      ExtractedItem item = items.get(itemIndex);
+      if (item.title() == null || item.title().isBlank()) {
+        // 제목 없는 일정은 캘린더 preview 대상에서 제외 (체크리스트는 이미 저장됨)
+        continue;
+      }
+      List<Checklist> linkedChecklists = checklistsByItemIndex.getOrDefault(itemIndex, List.of());
+      result.add(new SavedExtractedItem(item, linkedChecklists));
+    }
+    return result;
   }
 
   private Checklist toChecklist(
-      Long newsletterId, Long userId, ExtractedItem item, String language) {
-    ChecklistType checklistType =
-        "checklist".equalsIgnoreCase(item.type()) ? ChecklistType.CHECKLIST : ChecklistType.TODO;
+      Long newsletterId, Long userId, AiNewsletterClient.ChecklistItemDto checklistItem) {
+    String content = trimToMax(checklistItem.content().trim(), CHECKLIST_TEXT_MAX_LENGTH);
 
-    LocalDate targetDate = parseTargetDate(item.datetime());
-
-    String targetDateLabel = null;
-    if (targetDate != null) {
-      String koreanLabel = targetDate.getMonthValue() + "월 " + targetDate.getDayOfMonth() + "일";
-      targetDateLabel = translateIfNeeded(koreanLabel, language, "targetDateLabel", newsletterId);
-    }
-
-    // content: AI 서버가 한국어로 추출한 항목명을 파파고로 번역
-    String content =
-        translateIfNeeded(
-            trimToMax(item.title().trim(), CHECKLIST_TEXT_MAX_LENGTH),
-            language,
-            "content",
-            newsletterId);
-
-    // detail: AI 서버가 한국어로 추출한 상세 설명을 파파고로 번역
     String detail = null;
-    if (item.evidenceText() != null && !item.evidenceText().isBlank()) {
-      String trimmedDetail = trimNullable(item.evidenceText(), CHECKLIST_TEXT_MAX_LENGTH);
-      detail = translateIfNeeded(trimmedDetail, language, "detail", newsletterId);
+    if (checklistItem.detail() != null && !checklistItem.detail().isBlank()) {
+      detail = trimNullable(checklistItem.detail(), CHECKLIST_TEXT_MAX_LENGTH);
     }
 
     return Checklist.builder()
         .newsletterId(newsletterId)
-        .calendarEventId(null)
+        .calendarEventId(null) // 캘린더 등록 시점에 연결됨 (linkChecklistsToEvents)
         .userId(userId)
-        .type(checklistType)
+        .type(ChecklistType.CHECKLIST) // v7: CHECKLIST만 사용
         .content(content)
+        .contentI18n(trimI18nValues(checklistItem.contentI18n(), CHECKLIST_TEXT_MAX_LENGTH))
         .detail(detail)
-        .targetDate(checklistType == ChecklistType.TODO ? targetDate : null)
-        .targetDateLabel(checklistType == ChecklistType.TODO ? targetDateLabel : null)
+        .targetDate(null) // v7: 체크리스트는 날짜를 갖지 않음 (일정의 날짜를 따라감)
+        .targetDateLabel(null)
         .build();
-  }
-
-  /** KO가 아닌 경우 파파고로 번역. KO이거나 번역 실패 시 원문 그대로 반환. */
-  private String translateIfNeeded(
-      String text, String language, String fieldName, Long newsletterId) {
-    if (text == null || text.isBlank()) {
-      return text;
-    }
-    if ("KO".equals(language)) {
-      // KO는 번역 스킵, 원문 그대로 반환
-      return text;
-    }
-    try {
-      String translated = papagoTranslateClient.translate(text, language);
-      if (translated != null && !translated.isBlank()) {
-        log.debug(
-            "[AiAnalyzer] {} 번역 완료. newsletterId={}, language={}",
-            fieldName,
-            newsletterId,
-            language);
-        return translated;
-      }
-    } catch (Exception e) {
-      // 번역 실패 시 원문 유지 (파이프라인 전체를 중단하지 않음)
-      log.warn(
-          "[AiAnalyzer] {} 번역 실패. 원문 유지. newsletterId={}, language={}, error={}",
-          fieldName,
-          newsletterId,
-          language,
-          e.getMessage());
-    }
-    return text;
   }
 
   private LocalDate parseTargetDate(String value) {
@@ -199,9 +174,10 @@ public class NewsletterAiAnalyzer {
           new CalendarPreviewEvent(
               "ai_evt_" + (previewEvents.size() + 1),
               trimToMax(item.title().trim(), CHECKLIST_TEXT_MAX_LENGTH),
+              trimI18nValues(item.titleI18n(), CHECKLIST_TEXT_MAX_LENGTH),
               extractedDate,
               true,
-              checklistIdList(savedItem.checklist())));
+              checklistIdList(savedItem.checklists())));
     }
 
     if (previewEvents.isEmpty()) {
@@ -221,15 +197,18 @@ public class NewsletterAiAnalyzer {
     return targetDate != null ? targetDate.toString() : null;
   }
 
-  private List<Long> checklistIdList(Checklist checklist) {
-    return checklist.getId() != null ? List.of(checklist.getId()) : List.of();
-  }
-
   private String normalizeTitle(String aiTitle, String originalText) {
     if (aiTitle != null && !aiTitle.isBlank()) {
       return trimToMax(compact(aiTitle), TITLE_MAX_LENGTH);
     }
     return inferTitle(originalText);
+  }
+
+  private List<Long> checklistIdList(List<Checklist> checklists) {
+    if (checklists == null || checklists.isEmpty()) {
+      return List.of();
+    }
+    return checklists.stream().map(Checklist::getId).filter(Objects::nonNull).toList();
   }
 
   private String normalizeSummary(String aiSummary, String translatedText, String originalText) {
@@ -282,15 +261,12 @@ public class NewsletterAiAnalyzer {
     return value.substring(0, maxLength - 3).stripTrailing() + "...";
   }
 
-  private record SavedExtractedItem(ExtractedItem item, Checklist checklist) {}
+  private record SavedExtractedItem(ExtractedItem item, List<Checklist> checklists) {}
 
-  public record AiAnalysisResult(String title, String summary) {}
+  public record AiAnalysisResult(String title, Map<String, String> titleI18n, String summary) {}
 
   private void saveConversationTopics(
-      Long newsletterId,
-      Long userId,
-      List<AiNewsletterClient.ConversationTopicItem> topicItems,
-      String language) {
+      Long newsletterId, Long userId, List<AiNewsletterClient.ConversationTopicItem> topicItems) {
 
     if (topicItems == null || topicItems.isEmpty()) {
       log.debug("[AiAnalyzer] 대화 주제 없음. newsletterId={}", newsletterId);
@@ -302,14 +278,10 @@ public class NewsletterAiAnalyzer {
             .filter(item -> item.topic() != null && !item.topic().isBlank())
             .map(
                 item -> {
-                  // AI 서버가 한국어로 반환 → 파파고로 번역 (KO이면 원문 유지)
-                  String translated =
-                      translateIfNeeded(
-                          item.topic().trim(), language, "conversationTopic", newsletterId);
                   return com.gachi.be.domain.newsletter.entity.ConversationTopic.builder()
                       .newsletterId(newsletterId)
                       .userId(userId)
-                      .topic(translated)
+                      .topic(item.topic().trim())
                       .build();
                 })
             .toList();
@@ -318,5 +290,19 @@ public class NewsletterAiAnalyzer {
       conversationTopicRepository.saveAll(entities);
       log.debug("[AiAnalyzer] 대화 주제 {}개 저장 완료. newsletterId={}", entities.size(), newsletterId);
     }
+  }
+
+  private Map<String, String> trimI18nValues(Map<String, String> values, int maxLength) {
+    if (values == null || values.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, String> result = new LinkedHashMap<>();
+    values.forEach(
+        (language, value) -> {
+          if (language != null && value != null && !value.isBlank()) {
+            result.put(language.trim().toUpperCase(), trimToMax(compact(value), maxLength));
+          }
+        });
+    return result;
   }
 }

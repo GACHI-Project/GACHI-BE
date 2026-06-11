@@ -45,14 +45,18 @@ public class ExpoPushNotificationClient implements PushNotificationClient {
 
   @Override
   public PushSendResult send(
-      Notification notification, PushDeviceToken pushDeviceToken, Map<String, Object> payload) {
+      Notification notification,
+      PushDeviceToken pushDeviceToken,
+      Map<String, Object> payload,
+      String title,
+      String body) {
     try {
-      String body =
+      String requestBody =
           objectMapper.writeValueAsString(
               new ExpoPushRequest(
                   pushDeviceToken.getToken(),
-                  notification.getTitle(),
-                  notification.getBody(),
+                  title,
+                  body,
                   "default",
                   payload != null ? payload : Map.of()));
 
@@ -63,7 +67,7 @@ public class ExpoPushNotificationClient implements PushNotificationClient {
               .header("Accept-Encoding", "gzip, deflate")
               .header("Content-Type", "application/json")
               .timeout(Duration.ofSeconds(properties.getReadTimeoutSeconds()))
-              .POST(HttpRequest.BodyPublishers.ofString(body));
+              .POST(HttpRequest.BodyPublishers.ofString(requestBody));
       if (StringUtils.hasText(properties.getExpo().getAccessToken())) {
         requestBuilder.header("Authorization", "Bearer " + properties.getExpo().getAccessToken());
       }

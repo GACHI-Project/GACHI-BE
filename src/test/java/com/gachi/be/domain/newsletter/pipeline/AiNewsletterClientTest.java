@@ -48,26 +48,27 @@ class AiNewsletterClientTest {
 
           byte[] response =
               """
-              {
-                "title": "AI 제목",
-                "summary": "AI 요약",
-                "items": [
-                  {
-                    "type": "checklist",
-                    "title": "동의서 제출",
-                    "selectedDateCandidate": null,
-                    "datetime": "2026-05-25",
-                    "timezone": "Asia/Seoul",
-                    "evidenceText": "5월 25일까지 동의서를 제출해 주세요.",
-                    "dateStatus": "confirmed",
-                    "confidence": 0.9,
-                    "needsUserConfirmation": false,
-                    "confirmationQuestion": null
-                  }
-                ],
-                "meta": {"mode": "test"}
-              }
-              """
+                {
+                  "title": "AI 제목",
+                  "summary": "AI 요약",
+                  "items": [
+                    {
+                      "type": "reminder",
+                      "title": "동의서 제출",
+                      "selectedDateCandidate": null,
+                      "datetime": "2026-05-25",
+                      "timezone": "Asia/Seoul",
+                      "evidenceText": "5월 25일까지 동의서를 제출해 주세요.",
+                      "dateStatus": "confirmed",
+                      "confidence": 0.9,
+                      "needsUserConfirmation": false,
+                      "confirmationQuestion": null,
+                      "checklistItems": []
+                    }
+                  ],
+                  "meta": {"mode": "test"}
+                }
+                """
                   .getBytes(StandardCharsets.UTF_8);
           sendResponse(exchange, 200, response);
         });
