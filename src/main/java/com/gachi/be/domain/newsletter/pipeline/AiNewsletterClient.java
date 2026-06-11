@@ -152,7 +152,7 @@ public class AiNewsletterClient {
       return new AnalysisResponse(
           title,
           summary,
-          items != null ? items : List.of(),
+          normalizedItems,
           conversationTopics != null ? conversationTopics : List.of(),
           meta);
     }

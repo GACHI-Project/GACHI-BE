@@ -235,10 +235,6 @@ public class NewsletterAiAnalyzer {
     return targetDate != null ? targetDate.toString() : null;
   }
 
-  private List<Long> checklistIdList(Checklist checklist) {
-    return checklist.getId() != null ? List.of(checklist.getId()) : List.of();
-  }
-
   private String normalizeTitle(String aiTitle, String originalText) {
     if (aiTitle != null && !aiTitle.isBlank()) {
       return trimToMax(compact(aiTitle), TITLE_MAX_LENGTH);
