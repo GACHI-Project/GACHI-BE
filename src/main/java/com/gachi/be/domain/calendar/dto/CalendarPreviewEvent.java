@@ -2,6 +2,7 @@ package com.gachi.be.domain.calendar.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
+import java.util.Map;
 
 /** Redis에 저장되고 조회되는 캘린더 일정 미리보기 단건 DTO. */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -12,6 +13,9 @@ public record CalendarPreviewEvent(
     /** 일정 제목. AI가 추출하거나 사용자가 수정한 값. */
     String title,
 
+    /** 알림 렌더링용 일정 제목 다국어 map. 사용자가 제목을 직접 수정하면 기존 title을 우선한다. */
+    Map<String, String> titleI18n,
+
     /** AI가 추출한 날짜(+시간). ISO 8601 형식. */
     String extractedDate,
 
@@ -19,4 +23,14 @@ public record CalendarPreviewEvent(
     boolean isDateExtracted,
 
     // 이 일정에 속하는 체크리스트 ID 목록
-    List<Long> checklistIds) {}
+    List<Long> checklistIds) {
+
+  public CalendarPreviewEvent(
+      String tempEventId,
+      String title,
+      String extractedDate,
+      boolean isDateExtracted,
+      List<Long> checklistIds) {
+    this(tempEventId, title, Map.of(), extractedDate, isDateExtracted, checklistIds);
+  }
+}

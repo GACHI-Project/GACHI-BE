@@ -13,7 +13,9 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -69,6 +71,10 @@ public class Newsletter {
   @Column(name = "title", length = 255)
   private String title;
 
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "title_i18n", columnDefinition = "jsonb")
+  private Map<String, String> titleI18n = new LinkedHashMap<>();
+
   @Column(name = "summary", columnDefinition = "TEXT")
   private String summary;
 
@@ -120,12 +126,14 @@ public class Newsletter {
     if (status == null) status = NewsletterStatus.PENDING;
     if (language == null) language = "KO";
     if (dateCandidates == null) dateCandidates = new ArrayList<>();
+    if (titleI18n == null) titleI18n = new LinkedHashMap<>();
   }
 
   @PreUpdate
   protected void onUpdate() {
     updatedAt = OffsetDateTime.now();
     if (dateCandidates == null) dateCandidates = new ArrayList<>();
+    if (titleI18n == null) titleI18n = new LinkedHashMap<>();
   }
 
   /** AI 분석 시작 시 PROCESSING 상태로 전환합니다. */
@@ -138,10 +146,22 @@ public class Newsletter {
   /** AI 분석 결과를 저장하고 COMPLETED 상태로 전환합니다. */
   public void complete(
       String ocrText, String originalText, String translatedText, String title, String summary) {
+    complete(ocrText, originalText, translatedText, title, null, summary);
+  }
+
+  /** AI 분석 결과와 알림 렌더링용 다국어 제목을 저장하고 COMPLETED 상태로 전환합니다. */
+  public void complete(
+      String ocrText,
+      String originalText,
+      String translatedText,
+      String title,
+      Map<String, String> titleI18n,
+      String summary) {
     this.ocrText = ocrText;
     this.originalText = originalText;
     this.translatedText = translatedText;
     this.title = title;
+    this.titleI18n = titleI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(titleI18n);
     this.summary = summary;
     this.status = NewsletterStatus.COMPLETED;
     this.failureStage = null;
@@ -174,6 +194,7 @@ public class Newsletter {
     this.failureStage = null;
     this.failureReason = null;
     this.title = null;
+    this.titleI18n = new LinkedHashMap<>();
     this.summary = null;
   }
 

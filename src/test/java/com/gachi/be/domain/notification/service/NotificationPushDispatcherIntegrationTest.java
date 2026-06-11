@@ -56,6 +56,8 @@ class NotificationPushDispatcherIntegrationTest {
     assertThat(logs.get(0).getProvider()).isEqualTo("TEST");
     assertThat(logs.get(0).getProviderMessageId()).isEqualTo("ticket-1");
     assertThat(pushNotificationClient.sendCount).isEqualTo(1);
+    assertThat(pushNotificationClient.lastTitle).isEqualTo("title");
+    assertThat(pushNotificationClient.lastBody).isEqualTo("body");
   }
 
   @Test
@@ -139,6 +141,8 @@ class NotificationPushDispatcherIntegrationTest {
   static class CapturingPushNotificationClient implements PushNotificationClient {
     private PushSendResult nextResult = PushSendResult.sent("ticket-1");
     private int sendCount;
+    private String lastTitle;
+    private String lastBody;
 
     @Override
     public String providerName() {
@@ -147,14 +151,22 @@ class NotificationPushDispatcherIntegrationTest {
 
     @Override
     public PushSendResult send(
-        Notification notification, PushDeviceToken pushDeviceToken, Map<String, Object> payload) {
+        Notification notification,
+        PushDeviceToken pushDeviceToken,
+        Map<String, Object> payload,
+        String title,
+        String body) {
       sendCount++;
+      lastTitle = title;
+      lastBody = body;
       return nextResult;
     }
 
     void reset() {
       nextResult = PushSendResult.sent("ticket-1");
       sendCount = 0;
+      lastTitle = null;
+      lastBody = null;
     }
   }
 }

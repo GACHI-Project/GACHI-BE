@@ -40,6 +40,7 @@ public class NotificationPushDispatcher {
   private final NotificationDeliveryLogRepository deliveryLogRepository;
   private final UserRepository userRepository;
   private final PushNotificationClient pushNotificationClient;
+  private final NotificationTemplateRenderer notificationTemplateRenderer;
   private final ObjectMapper objectMapper;
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -88,19 +89,26 @@ public class NotificationPushDispatcher {
     }
 
     Map<String, Object> payload = deserializePayload(notification.getPayloadJson());
+    RenderedNotification rendered =
+        notificationTemplateRenderer.render(notification, user.getLanguageCode());
     for (PushDeviceToken token : tokens) {
-      dispatchToToken(notification, token, payload);
+      dispatchToToken(notification, token, payload, rendered);
     }
   }
 
   private void dispatchToToken(
-      Notification notification, PushDeviceToken token, Map<String, Object> payload) {
+      Notification notification,
+      PushDeviceToken token,
+      Map<String, Object> payload,
+      RenderedNotification rendered) {
     if (token.getPlatform() != PushPlatform.EXPO) {
       saveSkipped(notification, token, "현재 provider에서 지원하지 않는 토큰 플랫폼입니다: " + token.getPlatform());
       return;
     }
 
-    PushSendResult result = pushNotificationClient.send(notification, token, payload);
+    PushSendResult result =
+        pushNotificationClient.send(
+            notification, token, payload, rendered.title(), rendered.body());
     if (result.success()) {
       saveDeliveryLog(
           notification,

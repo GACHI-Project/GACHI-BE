@@ -7,6 +7,7 @@ import com.gachi.be.domain.notification.entity.enums.NotificationLevel;
 import com.gachi.be.domain.notification.entity.enums.NotificationType;
 import com.gachi.be.domain.notification.service.NotificationCreateCommand;
 import com.gachi.be.domain.notification.service.NotificationService;
+import com.gachi.be.domain.notification.service.NotificationTemplateKey;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,11 +49,23 @@ public class NewsletterPipelineStatusService {
       String translatedText,
       String title,
       String summary) {
+    markCompleted(newsletterId, ocrText, originalText, translatedText, title, Map.of(), summary);
+  }
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void markCompleted(
+      Long newsletterId,
+      String ocrText,
+      String originalText,
+      String translatedText,
+      String title,
+      Map<String, String> titleI18n,
+      String summary) {
     newsletterRepository
         .findById(newsletterId)
         .ifPresent(
             newsletter -> {
-              newsletter.complete(ocrText, originalText, translatedText, title, summary);
+              newsletter.complete(ocrText, originalText, translatedText, title, titleI18n, summary);
               Newsletter saved = newsletterRepository.save(newsletter);
               scheduleAnalysisCompletedNotification(saved);
             });
@@ -125,6 +138,12 @@ public class NewsletterPipelineStatusService {
                 newsletter.getId(),
                 "childName",
                 newsletter.getChildName() != null ? newsletter.getChildName() : ""),
+            NotificationTemplateKey.NEWSLETTER_ANALYSIS,
+            Map.of(
+                "newsletterTitle",
+                newsletter.getTitle() != null ? newsletter.getTitle() : "",
+                "newsletterTitleI18n",
+                newsletter.getTitleI18n() != null ? newsletter.getTitleI18n() : Map.of()),
             "newsletter-analysis:" + newsletter.getId(),
             NotificationLevel.IMPORTANT,
             childId,

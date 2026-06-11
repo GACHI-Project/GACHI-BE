@@ -18,6 +18,7 @@ import com.gachi.be.domain.notification.entity.enums.NotificationDeliveryStatus;
 import com.gachi.be.domain.notification.repository.NotificationDeliveryLogRepository;
 import com.gachi.be.domain.notification.repository.NotificationRepository;
 import com.gachi.be.domain.notification.repository.PushDeviceTokenRepository;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import java.nio.charset.StandardCharsets;
@@ -48,6 +49,8 @@ public class NotificationService {
   private final PushDeviceTokenRepository pushDeviceTokenRepository;
   private final NotificationDeliveryLogRepository notificationDeliveryLogRepository;
   private final ChildRepository childRepository;
+  private final UserRepository userRepository;
+  private final NotificationTemplateRenderer notificationTemplateRenderer;
   private final ObjectMapper objectMapper;
   private final ApplicationEventPublisher eventPublisher;
 
@@ -64,8 +67,11 @@ public class NotificationService {
     List<Notification> page = hasNext ? rows.subList(0, pageSize) : rows;
     Long nextCursor = hasNext && !page.isEmpty() ? page.get(page.size() - 1).getId() : null;
 
+    String language = resolveUserLanguage(userId);
     return new NotificationListResponse(
-        page.stream().map(this::toResponse).toList(), nextCursor, hasNext);
+        page.stream().map(notification -> toResponse(notification, language)).toList(),
+        nextCursor,
+        hasNext);
   }
 
   @Transactional(readOnly = true)
@@ -181,6 +187,8 @@ public class NotificationService {
             .title(normalizeRequired(command.title()))
             .body(normalizeRequired(command.body()))
             .payloadJson(serializePayload(command.payload()))
+            .templateKey(command.templateKey() != null ? command.templateKey().name() : null)
+            .templateParamsJson(serializePayload(command.templateParams()))
             .dedupeKey(dedupeKey)
             .build();
 
@@ -223,19 +231,27 @@ public class NotificationService {
             .build());
   }
 
-  private NotificationResponse toResponse(Notification notification) {
+  private NotificationResponse toResponse(Notification notification, String language) {
+    RenderedNotification rendered = notificationTemplateRenderer.render(notification, language);
     return new NotificationResponse(
         notification.getId(),
         notification.getType(),
         notification.getLevel(),
         notification.getChildId(),
         notification.getChildName(),
-        notification.getTitle(),
-        notification.getBody(),
+        rendered.title(),
+        rendered.body(),
         deserializePayload(notification.getPayloadJson()),
         notification.isRead(),
         notification.getReadAt(),
         notification.getCreatedAt());
+  }
+
+  private String resolveUserLanguage(Long userId) {
+    return userRepository
+        .findById(userId)
+        .map(user -> normalizeOptional(user.getLanguageCode()))
+        .orElse("KO");
   }
 
   private PushTokenResponse toResponse(PushDeviceToken token) {

@@ -112,6 +112,7 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                     return new CalendarPreviewEvent(
                         event.tempEventId(),
                         event.title(),
+                        event.titleI18n(),
                         correctedDate,
                         true,
                         event.checklistIds());
@@ -135,6 +136,13 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
     Newsletter newsletter = findNewsletterAndValidateOwner(userId, newsletterId);
 
     List<CalendarEvent> savedEvents = new ArrayList<>();
+
+    List<CalendarPreviewEvent> previewEvents = previewRedisService.getPreview(newsletterId);
+    Map<String, CalendarPreviewEvent> previewByTempId =
+        previewEvents == null
+            ? Map.of()
+            : previewEvents.stream()
+                .collect(Collectors.toMap(CalendarPreviewEvent::tempEventId, e -> e, (a, b) -> a));
 
     // 일정 등록
     for (CalendarRegisterRequest.EventRegister eventReq : request.events()) {
@@ -168,6 +176,8 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                       ? newsletter.getChildColor()
                       : DEFAULT_CHILD_COLOR)
               .title(eventReq.title())
+              .titleI18n(
+                  resolveCalendarTitleI18n(eventReq, previewByTempId.get(eventReq.tempEventId())))
               .externalKey(externalKey)
               .startAt(startAt)
               .endAt(endAt)
@@ -184,7 +194,6 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
 
     // preview 목록 기반으로 체크리스트를 각 일정에 정확하게 연결
     if (!savedEvents.isEmpty()) {
-      List<CalendarPreviewEvent> previewEvents = previewRedisService.getPreview(newsletterId);
       if (previewEvents != null) {
         linkChecklistsToEvents(newsletterId, savedEvents, previewEvents);
       }
@@ -201,6 +210,18 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
         count);
 
     return new CalendarRegisterResponse(count);
+  }
+
+  private Map<String, String> resolveCalendarTitleI18n(
+      CalendarRegisterRequest.EventRegister eventReq, CalendarPreviewEvent preview) {
+    if (preview == null || preview.titleI18n() == null || preview.titleI18n().isEmpty()) {
+      return Map.of();
+    }
+    // 사용자가 preview 제목을 수정했다면 AI가 만든 다국어 제목은 더 이상 같은 의미라고 보장할 수 없습니다.
+    if (!eventReq.title().equals(preview.title())) {
+      return Map.of();
+    }
+    return preview.titleI18n();
   }
 
   /** CHECKLIST 타입 항목들을 등록된 캘린더 일정에 연결. */
