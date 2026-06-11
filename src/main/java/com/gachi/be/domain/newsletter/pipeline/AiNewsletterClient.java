@@ -147,6 +147,8 @@ public class AiNewsletterClient {
       Map<String, Object> meta) {
 
     AnalysisResponse normalized() {
+      List<ExtractedItem> normalizedItems =
+          items != null ? items.stream().map(ExtractedItem::normalized).toList() : List.of();
       return new AnalysisResponse(
           title,
           summary,
@@ -164,6 +166,9 @@ public class AiNewsletterClient {
       Integer index, String candidateId, String originalText, LocalDate normalizedDate) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
+  public record ChecklistItemDto(String content, String detail) {}
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public record ExtractedItem(
       String type,
       String title,
@@ -174,5 +179,22 @@ public class AiNewsletterClient {
       String dateStatus,
       Double confidence,
       Boolean needsUserConfirmation,
-      String confirmationQuestion) {}
+      String confirmationQuestion,
+      List<ChecklistItemDto> checklistItems) {
+
+      ExtractedItem normalized() {
+          return new ExtractedItem(
+              type,
+              title,
+              selectedDateCandidate,
+              datetime,
+              timezone,
+              evidenceText,
+              dateStatus,
+              confidence,
+              needsUserConfirmation,
+              confirmationQuestion,
+              checklistItems != null ? checklistItems : List.of());
+      }
+  }
 }
