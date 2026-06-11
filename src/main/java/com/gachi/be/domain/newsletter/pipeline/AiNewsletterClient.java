@@ -182,19 +182,19 @@ public class AiNewsletterClient {
       String confirmationQuestion,
       List<ChecklistItemDto> checklistItems) {
 
-      ExtractedItem normalized() {
-          return new ExtractedItem(
-              type,
-              title,
-              selectedDateCandidate,
-              datetime,
-              timezone,
-              evidenceText,
-              dateStatus,
-              confidence,
-              needsUserConfirmation,
-              confirmationQuestion,
-              checklistItems != null ? checklistItems : List.of());
-      }
+    ExtractedItem normalized() {
+      return new ExtractedItem(
+          type,
+          title,
+          selectedDateCandidate,
+          datetime,
+          timezone,
+          evidenceText,
+          dateStatus,
+          confidence,
+          needsUserConfirmation,
+          confirmationQuestion,
+          checklistItems != null ? checklistItems : List.of());
+    }
   }
 }
