@@ -17,6 +17,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -147,10 +148,14 @@ public class AiNewsletterClient {
       Map<String, Object> meta) {
 
     AnalysisResponse normalized() {
+      List<ExtractedItem> normalizedItems =
+          items != null
+              ? items.stream().filter(Objects::nonNull).map(ExtractedItem::normalized).toList()
+              : List.of();
       return new AnalysisResponse(
           title,
           summary,
-          items != null ? items : List.of(),
+          normalizedItems,
           conversationTopics != null ? conversationTopics : List.of(),
           meta);
     }
@@ -164,6 +169,9 @@ public class AiNewsletterClient {
       Integer index, String candidateId, String originalText, LocalDate normalizedDate) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
+  public record ChecklistItemDto(String content, String detail) {}
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public record ExtractedItem(
       String type,
       String title,
@@ -174,5 +182,26 @@ public class AiNewsletterClient {
       String dateStatus,
       Double confidence,
       Boolean needsUserConfirmation,
-      String confirmationQuestion) {}
+      String confirmationQuestion,
+      List<ChecklistItemDto> checklistItems) {
+
+    ExtractedItem normalized() {
+      List<ChecklistItemDto> normalizedChecklistItems =
+          checklistItems != null
+              ? checklistItems.stream().filter(Objects::nonNull).toList()
+              : List.of();
+      return new ExtractedItem(
+          type,
+          title,
+          selectedDateCandidate,
+          datetime,
+          timezone,
+          evidenceText,
+          dateStatus,
+          confidence,
+          needsUserConfirmation,
+          confirmationQuestion,
+          normalizedChecklistItems);
+    }
+  }
 }
