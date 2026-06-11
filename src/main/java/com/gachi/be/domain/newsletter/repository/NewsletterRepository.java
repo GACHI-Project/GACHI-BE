@@ -67,6 +67,7 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
           n.failureStage = null,
           n.failureReason = null,
           n.title = null,
+          n.titleI18n = null,
           n.summary = null
       WHERE n.id = :newsletterId
         AND n.userId = :userId

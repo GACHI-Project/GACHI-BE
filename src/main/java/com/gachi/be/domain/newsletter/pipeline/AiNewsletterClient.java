@@ -142,10 +142,20 @@ public class AiNewsletterClient {
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record AnalysisResponse(
       String title,
+      Map<String, String> titleI18n,
       String summary,
       List<ExtractedItem> items,
       List<ConversationTopicItem> conversationTopics,
       Map<String, Object> meta) {
+
+    public AnalysisResponse(
+        String title,
+        String summary,
+        List<ExtractedItem> items,
+        List<ConversationTopicItem> conversationTopics,
+        Map<String, Object> meta) {
+      this(title, Map.of(), summary, items, conversationTopics, meta);
+    }
 
     AnalysisResponse normalized() {
       List<ExtractedItem> normalizedItems =
@@ -154,6 +164,7 @@ public class AiNewsletterClient {
               : List.of();
       return new AnalysisResponse(
           title,
+          titleI18n != null ? titleI18n : Map.of(),
           summary,
           normalizedItems,
           conversationTopics != null ? conversationTopics : List.of(),
@@ -169,12 +180,21 @@ public class AiNewsletterClient {
       Integer index, String candidateId, String originalText, LocalDate normalizedDate) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
-  public record ChecklistItemDto(String content, String detail) {}
+  public record ChecklistItemDto(String content, Map<String, String> contentI18n, String detail) {
+    public ChecklistItemDto(String content, String detail) {
+      this(content, Map.of(), detail);
+    }
+
+    ChecklistItemDto normalized() {
+      return new ChecklistItemDto(content, contentI18n != null ? contentI18n : Map.of(), detail);
+    }
+  }
 
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record ExtractedItem(
       String type,
       String title,
+      Map<String, String> titleI18n,
       SelectedDateCandidate selectedDateCandidate,
       String datetime,
       String timezone,
@@ -185,14 +205,45 @@ public class AiNewsletterClient {
       String confirmationQuestion,
       List<ChecklistItemDto> checklistItems) {
 
+    public ExtractedItem(
+        String type,
+        String title,
+        SelectedDateCandidate selectedDateCandidate,
+        String datetime,
+        String timezone,
+        String evidenceText,
+        String dateStatus,
+        Double confidence,
+        Boolean needsUserConfirmation,
+        String confirmationQuestion,
+        List<ChecklistItemDto> checklistItems) {
+      this(
+          type,
+          title,
+          Map.of(),
+          selectedDateCandidate,
+          datetime,
+          timezone,
+          evidenceText,
+          dateStatus,
+          confidence,
+          needsUserConfirmation,
+          confirmationQuestion,
+          checklistItems);
+    }
+
     ExtractedItem normalized() {
       List<ChecklistItemDto> normalizedChecklistItems =
           checklistItems != null
-              ? checklistItems.stream().filter(Objects::nonNull).toList()
+              ? checklistItems.stream()
+                  .filter(Objects::nonNull)
+                  .map(ChecklistItemDto::normalized)
+                  .toList()
               : List.of();
       return new ExtractedItem(
           type,
           title,
+          titleI18n != null ? titleI18n : Map.of(),
           selectedDateCandidate,
           datetime,
           timezone,

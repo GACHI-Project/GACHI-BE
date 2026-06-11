@@ -13,10 +13,14 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** 체크리스트/해야할일 통합 엔티티 */
 @Getter
@@ -45,6 +49,10 @@ public class Checklist {
   @Column(nullable = false, length = 500)
   private String content;
 
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "content_i18n", columnDefinition = "jsonb")
+  private Map<String, String> contentI18n = new LinkedHashMap<>();
+
   @Column(length = 500)
   private String detail;
 
@@ -70,6 +78,7 @@ public class Checklist {
       Long userId,
       ChecklistType type,
       String content,
+      Map<String, String> contentI18n,
       String detail,
       LocalDate targetDate,
       String targetDateLabel) {
@@ -77,6 +86,8 @@ public class Checklist {
     this.userId = userId;
     this.type = type;
     this.content = content;
+    this.contentI18n =
+        contentI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(contentI18n);
     this.detail = detail;
     this.targetDate = targetDate;
     this.targetDateLabel = targetDateLabel;
@@ -87,6 +98,7 @@ public class Checklist {
   protected void onCreate() {
     OffsetDateTime now = OffsetDateTime.now();
     if (createdAt == null) createdAt = now;
+    if (contentI18n == null) contentI18n = new LinkedHashMap<>();
     updatedAt = now;
   }
 

@@ -55,6 +55,12 @@ public class Notification {
   @Column(name = "payload_json", columnDefinition = "TEXT")
   private String payloadJson;
 
+  @Column(name = "template_key", length = 80)
+  private String templateKey;
+
+  @Column(name = "template_params_json", columnDefinition = "TEXT")
+  private String templateParamsJson;
+
   @Column(name = "dedupe_key", length = 255)
   private String dedupeKey;
 
@@ -77,6 +83,8 @@ public class Notification {
       String title,
       String body,
       String payloadJson,
+      String templateKey,
+      String templateParamsJson,
       String dedupeKey) {
     this.userId = userId;
     this.type = type;
@@ -86,6 +94,8 @@ public class Notification {
     this.title = title;
     this.body = body;
     this.payloadJson = payloadJson;
+    this.templateKey = templateKey;
+    this.templateParamsJson = templateParamsJson;
     this.dedupeKey = dedupeKey;
   }
 

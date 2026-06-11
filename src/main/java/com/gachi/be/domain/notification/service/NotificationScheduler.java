@@ -78,6 +78,12 @@ public class NotificationScheduler {
               event.getTitle() + " 마감 D-1",
               "내일 마감이에요",
               payload,
+              NotificationTemplateKey.DEADLINE_REMINDER,
+              Map.of(
+                  "eventTitle",
+                  event.getTitle(),
+                  "eventTitleI18n",
+                  i18nOrEmpty(event.getTitleI18n())),
               "deadline:" + event.getId() + ":" + targetDate,
               NotificationLevel.URGENT,
               childId,
@@ -113,6 +119,12 @@ public class NotificationScheduler {
               "미완료 할 일이 있어요",
               checklist.getContent(),
               payload,
+              NotificationTemplateKey.CHECKLIST_DUE,
+              Map.of(
+                  "checklistContent",
+                  checklist.getContent(),
+                  "checklistContentI18n",
+                  i18nOrEmpty(checklist.getContentI18n())),
               "todo:" + checklist.getId() + ":d-" + daysBefore + ":" + targetDate,
               NotificationLevel.IMPORTANT,
               childId,
@@ -157,6 +169,12 @@ public class NotificationScheduler {
               "미완료 할 일이 있어요",
               checklist.getContent(),
               payload,
+              NotificationTemplateKey.CHECKLIST_DUE,
+              Map.of(
+                  "checklistContent",
+                  checklist.getContent(),
+                  "checklistContentI18n",
+                  i18nOrEmpty(checklist.getContentI18n())),
               "checklist:" + checklist.getId() + ":d-" + daysBefore + ":" + targetDate,
               NotificationLevel.IMPORTANT,
               childId,
@@ -203,6 +221,8 @@ public class NotificationScheduler {
               "이번 주 요약이 도착했어요",
               buildWeeklySummaryBody(calendarEventCount, newsletterCount, incompleteCount),
               payload,
+              NotificationTemplateKey.WEEKLY_SUMMARY,
+              Map.of(),
               "weekly-summary:" + user.getId() + ":" + rangeStartDate,
               NotificationLevel.NORMAL,
               null,
@@ -256,6 +276,10 @@ public class NotificationScheduler {
 
   private Map<String, Object> payload() {
     return new LinkedHashMap<>();
+  }
+
+  private Map<String, String> i18nOrEmpty(Map<String, String> values) {
+    return values != null ? values : Map.of();
   }
 
   private void putIfPresent(Map<String, Object> payload, String key, Object value) {

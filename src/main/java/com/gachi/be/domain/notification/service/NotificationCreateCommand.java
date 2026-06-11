@@ -10,6 +10,8 @@ public record NotificationCreateCommand(
     String title,
     String body,
     Map<String, Object> payload,
+    NotificationTemplateKey templateKey,
+    Map<String, Object> templateParams,
     String dedupeKey,
     NotificationLevel level,
     Long childId,
@@ -21,6 +23,19 @@ public record NotificationCreateCommand(
       String body,
       Map<String, Object> payload,
       String dedupeKey) {
-    this(type, title, body, payload, dedupeKey, NotificationLevel.IMPORTANT, null, null);
+    this(
+        type, title, body, payload, null, null, dedupeKey, NotificationLevel.IMPORTANT, null, null);
+  }
+
+  public NotificationCreateCommand(
+      NotificationType type,
+      String title,
+      String body,
+      Map<String, Object> payload,
+      String dedupeKey,
+      NotificationLevel level,
+      Long childId,
+      String childName) {
+    this(type, title, body, payload, null, null, dedupeKey, level, childId, childName);
   }
 }
