@@ -60,7 +60,7 @@ public class NewsletterAiAnalyzer {
         translateAndRefineDisplayTexts(originalText, language, analysisResponse, items);
 
     List<SavedExtractedItem> savedItems =
-        saveExtractedItems(newsletterId, newsletter.getUserId(), items, language);
+        saveExtractedItems(newsletterId, newsletter.getUserId(), items, displayTexts);
 
     try {
       saveCalendarPreview(newsletterId, savedItems, displayTexts);
@@ -71,8 +71,10 @@ public class NewsletterAiAnalyzer {
 
     saveConversationTopics(
         newsletterId, newsletter.getUserId(), analysisResponse.conversationTopics(), displayTexts);
-    String rawTitle = normalizeTitle(analysisResponse.title(), originalText);
-    String summary = normalizeSummary(analysisResponse.summary(), translatedText, originalText);
+    String finalTitle = displayTexts.getOrDefault(FIELD_ID_TITLE, analysisResponse.title());
+    String finalSummary = displayTexts.getOrDefault(FIELD_ID_SUMMARY, analysisResponse.summary());
+    String rawTitle = normalizeTitle(finalTitle, originalText);
+    String summary = normalizeSummary(finalSummary, translatedText, originalText);
     Map<String, String> normalizedTitleI18n =
         trimI18nValues(analysisResponse.titleI18n(), TITLE_MAX_LENGTH);
 
@@ -171,7 +173,7 @@ public class NewsletterAiAnalyzer {
   }
 
   private List<SavedExtractedItem> saveExtractedItems(
-      Long newsletterId, Long userId, List<ExtractedItem> items, String language) {
+      Long newsletterId, Long userId, List<ExtractedItem> items, Map<String, String> displayTexts) {
     if (items == null || items.isEmpty()) {
       log.warn("[AiAnalyzer] AI 서버 항목 추출 결과 없음. newsletterId={}", newsletterId);
       return List.of();
@@ -185,12 +187,14 @@ public class NewsletterAiAnalyzer {
       if (item.checklistItems() == null || item.checklistItems().isEmpty()) {
         continue;
       }
-      for (AiNewsletterClient.ChecklistItemDto checklistItem : item.checklistItems()) {
-        if (checklistItem.content() == null || checklistItem.content().isBlank()) {
-          continue; // 빈 content는 저장하지 않음
-        }
-        entitiesToSave.add(toChecklist(newsletterId, userId, checklistItem, displayTexts));
-        ownerItemIndex.add(itemIndex);
+      for (int checklistIndex = 0; checklistIndex < item.checklistItems().size(); checklistIndex++) {
+          AiNewsletterClient.ChecklistItemDto checklistItem = item.checklistItems().get(checklistIndex);
+          if (checklistItem.content() == null || checklistItem.content().isBlank()) {
+              continue; // 빈 content는 저장하지 않음
+          }
+          entitiesToSave.add(
+              toChecklist(newsletterId, userId, checklistItem, itemIndex, checklistIndex, displayTexts));
+          ownerItemIndex.add(itemIndex);
       }
     }
 
