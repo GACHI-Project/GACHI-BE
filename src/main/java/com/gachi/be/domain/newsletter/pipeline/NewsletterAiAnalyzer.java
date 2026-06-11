@@ -98,10 +98,11 @@ public class NewsletterAiAnalyzer {
       String language,
       AnalysisResponse analysisResponse,
       List<ExtractedItem> items) {
-
+    String normalizedLanguage =
+        (language == null || language.isBlank()) ? "KO" : language.trim().toUpperCase();
     Map<String, String> koTextsById = collectKoreanDisplayTexts(analysisResponse, items);
 
-    if ("KO".equals(language)) {
+    if ("KO".equals(normalizedLanguage)) {
       // KO 사용자는 한국어 원본을 그대로 사용 (번역/검증 불필요)
       return koTextsById;
     }
@@ -110,7 +111,7 @@ public class NewsletterAiAnalyzer {
     Map<String, String> papagoTextsById = new LinkedHashMap<>();
     for (Map.Entry<String, String> entry : koTextsById.entrySet()) {
       String koText = entry.getValue();
-      String translated = papagoTranslateClient.translate(koText, language);
+      String translated = papagoTranslateClient.translate(koText, normalizedLanguage);
       papagoTextsById.put(entry.getKey(), translated != null ? translated : koText);
     }
 
@@ -124,7 +125,9 @@ public class NewsletterAiAnalyzer {
 
     try {
       Map<String, String> refinedById =
-          aiNewsletterClient.refineTranslation(originalText, language, refineFields).toMap();
+          aiNewsletterClient
+              .refineTranslation(originalText, normalizedLanguage, refineFields)
+              .toMap();
 
       Map<String, String> result = new LinkedHashMap<>(papagoTextsById);
       result.putAll(refinedById); // 검증 결과로 덮어쓰기. 누락된 id는 파파고 번역값 유지.

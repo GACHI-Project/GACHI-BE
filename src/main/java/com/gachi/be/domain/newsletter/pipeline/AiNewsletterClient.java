@@ -105,7 +105,11 @@ public class AiNewsletterClient {
           objectMapper.writeValueAsString(
               new RefineTranslationRequest(
                   originalText, language != null ? language : "KO", fields));
-      log.info("[AiNewsletterClient] 2차 검증 요청 body: {}", requestBody);
+      log.debug(
+          "[AiNewsletterClient] 2차 검증 요청. language={}, fieldCount={}, fieldIds={}",
+          language != null ? language : "KO",
+          fields.size(),
+          fields.stream().map(RefineFieldRequest::id).toList());
 
       HttpRequest request =
           HttpRequest.newBuilder()
@@ -323,9 +327,13 @@ public class AiNewsletterClient {
       }
       Map<String, String> result = new java.util.LinkedHashMap<>();
       for (RefineFieldResponse field : fields) {
-        if (field != null && field.id() != null && field.text() != null) {
-          result.put(field.id(), field.text());
+        if (field == null || field.id() == null || field.id().isBlank()) {
+          continue;
         }
+        if (field.text() == null || field.text().isBlank()) {
+          continue;
+        }
+        result.put(field.id(), field.text().trim());
       }
       return result;
     }
