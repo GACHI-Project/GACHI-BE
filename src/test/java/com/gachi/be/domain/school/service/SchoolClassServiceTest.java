@@ -3,6 +3,8 @@ package com.gachi.be.domain.school.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -96,6 +98,19 @@ class SchoolClassServiceTest {
 
     assertThat(callCount).hasValue(1);
     verify(neisSchoolClassClient, times(1)).search("B10", "7051173", "2026", 4);
+  }
+
+  @Test
+  void searchEvictsOldestCacheEntriesWhenCacheExceedsLimit() {
+    when(neisSchoolClassClient.search(anyString(), anyString(), anyString(), any()))
+        .thenReturn(List.of(new NeisSchoolClassItem("2026", 4, "1", "초등학교")));
+
+    for (int i = 0; i <= 1_000; i++) {
+      service.search("B10", "school-" + i, "2026", 4);
+    }
+    service.search("B10", "school-0", "2026", 4);
+
+    verify(neisSchoolClassClient, times(2)).search("B10", "school-0", "2026", 4);
   }
 
   @Test

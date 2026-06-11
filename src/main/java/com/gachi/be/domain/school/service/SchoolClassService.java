@@ -25,6 +25,8 @@ import org.springframework.util.StringUtils;
 public class SchoolClassService {
   private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
   private static final Duration CACHE_TTL = Duration.ofHours(24);
+  private static final int MAX_CACHE_SIZE = 1_000;
+  private static final int CACHE_EVICTION_BATCH_SIZE = 100;
 
   private final NeisSchoolClassClient neisSchoolClassClient;
   private final Map<CacheKey, CacheEntry> cache = new ConcurrentHashMap<>();
@@ -41,6 +43,7 @@ public class SchoolClassService {
     CacheKey key =
         new CacheKey(normalizedOfficeCode, normalizedSchoolCode, resolvedAcademicYear, grade);
     Instant now = Instant.now();
+    cleanupCache(now, key);
     CacheEntry entry =
         cache.compute(
             key,
@@ -63,6 +66,21 @@ public class SchoolClassService {
               return new CacheEntry(response, now.plus(CACHE_TTL));
             });
     return entry.response();
+  }
+
+  private void cleanupCache(Instant now, CacheKey incomingKey) {
+    // NEIS 학급 조합은 학교/학년별로 다양해서 재조회되지 않는 만료 키도 요청 흐름에서 정리합니다.
+    cache
+        .entrySet()
+        .removeIf(entry -> !entry.getKey().equals(incomingKey) && entry.getValue().isExpired(now));
+    if (cache.size() < MAX_CACHE_SIZE || cache.containsKey(incomingKey)) {
+      return;
+    }
+    cache.entrySet().stream()
+        .sorted(Comparator.comparing(entry -> entry.getValue().expiresAt()))
+        .limit(CACHE_EVICTION_BATCH_SIZE)
+        .map(Map.Entry::getKey)
+        .forEach(cache::remove);
   }
 
   private List<SchoolClassItem> normalize(List<NeisSchoolClassItem> items) {

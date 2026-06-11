@@ -135,6 +135,14 @@ public class NotificationTemplateRenderer {
 
   private String weeklyBody(
       String language, long calendarEventCount, long newsletterCount, long incompleteCount) {
+    if (calendarEventCount == 0 && newsletterCount == 0 && incompleteCount == 0) {
+      return switchLanguage(
+          language,
+          "확인할 항목이 없습니다",
+          "No items to check",
+          "没有项目需要查看",
+          "Không có mục nào cần kiểm tra");
+    }
     return switch (language) {
       case "US" -> {
         String items =

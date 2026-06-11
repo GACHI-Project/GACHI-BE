@@ -73,7 +73,7 @@ public class Newsletter {
 
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "title_i18n", columnDefinition = "jsonb")
-  private Map<String, String> titleI18n = new LinkedHashMap<>();
+  private Map<String, String> titleI18n;
 
   @Column(name = "summary", columnDefinition = "TEXT")
   private String summary;
