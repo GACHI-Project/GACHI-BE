@@ -64,10 +64,12 @@ public class NewsletterAiAnalyzer {
         newsletterId, newsletter.getUserId(), analysisResponse.conversationTopics());
     String rawTitle = normalizeTitle(analysisResponse.title(), originalText);
     String summary = normalizeSummary(analysisResponse.summary(), translatedText, originalText);
+    Map<String, String> normalizedTitleI18n =
+        trimI18nValues(analysisResponse.titleI18n(), TITLE_MAX_LENGTH);
 
     log.info(
         "[AiAnalyzer] AI 서버 분석 완료. newsletterId={}, extractedItems={}", newsletterId, items.size());
-    return new AiAnalysisResult(rawTitle, analysisResponse.titleI18n(), summary);
+    return new AiAnalysisResult(rawTitle, normalizedTitleI18n, summary);
   }
 
   private List<SavedExtractedItem> saveExtractedItems(

@@ -72,7 +72,14 @@ class NewsletterAiAnalyzerTest {
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
     when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
-        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), List.of(), Map.of()));
+        .thenReturn(
+            new AnalysisResponse(
+                "AI 제목",
+                Map.of(" us ", " AI English title "),
+                "AI 요약",
+                List.of(item),
+                List.of(),
+                Map.of()));
     when(checklistRepository.saveAll(anyList()))
         .thenAnswer(
             invocation -> {
@@ -84,6 +91,7 @@ class NewsletterAiAnalyzerTest {
     AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO");
 
     assertThat(result.title()).isEqualTo("AI 제목");
+    assertThat(result.titleI18n()).containsEntry("US", "AI English title");
     assertThat(result.summary()).isEqualTo("AI 요약");
 
     verify(checklistRepository).saveAll(checklistsCaptor.capture());

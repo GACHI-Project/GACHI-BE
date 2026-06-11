@@ -71,4 +71,29 @@ class NotificationTemplateRendererTest {
     assertThat(rendered.title()).isEqualTo("system title");
     assertThat(rendered.body()).isEqualTo("system body");
   }
+
+  @Test
+  void renderFallsBackToTypeWhenTemplateKeyIsInvalid() throws Exception {
+    Notification notification =
+        Notification.builder()
+            .userId(1L)
+            .type(NotificationType.CHECKLIST_DUE)
+            .title("미완료 할 일이 있어요")
+            .body("준비물 챙기기")
+            .templateKey("BROKEN_KEY")
+            .templateParamsJson(
+                objectMapper.writeValueAsString(
+                    Map.of(
+                        "checklistContent",
+                        "준비물 챙기기",
+                        "checklistContentI18n",
+                        Map.of("US", "Pack supplies"))))
+            .dedupeKey("checklist:1")
+            .build();
+
+    RenderedNotification rendered = renderer.render(notification, "US");
+
+    assertThat(rendered.title()).isEqualTo("You have an incomplete task");
+    assertThat(rendered.body()).isEqualTo("Pack supplies");
+  }
 }

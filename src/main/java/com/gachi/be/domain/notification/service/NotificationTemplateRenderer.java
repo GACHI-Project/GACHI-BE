@@ -184,7 +184,7 @@ public class NotificationTemplateRenderer {
       try {
         return NotificationTemplateKey.valueOf(notification.getTemplateKey());
       } catch (IllegalArgumentException ignored) {
-        return null;
+        // 저장값이 손상되어도 type 기반 추론으로 기존 알림을 최대한 렌더링합니다.
       }
     }
     if (notification.getType() == NotificationType.NEWSLETTER_ANALYSIS) {
