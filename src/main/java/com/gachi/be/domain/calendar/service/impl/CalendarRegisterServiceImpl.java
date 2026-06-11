@@ -24,6 +24,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -70,7 +71,7 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
         userId,
         newsletterId,
         events.size());
-    return CalendarPreviewResponse.from(events);
+    return CalendarPreviewResponse.from(sortPreviewEvents(events));
   }
 
   /** 캘린더 일정 날짜 수정. Redis에서 기존 preview 데이터를 읽어 tempEventId 기준으로 날짜만 교체하고 다시 저장. TTL이 1시간으로 갱신됨. */
@@ -243,6 +244,35 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
   private String extractTempId(String externalKey, Long newsletterId) {
     String prefix = newsletterId + "_";
     return externalKey.startsWith(prefix) ? externalKey.substring(prefix.length()) : externalKey;
+  }
+
+  private List<CalendarPreviewEvent> sortPreviewEvents(List<CalendarPreviewEvent> events) {
+    return events.stream().sorted(Comparator.comparing(this::previewSortKey)).toList();
+  }
+
+  private LocalDateTime previewSortKey(CalendarPreviewEvent event) {
+    String extractedDate = event.extractedDate();
+    if (extractedDate == null || extractedDate.isBlank()) {
+      return LocalDateTime.MAX;
+    }
+
+    String normalized = extractedDate.trim();
+    try {
+      if (normalized.length() == 10) {
+        return LocalDate.parse(normalized, DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay();
+      }
+      try {
+        return OffsetDateTime.parse(normalized).atZoneSameInstant(KST).toLocalDateTime();
+      } catch (DateTimeParseException ignored) {
+        return LocalDateTime.parse(normalized, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+      }
+    } catch (DateTimeParseException e) {
+      log.debug(
+          "[CalendarRegister] preview 날짜 정렬 기준 파싱 실패. tempEventId={}, extractedDate={}",
+          event.tempEventId(),
+          extractedDate);
+      return LocalDateTime.MAX;
+    }
   }
 
   /** 날짜/시간 문자열을 KST 기준 OffsetDateTime으로 변환 */
