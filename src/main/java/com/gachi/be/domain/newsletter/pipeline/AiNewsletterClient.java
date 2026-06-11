@@ -17,6 +17,8 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -148,7 +150,9 @@ public class AiNewsletterClient {
 
     AnalysisResponse normalized() {
       List<ExtractedItem> normalizedItems =
-          items != null ? items.stream().map(ExtractedItem::normalized).toList() : List.of();
+          items != null
+              ? items.stream().filter(Objects::nonNull).map(ExtractedItem::normalized).toList()
+                            : List.of();
       return new AnalysisResponse(
           title,
           summary,
@@ -183,6 +187,10 @@ public class AiNewsletterClient {
       List<ChecklistItemDto> checklistItems) {
 
     ExtractedItem normalized() {
+       List<ChecklistItemDto> normalizedChecklistItems =
+           checklistItems != null
+               ? checklistItems.stream().filter(Objects::nonNull).toList()
+               : List.of();
       return new ExtractedItem(
           type,
           title,
@@ -194,7 +202,7 @@ public class AiNewsletterClient {
           confidence,
           needsUserConfirmation,
           confirmationQuestion,
-          checklistItems != null ? checklistItems : List.of());
+          normalizedChecklistItems);
     }
   }
 }

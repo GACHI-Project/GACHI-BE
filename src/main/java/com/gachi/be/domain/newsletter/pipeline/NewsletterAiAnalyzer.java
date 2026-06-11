@@ -96,17 +96,16 @@ public class NewsletterAiAnalyzer {
       }
     }
 
-    List<Checklist> savedEntities =
-        entitiesToSave.isEmpty() ? List.of() : checklistRepository.saveAll(entitiesToSave);
-    if (!savedEntities.isEmpty()) {
-      log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", savedEntities.size());
+    if (!entitiesToSave.isEmpty()) {
+        checklistRepository.saveAll(entitiesToSave);
+        log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", entitiesToSave.size());
     }
 
     Map<Integer, List<Checklist>> checklistsByItemIndex = new LinkedHashMap<>();
-    for (int i = 0; i < savedEntities.size(); i++) {
+    for (int i = 0; i < entitiesToSave.size(); i++) {
       checklistsByItemIndex
           .computeIfAbsent(ownerItemIndex.get(i), k -> new ArrayList<>())
-          .add(savedEntities.get(i));
+          .add(entitiesToSave.get(i));
     }
 
     List<SavedExtractedItem> result = new ArrayList<>();
