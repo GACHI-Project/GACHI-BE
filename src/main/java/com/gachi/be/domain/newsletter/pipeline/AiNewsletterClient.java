@@ -27,7 +27,7 @@ public class AiNewsletterClient {
 
   private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Seoul");
   private static final String ANALYZE_PATH = "/ai/newsletters/analyze";
-
+  private static final String REFINE_TRANSLATION_PATH = "/ai/newsletters/refine-translation";
   private final AiServerProperties aiServerProperties;
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
@@ -92,6 +92,52 @@ public class AiNewsletterClient {
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 오류: " + e.getMessage(), e);
     }
+  }
+
+  public RefineTranslationResponse refineTranslation(
+      String originalText, String language, List<RefineFieldRequest> fields) {
+      if (fields == null || fields.isEmpty()) {
+          return new RefineTranslationResponse(List.of());
+      }
+
+      try {
+          String requestBody =
+              objectMapper.writeValueAsString(
+                  new RefineTranslationRequest(originalText, language != null ? language : "KO", fields));
+          log.info("[AiNewsletterClient] 2차 검증 요청 body: {}", requestBody);
+
+          HttpRequest request =
+              HttpRequest.newBuilder()
+                  .uri(URI.create(normalizedBaseUrl() + REFINE_TRANSLATION_PATH))
+                  .header("Content-Type", "application/json")
+                  .header("Accept", "application/json")
+                  .timeout(Duration.ofSeconds(aiServerProperties.getReadTimeoutSeconds()))
+                  .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                  .build();
+
+          HttpResponse<String> response =
+              httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+          if (response.statusCode() < 200 || response.statusCode() >= 300) {
+              log.error(
+                  "[AiNewsletterClient] 2차 검증 실패. status={}, body={}",
+                  response.statusCode(),
+                  response.body());
+              throw new ExternalApiException(
+                  ErrorCode.EXTERNAL_API_ERROR, "AI 서버 2차 검증 실패. status=" + response.statusCode());
+          }
+
+          return objectMapper.readValue(response.body(), RefineTranslationResponse.class);
+      } catch (ExternalApiException e) {
+          throw e;
+      } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new ExternalApiException(
+              ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 인터럽트: " + e.getMessage(), e);
+      } catch (IOException e) {
+          throw new ExternalApiException(
+              ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 오류: " + e.getMessage(), e);
+      }
   }
 
   private String normalizedBaseUrl() {
@@ -254,5 +300,31 @@ public class AiNewsletterClient {
           confirmationQuestion,
           normalizedChecklistItems);
     }
+  }
+  /** 2차 검증 요청에 포함되는 단일 필드. id로 응답과 매핑한다. */
+  public record RefineFieldRequest(String id, String koText, String translatedText) {}
+
+  record RefineTranslationRequest(String originalText, String language, List<RefineFieldRequest> fields) {}
+
+  /** 2차 검증 응답에 포함되는 단일 필드. */
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record RefineFieldResponse(String id, String text) {}
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record RefineTranslationResponse(List<RefineFieldResponse> fields) {
+
+      /** id → 교정된 텍스트 맵으로 변환. */
+      public Map<String, String> toMap() {
+          if (fields == null || fields.isEmpty()) {
+              return Map.of();
+          }
+          Map<String, String> result = new java.util.LinkedHashMap<>();
+          for (RefineFieldResponse field : fields) {
+              if (field != null && field.id() != null && field.text() != null) {
+                  result.put(field.id(), field.text());
+              }
+          }
+          return result;
+      }
   }
 }
