@@ -2,8 +2,10 @@ package com.gachi.be.domain.newsletter.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,7 +16,10 @@ import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.AnalysisResponse;
+import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ConversationTopicItem;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
+import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.RefineFieldResponse;
+import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.RefineTranslationResponse;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisResult;
 import com.gachi.be.domain.newsletter.repository.ConversationTopicRepository;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
@@ -38,9 +43,14 @@ class NewsletterAiAnalyzerTest {
   @Mock private CalendarPreviewRedisService calendarPreviewRedisService;
   @Mock private NewsletterRepository newsletterRepository;
   @Mock private ConversationTopicRepository conversationTopicRepository;
+  @Mock private PapagoTranslateClient papagoTranslateClient;
 
   @Captor private ArgumentCaptor<List<Checklist>> checklistsCaptor;
   @Captor private ArgumentCaptor<List<CalendarPreviewEvent>> previewEventsCaptor;
+
+  @Captor
+  private ArgumentCaptor<List<com.gachi.be.domain.newsletter.entity.ConversationTopic>>
+      conversationTopicsCaptor;
 
   @InjectMocks private NewsletterAiAnalyzer newsletterAiAnalyzer;
 
@@ -113,6 +123,9 @@ class NewsletterAiAnalyzerTest {
     assertThat(previewEvents.get(0).extractedDate()).isEqualTo("2026-05-25");
     assertThat(previewEvents.get(0).isDateExtracted()).isTrue();
     assertThat(previewEvents.get(0).checklistIds()).containsExactly(501L);
+
+    verify(papagoTranslateClient, never()).translate(anyString(), anyString());
+    verify(aiNewsletterClient, never()).refineTranslation(anyString(), anyString(), anyList());
   }
 
   @Test
@@ -266,5 +279,117 @@ class NewsletterAiAnalyzerTest {
     assertThat(result.title()).isEqualTo("원문 제목");
     assertThat(result.summary()).isEqualTo("AI 요약");
     verify(checklistRepository, org.mockito.Mockito.never()).saveAll(anyList());
+  }
+
+  @Test
+  void analyzeTranslatesAndRefinesDisplayTextsForNonKoLanguage() {
+    Long newsletterId = 30L;
+    Newsletter newsletter =
+        Newsletter.builder()
+            .userId(40L)
+            .fileKey("newsletter.pdf")
+            .fileHash("hash")
+            .status(NewsletterStatus.PROCESSING)
+            .language("VI")
+            .build();
+
+    ExtractedItem item =
+        new ExtractedItem(
+            "reminder",
+            "준비물 확인", // item_0_title (한국어)
+            null,
+            "2026-05-25",
+            "Asia/Seoul",
+            "체육복을 준비해 주세요.",
+            "confirmed",
+            0.91,
+            false,
+            null,
+            List.of(
+                new AiNewsletterClient.ChecklistItemDto(
+                    "준비물 확인", // item_0_chk_0_content (한국어)
+                    "체육복을 준비해 주세요." // item_0_chk_0_detail (한국어)
+                    )));
+
+    ConversationTopicItem topic = new ConversationTopicItem("수영장에서 뭐가 제일 기대돼?"); // topic_0 (한국어)
+
+    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
+    when(aiNewsletterClient.analyze("원문", "번역문", "VI", List.of()))
+        .thenReturn(
+            new AnalysisResponse(
+                "AI 제목", Map.of(), "AI 요약", List.of(item), List.of(topic), Map.of()));
+
+    // 파파고 1차 번역: 한국어 → 베트남어 (간단히 "[VI] " 접두사로 표현)
+    when(papagoTranslateClient.translate(org.mockito.ArgumentMatchers.anyString(), eq("VI")))
+        .thenAnswer(invocation -> "[VI] " + invocation.getArgument(0));
+
+    // AI 서버 2차 검증: title만 교정하고 나머지는 파파고 번역 그대로 통과
+    when(aiNewsletterClient.refineTranslation(
+            eq("원문"), eq("VI"), org.mockito.ArgumentMatchers.anyList()))
+        .thenReturn(
+            new RefineTranslationResponse(
+                List.of(new RefineFieldResponse("title", "[VI-검증] AI 제목"))));
+
+    when(checklistRepository.saveAll(anyList()))
+        .thenAnswer(
+            invocation -> {
+              List<Checklist> checklists = invocation.getArgument(0);
+              ReflectionTestUtils.setField(checklists.get(0), "id", 601L);
+              return checklists;
+            });
+
+    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI");
+
+    // title은 2차 검증 결과로 교체됨
+    assertThat(result.title()).isEqualTo("[VI-검증] AI 제목");
+    // summary는 2차 검증 응답에 없으므로 파파고 1차 번역 결과를 사용
+    assertThat(result.summary()).isEqualTo("[VI] AI 요약");
+
+    // 체크리스트 content/detail도 파파고 번역 결과로 저장됨
+    verify(checklistRepository).saveAll(checklistsCaptor.capture());
+    Checklist savedChecklist = checklistsCaptor.getValue().get(0);
+    assertThat(savedChecklist.getContent()).isEqualTo("[VI] 준비물 확인");
+    assertThat(savedChecklist.getDetail()).isEqualTo("[VI] 체육복을 준비해 주세요.");
+
+    // 캘린더 preview의 일정 제목도 파파고 번역 결과로 저장됨
+    verify(calendarPreviewRedisService)
+        .savePreview(eq(newsletterId), previewEventsCaptor.capture());
+    assertThat(previewEventsCaptor.getValue().get(0).title()).isEqualTo("[VI] 준비물 확인");
+
+    // 대화 주제도 파파고 번역 결과로 저장됨
+    verify(conversationTopicRepository).saveAll(conversationTopicsCaptor.capture());
+    assertThat(conversationTopicsCaptor.getValue().get(0).getTopic())
+        .isEqualTo("[VI] 수영장에서 뭐가 제일 기대돼?");
+  }
+
+  @Test
+  void analyzeFallsBackToPapagoWhenRefineTranslationFails() {
+    Long newsletterId = 31L;
+    Newsletter newsletter =
+        Newsletter.builder()
+            .userId(41L)
+            .fileKey("newsletter.pdf")
+            .fileHash("hash")
+            .status(NewsletterStatus.PROCESSING)
+            .language("VI")
+            .build();
+
+    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
+    when(aiNewsletterClient.analyze("원문", "번역문", "VI", List.of()))
+        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(), List.of(), Map.of()));
+
+    when(papagoTranslateClient.translate(org.mockito.ArgumentMatchers.anyString(), eq("VI")))
+        .thenAnswer(invocation -> "[VI] " + invocation.getArgument(0));
+
+    // 2차 검증 호출이 실패하는 경우
+    when(aiNewsletterClient.refineTranslation(
+            eq("원문"), eq("VI"), org.mockito.ArgumentMatchers.anyList()))
+        .thenThrow(new RuntimeException("AI 서버 오류"));
+
+    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI");
+
+    // 2차 검증 실패 시 파파고 1차 번역 결과를 그대로 사용
+    assertThat(result.title()).isEqualTo("[VI] AI 제목");
+    assertThat(result.summary()).isEqualTo("[VI] AI 요약");
   }
 }
