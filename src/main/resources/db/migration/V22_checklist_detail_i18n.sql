@@ -1,0 +1,2 @@
+ALTER TABLE checklist
+    ADD COLUMN IF NOT EXISTS detail_i18n JSONB NULL;
