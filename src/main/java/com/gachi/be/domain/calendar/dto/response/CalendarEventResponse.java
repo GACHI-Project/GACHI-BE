@@ -25,7 +25,7 @@ public record CalendarEventResponse(
 
         public static ChecklistItem from(Checklist c, String language) {
           String content = i18nText(c.getContentI18n(), language, c.getContent());
-          return new ChecklistItem(c.getId(), c.getContent(), c.getDetail(), c.isCompleted());
+          return new ChecklistItem(c.getId(), content, c.getDetail(), c.isCompleted());
     }
   }
 
