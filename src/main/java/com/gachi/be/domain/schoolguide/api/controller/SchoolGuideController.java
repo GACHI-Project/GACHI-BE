@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -50,9 +51,10 @@ public class SchoolGuideController {
       summary = "주간 인기 질문 TOP 2",
       description = "이번 주 조회수 기준 상위 2개 질문을 반환합니다. 매주 월요일 00:00(KST) 초기화됩니다.")
   @GetMapping("/faqs/popular")
-  public ApiResponse<SchoolGuidePopularResponse> getPopularFaqs() {
-    return ApiResponse.success(
-        SuccessCode.SCHOOL_GUIDE_POPULAR_SUCCESS, schoolGuideService.getPopularFaqs());
+  public ApiResponse<SchoolGuidePopularResponse> getPopularFaqs(
+      @AuthenticationPrincipal Long userId) {
+      return ApiResponse.success(
+          SuccessCode.SCHOOL_GUIDE_POPULAR_SUCCESS, schoolGuideService.getPopularFaqs(userId));
   }
 
   /** FAQ 목록 조회 (카테고리 필터 or 검색). */
@@ -68,17 +70,18 @@ public class SchoolGuideController {
             """)
   @GetMapping("/faqs")
   public ApiResponse<SchoolGuideListResponse> getFaqs(
+      @AuthenticationPrincipal Long userId,
       @Parameter(description = "카테고리 필터") @RequestParam(required = false)
-          SchoolGuideCategory category,
+      SchoolGuideCategory category,
       @Parameter(description = "질문 검색 키워드") @RequestParam(required = false) String search) {
 
-    if (category != null && search != null && !search.isBlank()) {
-      throw new com.gachi.be.global.exception.BusinessException(
-          com.gachi.be.global.code.ErrorCode.SCHOOL_GUIDE_FILTER_CONFLICT);
-    }
+      if (category != null && search != null && !search.isBlank()) {
+          throw new com.gachi.be.global.exception.BusinessException(
+              com.gachi.be.global.code.ErrorCode.SCHOOL_GUIDE_FILTER_CONFLICT);
+      }
 
-    return ApiResponse.success(
-        SuccessCode.SCHOOL_GUIDE_LIST_SUCCESS, schoolGuideService.getFaqs(category, search));
+      return ApiResponse.success(
+          SuccessCode.SCHOOL_GUIDE_LIST_SUCCESS, schoolGuideService.getFaqs(userId, category, search));
   }
 
   /** FAQ 상세 조회 + weekly_view_count 증가. */
@@ -87,9 +90,10 @@ public class SchoolGuideController {
       description = "FAQ 상세 정보(질문 + 답변)를 반환합니다. 호출 시 주간 조회수가 1 증가합니다.")
   @GetMapping("/faqs/{faqId}")
   public ApiResponse<SchoolGuideDetailResponse> getFaqDetail(
+      @AuthenticationPrincipal Long userId,
       @Parameter(description = "FAQ ID", required = true) @PathVariable Long faqId) {
-    return ApiResponse.success(
-        SuccessCode.SCHOOL_GUIDE_DETAIL_SUCCESS, schoolGuideService.getFaqDetail(faqId));
+      return ApiResponse.success(
+          SuccessCode.SCHOOL_GUIDE_DETAIL_SUCCESS, schoolGuideService.getFaqDetail(userId, faqId));
   }
 
   /** FAQ 등록 (관리용). */
