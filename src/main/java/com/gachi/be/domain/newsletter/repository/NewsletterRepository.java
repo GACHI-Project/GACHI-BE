@@ -22,6 +22,46 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
   /** 자녀 미선택(child_name=NULL) 가정통신문 중 동일 파일 해시 존재 여부 확인 (중복 방지). */
   Optional<Newsletter> findByUserIdAndChildNameIsNullAndFileHash(Long userId, String fileHash);
 
+  @Query(
+      """
+      SELECT COUNT(n) > 0
+      FROM Newsletter n
+      WHERE n.id <> :newsletterId
+        AND n.userId = :userId
+        AND n.contentHash = :contentHash
+        AND n.status IN :statuses
+        AND (
+          (:childName IS NULL AND n.childName IS NULL)
+          OR (:childName IS NOT NULL AND n.childName = :childName)
+        )
+      """)
+  boolean existsDuplicateContentHash(
+      @Param("newsletterId") Long newsletterId,
+      @Param("userId") Long userId,
+      @Param("childName") String childName,
+      @Param("contentHash") String contentHash,
+      @Param("statuses") List<NewsletterStatus> statuses);
+
+  @Query(
+      """
+      SELECT n
+      FROM Newsletter n
+      WHERE n.id <> :newsletterId
+        AND n.userId = :userId
+        AND n.contentHash IS NULL
+        AND n.originalText IS NOT NULL
+        AND n.status IN :statuses
+        AND (
+          (:childName IS NULL AND n.childName IS NULL)
+          OR (:childName IS NOT NULL AND n.childName = :childName)
+        )
+      """)
+  List<Newsletter> findLegacyContentHashCandidates(
+      @Param("newsletterId") Long newsletterId,
+      @Param("userId") Long userId,
+      @Param("childName") String childName,
+      @Param("statuses") List<NewsletterStatus> statuses);
+
   /** 특정 사용자·자녀 이름의 모든 newsletter의 child_color를 일괄 업데이트. */
   @Modifying
   @Query(

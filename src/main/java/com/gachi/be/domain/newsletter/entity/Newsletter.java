@@ -52,6 +52,9 @@ public class Newsletter {
   @Column(name = "file_hash", nullable = false, length = 64)
   private String fileHash;
 
+  @Column(name = "content_hash", length = 64)
+  private String contentHash;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   private NewsletterStatus status;
@@ -186,6 +189,11 @@ public class Newsletter {
     this.originalText = originalText;
     this.translatedText = translatedText;
     fail(failureStage, failureReason);
+  }
+
+  /** OCR 결과 기반 본문 해시를 저장합니다. 재촬영처럼 파일 해시가 달라도 같은 문서인지 판단하기 위한 값입니다. */
+  public void updateContentHash(String contentHash) {
+    this.contentHash = contentHash;
   }
 
   /** 실패한 분석을 사용자가 다시 시도할 때 이전 실패 사유를 비우고 대기 상태로 되돌립니다. */
