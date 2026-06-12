@@ -58,7 +58,7 @@ class NeisSchoolMealClientTest {
                         "MMEAL_SC_CODE": "2",
                         "MMEAL_SC_NM": "중식",
                         "MLSV_YMD": "20260302",
-                        "MLSV_FGR": "123",
+                        "MLSV_FGR": "123.0",
                         "DDISH_NM": "현미밥<br/>미역국",
                         "ORPLC_INFO": "쌀 : 국내산",
                         "CAL_INFO": "612.3 Kcal",
