@@ -12,6 +12,8 @@ import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
+import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
 import java.time.LocalDate;
@@ -41,7 +43,9 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
   private final CalendarEventRepository calendarEventRepository;
   private final ChecklistRepository checklistRepository;
   private final NewsletterRepository newsletterRepository;
+  private final UserRepository userRepository;
   private static final ZoneOffset KST_OFFSET = ZoneOffset.ofHours(9);
+  private static final String DEFAULT_LANGUAGE = "KO";
 
   /** 월별 일정 마커 조회. */
   @Override
@@ -98,7 +102,7 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
   public CalendarWeeklyResponse getWeekly(Long userId, String date, String childName) {
 
     String normalizedChildName = normalizeChildName(childName);
-
+    String language = resolveUserLanguage(userId);
     // 오늘 날짜 파싱 (KST)
     LocalDate today = parseLocalDate(date);
 
@@ -114,7 +118,6 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
     List<CalendarEvent> events =
         calendarEventRepository.findEventsInRange(userId, rangeStart, rangeEnd, childName);
 
-    Map<Long, String> newsletterTitleMap = buildNewsletterTitleMap(events);
     Map<LocalDate, List<CalendarEvent>> groupedByDate =
         events.stream()
             .collect(
@@ -126,14 +129,14 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
 
     List<CalendarWeeklyResponse.DayEvents> days = new ArrayList<>();
     for (LocalDate d : sortedDates) {
-      List<CalendarEvent> dayEvents = groupedByDate.get(d);
-      if (dayEvents == null || dayEvents.isEmpty()) {
-        continue;
-      }
+       List<CalendarEvent> dayEvents = groupedByDate.get(d);
+       if (dayEvents == null || dayEvents.isEmpty()) {
+           continue;
+       }
 
       // 각 일정에 체크리스트 붙이기
       List<CalendarEventResponse> eventResponses =
-          dayEvents.stream().map(e -> toEventResponse(e, today)).toList();
+          dayEvents.stream().map(e -> toEventResponse(e, today, language)).toList();
 
       days.add(
           new CalendarWeeklyResponse.DayEvents(
@@ -163,6 +166,7 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
     String normalizedChildName = normalizeChildName(childName);
     LocalDate targetDate = parseLocalDate(date);
     LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+    String language = resolveUserLanguage(userId);
 
     OffsetDateTime rangeStart = targetDate.atStartOfDay().atOffset(KST_OFFSET);
     OffsetDateTime rangeEnd = targetDate.plusDays(1).atStartOfDay().atOffset(KST_OFFSET);
@@ -171,11 +175,8 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
         calendarEventRepository.findEventsInRange(
             userId, rangeStart, rangeEnd, normalizedChildName);
 
-    Map<Long, String> newsletterTitleMap = buildNewsletterTitleMap(events);
-    Map<Long, List<Checklist>> checklistMap = buildChecklistMap(events);
-
     List<CalendarEventResponse> eventResponses =
-        events.stream().map(e -> toEventResponse(e, today)).toList();
+        events.stream().map(e -> toEventResponse(e, today, language)).toList();
 
     log.debug(
         "[CalendarQuery] 날짜별 조회. userId={}, date={}, count={}",
@@ -185,18 +186,6 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
 
     return new CalendarDailyResponse(
         targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE), eventResponses);
-  }
-
-  private Map<Long, String> buildNewsletterTitleMap(List<CalendarEvent> events) {
-    if (events.isEmpty()) return Collections.emptyMap();
-
-    Set<Long> newsletterIds =
-        events.stream().map(CalendarEvent::getNewsletterId).collect(Collectors.toSet());
-
-    return newsletterRepository.findAllById(newsletterIds).stream()
-        .collect(
-            Collectors.toMap(
-                Newsletter::getId, n -> n.getTitle() != null ? n.getTitle() : "(제목 없음)"));
   }
 
   private Map<Long, List<Checklist>> buildChecklistMap(List<CalendarEvent> events) {
@@ -211,7 +200,7 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
   }
 
   /** 일정 엔티티 → 응답 DTO 변환 (체크리스트 조회 포함). */
-  private CalendarEventResponse toEventResponse(CalendarEvent event, LocalDate today) {
+  private CalendarEventResponse toEventResponse(CalendarEvent event, LocalDate today, String language) {
     // 가정통신문 제목 조회
     String newsletterTitle =
         newsletterRepository
@@ -224,7 +213,28 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
         checklistRepository.findByCalendarEventIdAndTypeOrderByIdAsc(
             event.getId(), ChecklistType.CHECKLIST);
 
-    return CalendarEventResponse.of(event, newsletterTitle, checklists, today);
+    return CalendarEventResponse.of(event, newsletterTitle, checklists, today, language);
+  }
+  private String resolveUserLanguage(Long userId) {
+      return userRepository
+          .findById(userId)
+          .map(User::getLanguageCode)
+          .filter(code -> code != null && !code.isBlank())
+          .orElse(DEFAULT_LANGUAGE);
+  }
+  private String i18nText(Map<String, String> values, String language, String fallback) {
+      if (values == null || values.isEmpty()) {
+          return fallback;
+      }
+      String text = values.get(language);
+      if (text != null && !text.isBlank()) {
+          return text;
+      }
+      text = values.get(DEFAULT_LANGUAGE);
+      if (text != null && !text.isBlank()) {
+          return text;
+      }
+      return fallback;
   }
 
   /** 주별 날짜 정렬 순서 생성 */
