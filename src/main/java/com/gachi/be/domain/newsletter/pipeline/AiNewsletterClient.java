@@ -231,13 +231,21 @@ public class AiNewsletterClient {
       Integer index, String candidateId, String originalText, LocalDate normalizedDate) {}
 
   @JsonIgnoreProperties(ignoreUnknown = true)
-  public record ChecklistItemDto(String content, Map<String, String> contentI18n, String detail) {
+  public record ChecklistItemDto(
+      String content,
+      Map<String, String> contentI18n,
+      String detail,
+      Map<String, String> detailI18n) {
     public ChecklistItemDto(String content, String detail) {
-      this(content, Map.of(), detail);
+      this(content, Map.of(), detail, Map.of());
     }
 
     ChecklistItemDto normalized() {
-      return new ChecklistItemDto(content, contentI18n != null ? contentI18n : Map.of(), detail);
+      return new ChecklistItemDto(
+          content,
+          contentI18n != null ? contentI18n : Map.of(),
+          detail,
+          detailI18n != null ? detailI18n : Map.of());
     }
   }
 
