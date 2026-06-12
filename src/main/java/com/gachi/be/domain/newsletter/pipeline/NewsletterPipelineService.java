@@ -33,6 +33,7 @@ public class NewsletterPipelineService {
   private final NewsletterAiAnalyzer newsletterAiAnalyzer;
   private final NewsletterDateCandidateService newsletterDateCandidateService;
   private final NewsletterPipelineStatusService newsletterPipelineStatusService;
+  private final NewsletterContentHasher newsletterContentHasher;
 
   @Async
   public void runPipeline(Long newsletterId) {
@@ -89,6 +90,12 @@ public class NewsletterPipelineService {
       failureStage = "TEXT_REFINE";
       log.debug("[Pipeline][STEP5] 텍스트 정제 및 날짜 후보 추출 시작.");
       originalText = ocrTextRefiner.refineText(ocrText);
+      String contentHash = newsletterContentHasher.hash(originalText).orElse(null);
+      if (newsletterPipelineStatusService.markFailedIfContentDuplicated(
+          newsletterId, ocrText, originalText, contentHash)) {
+        log.info("[Pipeline] 본문 중복 가정통신문으로 분석을 중단합니다. newsletterId={}", newsletterId);
+        return;
+      }
       newsletterDateCandidateService.extractAndReplace(newsletterId, originalText);
       log.debug("[Pipeline][STEP5] 정제 완료. length={}chars", originalText.length());
 

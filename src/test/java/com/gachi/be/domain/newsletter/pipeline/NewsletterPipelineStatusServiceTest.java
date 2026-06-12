@@ -97,6 +97,69 @@ class NewsletterPipelineStatusServiceTest {
     assertThat(transactionManager.rollbacks).isGreaterThanOrEqualTo(1);
   }
 
+  @Test
+  void markFailedIfContentDuplicatedStoresHashAndStopsPipeline() {
+    Newsletter newsletter = processingNewsletter(90L);
+    when(newsletterRepository.findById(90L)).thenReturn(Optional.of(newsletter));
+    when(newsletterRepository.existsDuplicateContentHash(anyLong(), anyLong(), any(), any(), any()))
+        .thenReturn(true);
+
+    boolean duplicated =
+        newsletterPipelineStatusService.markFailedIfContentDuplicated(
+            90L, "ocr text", "original text", "content-hash");
+
+    assertThat(duplicated).isTrue();
+    assertThat(newsletter.getContentHash()).isEqualTo("content-hash");
+    assertThat(newsletter.getStatus()).isEqualTo(NewsletterStatus.FAILED);
+    assertThat(newsletter.getFailureStage()).isEqualTo("CONTENT_DUPLICATE");
+    assertThat(newsletter.getFailureReason()).contains("동일한 내용");
+    verify(newsletterRepository).save(newsletter);
+  }
+
+  @Test
+  void markFailedIfContentDuplicatedOnlyStoresHashWhenUnique() {
+    Newsletter newsletter = processingNewsletter(91L);
+    when(newsletterRepository.findById(91L)).thenReturn(Optional.of(newsletter));
+    when(newsletterRepository.existsDuplicateContentHash(anyLong(), anyLong(), any(), any(), any()))
+        .thenReturn(false);
+
+    boolean duplicated =
+        newsletterPipelineStatusService.markFailedIfContentDuplicated(
+            91L, "ocr text", "original text", "content-hash");
+
+    assertThat(duplicated).isFalse();
+    assertThat(newsletter.getContentHash()).isEqualTo("content-hash");
+    assertThat(newsletter.getStatus()).isEqualTo(NewsletterStatus.PROCESSING);
+    assertThat(newsletter.getFailureStage()).isNull();
+    verify(newsletterRepository).save(newsletter);
+  }
+
+  @Test
+  void markFailedIfContentDuplicatedComparesLegacyOriginalTextWhenContentHashIsMissing() {
+    Newsletter newsletter = processingNewsletter(92L);
+    Newsletter legacy = processingNewsletter(93L);
+    legacy.complete(
+        "ocr", "와글와글 베이커리 신청 안내\n제출 기한: 2026.06.20\n준비물: 앞치마", null, "와글와글 베이커리", "summary");
+    when(newsletterRepository.findById(92L)).thenReturn(Optional.of(newsletter));
+    when(newsletterRepository.existsDuplicateContentHash(anyLong(), anyLong(), any(), any(), any()))
+        .thenReturn(false);
+    when(newsletterRepository.findLegacyContentHashCandidates(anyLong(), anyLong(), any(), any()))
+        .thenReturn(List.of(legacy));
+
+    String contentHash =
+        new NewsletterContentHasher()
+            .hash("와글와글 베이커리 신청 안내 - 제출 기한 2026-06-20 / 준비물 앞치마")
+            .orElseThrow();
+
+    boolean duplicated =
+        newsletterPipelineStatusService.markFailedIfContentDuplicated(
+            92L, "ocr text", "original text", contentHash);
+
+    assertThat(duplicated).isTrue();
+    assertThat(newsletter.getStatus()).isEqualTo(NewsletterStatus.FAILED);
+    assertThat(newsletter.getFailureStage()).isEqualTo("CONTENT_DUPLICATE");
+  }
+
   private Newsletter processingNewsletter(Long id) {
     Newsletter newsletter =
         Newsletter.builder()
@@ -119,9 +182,14 @@ class NewsletterPipelineStatusServiceTest {
         NewsletterRepository newsletterRepository,
         NotificationService notificationService,
         ChildRepository childRepository,
-        CapturingTransactionManager transactionManager) {
+        CapturingTransactionManager transactionManager,
+        NewsletterContentHasher newsletterContentHasher) {
       return new NewsletterPipelineStatusService(
-          newsletterRepository, notificationService, childRepository, transactionManager);
+          newsletterRepository,
+          notificationService,
+          childRepository,
+          transactionManager,
+          newsletterContentHasher);
     }
 
     @Bean
@@ -142,6 +210,11 @@ class NewsletterPipelineStatusServiceTest {
     @Bean
     CapturingTransactionManager transactionManager() {
       return new CapturingTransactionManager();
+    }
+
+    @Bean
+    NewsletterContentHasher newsletterContentHasher() {
+      return new NewsletterContentHasher();
     }
   }
 

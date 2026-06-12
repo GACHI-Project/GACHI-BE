@@ -179,7 +179,7 @@ public enum ErrorCode {
       HttpStatus.CONFLICT,
       "NL4091",
       "이미 업로드된 가정통신문입니다.",
-      "동일한 file_hash를 가진 가정통신문이 이미 존재함",
+      "동일한 file_hash 또는 content_hash를 가진 가정통신문이 이미 존재함",
       ErrorLogLevel.WARN),
   NEWSLETTER_FILE_EMPTY(
       HttpStatus.BAD_REQUEST, "NL4001", "파일이 비어있습니다.", "업로드 파일 null 또는 empty", ErrorLogLevel.WARN),

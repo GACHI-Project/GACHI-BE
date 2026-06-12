@@ -2,12 +2,14 @@ package com.gachi.be.domain.newsletter.pipeline;
 
 import com.gachi.be.domain.child.repository.ChildRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.notification.entity.enums.NotificationLevel;
 import com.gachi.be.domain.notification.entity.enums.NotificationType;
 import com.gachi.be.domain.notification.service.NotificationCreateCommand;
 import com.gachi.be.domain.notification.service.NotificationService;
 import com.gachi.be.domain.notification.service.NotificationTemplateKey;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,10 +27,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class NewsletterPipelineStatusService {
 
+  private static final List<NewsletterStatus> CONTENT_DUPLICATE_TARGET_STATUSES =
+      List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING, NewsletterStatus.COMPLETED);
+
   private final NewsletterRepository newsletterRepository;
   private final NotificationService notificationService;
   private final ChildRepository childRepository;
   private final PlatformTransactionManager transactionManager;
+  private final NewsletterContentHasher newsletterContentHasher;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void markProcessing(Long newsletterId) {
@@ -39,6 +45,58 @@ public class NewsletterPipelineStatusService {
               newsletter.startProcessing();
               newsletterRepository.save(newsletter);
             });
+  }
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public boolean markFailedIfContentDuplicated(
+      Long newsletterId, String ocrText, String originalText, String contentHash) {
+    if (contentHash == null || contentHash.isBlank()) {
+      return false;
+    }
+
+    return newsletterRepository
+        .findById(newsletterId)
+        .map(
+            newsletter -> {
+              boolean duplicated =
+                  hasDuplicateContentHash(newsletterId, newsletter, contentHash)
+                      || hasLegacyDuplicateContentHash(newsletterId, newsletter, contentHash);
+              newsletter.updateContentHash(contentHash);
+              if (duplicated) {
+                newsletter.failWithSnapshot(
+                    ocrText, originalText, null, "CONTENT_DUPLICATE", "동일한 내용의 가정통신문이 이미 존재합니다.");
+              }
+              newsletterRepository.save(newsletter);
+              return duplicated;
+            })
+        .orElse(false);
+  }
+
+  private boolean hasDuplicateContentHash(
+      Long newsletterId, Newsletter newsletter, String contentHash) {
+    return newsletterRepository.existsDuplicateContentHash(
+        newsletterId,
+        newsletter.getUserId(),
+        newsletter.getChildName(),
+        contentHash,
+        CONTENT_DUPLICATE_TARGET_STATUSES);
+  }
+
+  private boolean hasLegacyDuplicateContentHash(
+      Long newsletterId, Newsletter newsletter, String contentHash) {
+    List<Newsletter> candidates =
+        newsletterRepository.findLegacyContentHashCandidates(
+            newsletterId,
+            newsletter.getUserId(),
+            newsletter.getChildName(),
+            CONTENT_DUPLICATE_TARGET_STATUSES);
+    if (candidates == null || candidates.isEmpty()) {
+      return false;
+    }
+    return candidates.stream()
+        .map(Newsletter::getOriginalText)
+        .map(newsletterContentHasher::hash)
+        .anyMatch(candidateHash -> candidateHash.filter(contentHash::equals).isPresent());
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
