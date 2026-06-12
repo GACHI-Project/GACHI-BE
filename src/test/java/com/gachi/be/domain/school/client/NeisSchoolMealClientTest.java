@@ -117,6 +117,65 @@ class NeisSchoolMealClientTest {
   }
 
   @Test
+  void searchParsesOnlyIntegerLikeDecimalMealPeopleCount() throws IOException {
+    startServer();
+    server.createContext(
+        "/hub/mealServiceDietInfo",
+        exchange ->
+            sendResponse(
+                exchange,
+                200,
+                """
+                {
+                  "mealServiceDietInfo": [
+                    {
+                      "head": [
+                        {"list_total_count": 3},
+                        {"RESULT": {"CODE": "INFO-000", "MESSAGE": "정상 처리되었습니다."}}
+                      ]
+                    },
+                    {
+                      "row": [
+                        {
+                          "MMEAL_SC_CODE": "2",
+                          "MMEAL_SC_NM": "중식",
+                          "MLSV_YMD": "20260302",
+                          "MLSV_FGR": "123.0",
+                          "DDISH_NM": "현미밥"
+                        },
+                        {
+                          "MMEAL_SC_CODE": "2",
+                          "MMEAL_SC_NM": "중식",
+                          "MLSV_YMD": "20260303",
+                          "MLSV_FGR": "123.5",
+                          "DDISH_NM": "보리밥"
+                        },
+                        {
+                          "MMEAL_SC_CODE": "2",
+                          "MMEAL_SC_NM": "중식",
+                          "MLSV_YMD": "20260304",
+                          "MLSV_FGR": "999999999999.0",
+                          "DDISH_NM": "흑미밥"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """
+                    .getBytes(StandardCharsets.UTF_8)));
+
+    NeisSchoolMealClient client = newClient("meal-key");
+
+    var meals =
+        client.search("B10", "7051173", LocalDate.of(2026, 3, 1), LocalDate.of(2026, 3, 31));
+
+    assertThat(meals).hasSize(3);
+    assertThat(meals.get(0).mealPeopleCount()).isEqualTo(123);
+    assertThat(meals.get(1).mealPeopleCount()).isNull();
+    assertThat(meals.get(2).mealPeopleCount()).isNull();
+  }
+
+  @Test
   void searchThrowsExternalApiExceptionWhenMealApiKeyIsMissing() {
     NeisSchoolMealClient client = newClient(null);
 
