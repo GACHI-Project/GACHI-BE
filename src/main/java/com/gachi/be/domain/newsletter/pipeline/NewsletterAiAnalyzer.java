@@ -60,8 +60,7 @@ public class NewsletterAiAnalyzer {
         translateAndRefineDisplayTexts(originalText, language, analysisResponse, items);
 
     List<SavedExtractedItem> savedItems =
-        saveExtractedItems(newsletterId, newsletter.getUserId(), items, displayTexts);
-
+        saveExtractedItems(newsletterId, newsletter.getUserId(), items, displayTexts, language);
     try {
       saveCalendarPreview(newsletterId, savedItems, displayTexts);
     } catch (RuntimeException e) {
@@ -91,7 +90,7 @@ public class NewsletterAiAnalyzer {
    * checklistItems[].content,detail/conversationTopics[].topic)를 모아 id를 부여하고, KO가 아니면 Papago로 1차 번역
    * → AI 서버로 2차 검증을 거쳐 최종 텍스트 맵을 반환한다.
    *
-   * <p>language=KO이거나 번역 대상 텍스트가 없으면 한국어 원본을 그대로 반환한다 (id → 원본 텍스트).
+   * language=KO이거나 번역 대상 텍스트가 없으면 한국어 원본을 그대로 반환한다 (id → 원본 텍스트).
    */
   private Map<String, String> translateAndRefineDisplayTexts(
       String originalText,
@@ -177,58 +176,58 @@ public class NewsletterAiAnalyzer {
   }
 
   private List<SavedExtractedItem> saveExtractedItems(
-      Long newsletterId, Long userId, List<ExtractedItem> items, Map<String, String> displayTexts) {
-    if (items == null || items.isEmpty()) {
-      log.warn("[AiAnalyzer] AI 서버 항목 추출 결과 없음. newsletterId={}", newsletterId);
-      return List.of();
-    }
-
-    List<Checklist> entitiesToSave = new ArrayList<>();
-    List<Integer> ownerItemIndex = new ArrayList<>();
-
-    for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
-      ExtractedItem item = items.get(itemIndex);
-      if (item.checklistItems() == null || item.checklistItems().isEmpty()) {
-        continue;
+      Long newsletterId, Long userId, List<ExtractedItem> items, Map<String, String> displayTexts, String language) {
+      if (items == null || items.isEmpty()) {
+          log.warn("[AiAnalyzer] AI 서버 항목 추출 결과 없음. newsletterId={}", newsletterId);
+          return List.of();
       }
-      for (int checklistIndex = 0;
-          checklistIndex < item.checklistItems().size();
-          checklistIndex++) {
-        AiNewsletterClient.ChecklistItemDto checklistItem =
-            item.checklistItems().get(checklistIndex);
-        if (checklistItem.content() == null || checklistItem.content().isBlank()) {
-          continue; // 빈 content는 저장하지 않음
-        }
-        entitiesToSave.add(
-            toChecklist(
-                newsletterId, userId, checklistItem, itemIndex, checklistIndex, displayTexts));
-        ownerItemIndex.add(itemIndex);
+
+      List<Checklist> entitiesToSave = new ArrayList<>();
+      List<Integer> ownerItemIndex = new ArrayList<>();
+
+      for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+          ExtractedItem item = items.get(itemIndex);
+          if (item.checklistItems() == null || item.checklistItems().isEmpty()) {
+              continue;
+          }
+          for (int checklistIndex = 0;
+               checklistIndex < item.checklistItems().size();
+               checklistIndex++) {
+              AiNewsletterClient.ChecklistItemDto checklistItem =
+                  item.checklistItems().get(checklistIndex);
+              if (checklistItem.content() == null || checklistItem.content().isBlank()) {
+                  continue; // 빈 content는 저장하지 않음
+              }
+              entitiesToSave.add(
+                    toChecklist(
+                        newsletterId, userId, checklistItem, itemIndex, checklistIndex, displayTexts, language));
+              ownerItemIndex.add(itemIndex);
+          }
       }
-    }
 
-    if (!entitiesToSave.isEmpty()) {
-      checklistRepository.saveAll(entitiesToSave);
-      log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", entitiesToSave.size());
-    }
-
-    Map<Integer, List<Checklist>> checklistsByItemIndex = new LinkedHashMap<>();
-    for (int i = 0; i < entitiesToSave.size(); i++) {
-      checklistsByItemIndex
-          .computeIfAbsent(ownerItemIndex.get(i), k -> new ArrayList<>())
-          .add(entitiesToSave.get(i));
-    }
-
-    List<SavedExtractedItem> result = new ArrayList<>();
-    for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
-      ExtractedItem item = items.get(itemIndex);
-      if (item.title() == null || item.title().isBlank()) {
-        // 제목 없는 일정은 캘린더 preview 대상에서 제외 (체크리스트는 이미 저장됨)
-        continue;
+      if (!entitiesToSave.isEmpty()) {
+          checklistRepository.saveAll(entitiesToSave);
+          log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", entitiesToSave.size());
       }
-      List<Checklist> linkedChecklists = checklistsByItemIndex.getOrDefault(itemIndex, List.of());
-      result.add(new SavedExtractedItem(itemIndex, item, linkedChecklists));
-    }
-    return result;
+
+      Map<Integer, List<Checklist>> checklistsByItemIndex = new LinkedHashMap<>();
+      for (int i = 0; i < entitiesToSave.size(); i++) {
+          checklistsByItemIndex
+              .computeIfAbsent(ownerItemIndex.get(i), k -> new ArrayList<>())
+              .add(entitiesToSave.get(i));
+      }
+
+      List<SavedExtractedItem> result = new ArrayList<>();
+      for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+          ExtractedItem item = items.get(itemIndex);
+          if (item.title() == null || item.title().isBlank()) {
+              // 제목 없는 일정은 캘린더 preview 대상에서 제외 (체크리스트는 이미 저장됨)
+              continue;
+          }
+          List<Checklist> linkedChecklists = checklistsByItemIndex.getOrDefault(itemIndex, List.of());
+          result.add(new SavedExtractedItem(itemIndex, item, linkedChecklists));
+      }
+      return result;
   }
 
   private Checklist toChecklist(
@@ -237,7 +236,8 @@ public class NewsletterAiAnalyzer {
       AiNewsletterClient.ChecklistItemDto checklistItem,
       int itemIndex,
       int checklistIndex,
-      Map<String, String> displayTexts) {
+      Map<String, String> displayTexts,
+      String language) {
     String contentKey = "item_" + itemIndex + "_chk_" + checklistIndex + "_content";
     String detailKey = "item_" + itemIndex + "_chk_" + checklistIndex + "_detail";
 
@@ -252,6 +252,21 @@ public class NewsletterAiAnalyzer {
     if (detailSource != null && !detailSource.isBlank()) {
       detail = trimNullable(detailSource, CHECKLIST_TEXT_MAX_LENGTH);
     }
+    Map<String, String> detailI18n;
+    if (detail == null) {
+        detailI18n = Map.of();
+    } else {
+        Map<String, String> base = new LinkedHashMap<>(
+            trimI18nValues(checklistItem.detailI18n(), CHECKLIST_TEXT_MAX_LENGTH));
+        String normalizedLanguage = (language == null || language.isBlank()) ? "KO" : language.trim().toUpperCase();
+        if (!"KO".equals(normalizedLanguage)) {
+            String translatedDetail = displayTexts.get(detailKey);
+            if (translatedDetail != null && !translatedDetail.isBlank()) {
+                base.put(normalizedLanguage, trimToMax(compact(translatedDetail), CHECKLIST_TEXT_MAX_LENGTH));
+            }
+        }
+        detailI18n = base;
+    }
 
     return Checklist.builder()
         .newsletterId(newsletterId)
@@ -261,7 +276,7 @@ public class NewsletterAiAnalyzer {
         .content(content)
         .contentI18n(trimI18nValues(checklistItem.contentI18n(), CHECKLIST_TEXT_MAX_LENGTH))
         .detail(detail)
-        .detailI18n(trimI18nValues(checklistItem.detailI18n(), CHECKLIST_TEXT_MAX_LENGTH))
+        .detailI18n(detailI18n)
         .targetDate(null) // 체크리스트는 날짜를 갖지 않음 (일정의 날짜를 따라감)
         .targetDateLabel(null)
         .build();
