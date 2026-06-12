@@ -56,6 +56,10 @@ public class Checklist {
   @Column(length = 500)
   private String detail;
 
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "detail_i18n", columnDefinition = "jsonb")
+  private Map<String, String> detailI18n = new LinkedHashMap<>();
+
   @Column(name = "is_completed", nullable = false)
   private boolean completed = false;
 
@@ -80,6 +84,7 @@ public class Checklist {
       String content,
       Map<String, String> contentI18n,
       String detail,
+      Map<String, String> detailI18n,
       LocalDate targetDate,
       String targetDateLabel) {
     this.newsletterId = newsletterId;
@@ -89,6 +94,7 @@ public class Checklist {
     this.contentI18n =
         contentI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(contentI18n);
     this.detail = detail;
+    this.detailI18n = detailI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(detailI18n);
     this.targetDate = targetDate;
     this.targetDateLabel = targetDateLabel;
     this.completed = false; // 생성 시 항상 미완료 상태
@@ -99,6 +105,7 @@ public class Checklist {
     OffsetDateTime now = OffsetDateTime.now();
     if (createdAt == null) createdAt = now;
     if (contentI18n == null) contentI18n = new LinkedHashMap<>();
+    if (detailI18n == null) detailI18n = new LinkedHashMap<>();
     updatedAt = now;
   }
 

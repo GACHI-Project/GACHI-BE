@@ -14,13 +14,13 @@ public interface SchoolGuideService {
   SchoolGuideCategoryResponse getCategoryCounts();
 
   /** 주간 인기 질문 TOP 2 */
-  SchoolGuidePopularResponse getPopularFaqs();
+  SchoolGuidePopularResponse getPopularFaqs(Long userId);
 
   /** FAQ 목록 조회 */
-  SchoolGuideListResponse getFaqs(SchoolGuideCategory category, String search);
+  SchoolGuideListResponse getFaqs(Long userId, SchoolGuideCategory category, String search);
 
   /** FAQ 상세 조회 + weekly_view_count 증가 */
-  SchoolGuideDetailResponse getFaqDetail(Long faqId);
+  SchoolGuideDetailResponse getFaqDetail(Long userId, Long faqId);
 
   /** FAQ 등록 */
   Long createFaq(SchoolGuideCreateRequest request);
@@ -30,4 +30,6 @@ public interface SchoolGuideService {
 
   /** FAQ 삭제 */
   void deleteFaq(Long faqId);
+
+  void backfillI18n();
 }
