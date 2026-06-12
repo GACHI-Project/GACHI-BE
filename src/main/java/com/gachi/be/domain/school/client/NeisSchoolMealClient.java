@@ -7,6 +7,7 @@ import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.config.external.NeisProperties;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -240,7 +241,23 @@ public class NeisSchoolMealClient {
     try {
       return Integer.valueOf(value);
     } catch (NumberFormatException e) {
+      Integer decimalInteger = parseDecimalInteger(value);
+      if (decimalInteger != null) {
+        return decimalInteger;
+      }
       log.warn("[NEIS] 급식 인원수 형식 오류. value={}", value);
+      return null;
+    }
+  }
+
+  private Integer parseDecimalInteger(String value) {
+    try {
+      BigDecimal decimal = new BigDecimal(value).stripTrailingZeros();
+      if (decimal.scale() > 0) {
+        return null;
+      }
+      return decimal.intValueExact();
+    } catch (ArithmeticException | NumberFormatException e) {
       return null;
     }
   }
