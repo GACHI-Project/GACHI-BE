@@ -5,6 +5,7 @@ import com.gachi.be.domain.checklist.entity.Checklist;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 public record CalendarEventResponse(
     Long eventId,
@@ -16,15 +17,20 @@ public record CalendarEventResponse(
     String calendarColor,
     String newsletterTitle,
     List<ChecklistItem> checklists) {
-  public record ChecklistItem(
+
+    private static final String DEFAULT_LANGUAGE = "KO";
+
+    public record ChecklistItem(
       Long checklistId, String content, String detail, boolean isCompleted) {
-    public static ChecklistItem from(Checklist c) {
-      return new ChecklistItem(c.getId(), c.getContent(), c.getDetail(), c.isCompleted());
+
+        public static ChecklistItem from(Checklist c, String language) {
+          String content = i18nText(c.getContentI18n(), language, c.getContent());
+          return new ChecklistItem(c.getId(), c.getContent(), c.getDetail(), c.isCompleted());
     }
   }
 
   public static CalendarEventResponse of(
-      CalendarEvent event, String newsletterTitle, List<Checklist> checklists, LocalDate today) {
+      CalendarEvent event,  String newsletterTitle, List<Checklist> checklists, LocalDate today, String language) {
 
     ZoneOffset kst = ZoneOffset.ofHours(9);
     String startAtStr = event.getStartAt().withOffsetSameInstant(kst).toString();
@@ -39,11 +45,15 @@ public record CalendarEventResponse(
     int dDay = (int) (eventDate.toEpochDay() - today.toEpochDay());
 
     List<ChecklistItem> checklistItems =
-        checklists == null ? List.of() : checklists.stream().map(ChecklistItem::from).toList();
+        checklists == null
+            ? List.of()
+            : checklists.stream().map(c -> ChecklistItem.from(c, language)).toList();
+
+    String title = i18nText(event.getTitleI18n(), language, event.getTitle());
 
     return new CalendarEventResponse(
         event.getId(),
-        event.getTitle(),
+        title,
         startAtStr,
         endAtStr,
         dDay,
@@ -52,4 +62,18 @@ public record CalendarEventResponse(
         newsletterTitle,
         checklistItems);
   }
+  private static String i18nText(Map<String, String> values, String language, String fallback) {
+        if (values == null || values.isEmpty()) {
+            return fallback;
+        }
+        String text = values.get(language);
+        if (text != null && !text.isBlank()) {
+            return text;
+        }
+        text = values.get(DEFAULT_LANGUAGE);
+        if (text != null && !text.isBlank()) {
+            return text;
+        }
+        return fallback;
+    }
 }
