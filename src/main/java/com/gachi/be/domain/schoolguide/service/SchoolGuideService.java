@@ -30,4 +30,6 @@ public interface SchoolGuideService {
 
   /** FAQ 삭제 */
   void deleteFaq(Long faqId);
+
+  void backfillI18n();
 }

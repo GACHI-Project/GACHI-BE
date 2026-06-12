@@ -123,4 +123,13 @@ public class SchoolGuideController {
     schoolGuideService.deleteFaq(faqId);
     return ApiResponse.success(SuccessCode.SCHOOL_GUIDE_DELETE_SUCCESS, null);
   }
+
+  @Operation(
+      summary = "[개발자용 1회성] FAQ i18n backfill",
+      description = "기존 FAQ question_i18n/answer_i18n 일괄 번역. 최초 1회만 실행.")
+  @PostMapping("/faqs/admin/backfill-i18n")
+  public ApiResponse<Void> backfillI18n() {
+    schoolGuideService.backfillI18n();
+    return ApiResponse.success(SuccessCode.SCHOOL_GUIDE_UPDATE_SUCCESS, null);
+  }
 }

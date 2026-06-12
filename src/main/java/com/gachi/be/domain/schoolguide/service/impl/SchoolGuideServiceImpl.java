@@ -182,4 +182,20 @@ public class SchoolGuideServiceImpl implements SchoolGuideService {
     }
     return result;
   }
+
+  /** FAQ i18n 일괄 번역 채우기 (최초 1회만 실행). */
+  @Override
+  @Transactional
+  public void backfillI18n() {
+    List<SchoolGuide> faqs = schoolGuideRepository.findAll();
+    for (SchoolGuide faq : faqs) {
+      if (faq.getQuestionI18n() == null || faq.getQuestionI18n().isEmpty()) {
+        faq.updateQuestion(faq.getQuestion(), translateToAllLanguages(faq.getQuestion()));
+      }
+      if (faq.getAnswerI18n() == null || faq.getAnswerI18n().isEmpty()) {
+        faq.updateAnswer(faq.getAnswer(), translateToAllLanguages(faq.getAnswer()));
+      }
+    }
+    log.info("[SchoolGuide] i18n backfill 완료. count={}", faqs.size());
+  }
 }
