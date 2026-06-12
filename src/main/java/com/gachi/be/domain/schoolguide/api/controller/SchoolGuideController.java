@@ -53,8 +53,8 @@ public class SchoolGuideController {
   @GetMapping("/faqs/popular")
   public ApiResponse<SchoolGuidePopularResponse> getPopularFaqs(
       @AuthenticationPrincipal Long userId) {
-      return ApiResponse.success(
-          SuccessCode.SCHOOL_GUIDE_POPULAR_SUCCESS, schoolGuideService.getPopularFaqs(userId));
+    return ApiResponse.success(
+        SuccessCode.SCHOOL_GUIDE_POPULAR_SUCCESS, schoolGuideService.getPopularFaqs(userId));
   }
 
   /** FAQ 목록 조회 (카테고리 필터 or 검색). */
@@ -72,16 +72,17 @@ public class SchoolGuideController {
   public ApiResponse<SchoolGuideListResponse> getFaqs(
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "카테고리 필터") @RequestParam(required = false)
-      SchoolGuideCategory category,
+          SchoolGuideCategory category,
       @Parameter(description = "질문 검색 키워드") @RequestParam(required = false) String search) {
 
-      if (category != null && search != null && !search.isBlank()) {
-          throw new com.gachi.be.global.exception.BusinessException(
-              com.gachi.be.global.code.ErrorCode.SCHOOL_GUIDE_FILTER_CONFLICT);
-      }
+    if (category != null && search != null && !search.isBlank()) {
+      throw new com.gachi.be.global.exception.BusinessException(
+          com.gachi.be.global.code.ErrorCode.SCHOOL_GUIDE_FILTER_CONFLICT);
+    }
 
-      return ApiResponse.success(
-          SuccessCode.SCHOOL_GUIDE_LIST_SUCCESS, schoolGuideService.getFaqs(userId, category, search));
+    return ApiResponse.success(
+        SuccessCode.SCHOOL_GUIDE_LIST_SUCCESS,
+        schoolGuideService.getFaqs(userId, category, search));
   }
 
   /** FAQ 상세 조회 + weekly_view_count 증가. */
@@ -92,8 +93,8 @@ public class SchoolGuideController {
   public ApiResponse<SchoolGuideDetailResponse> getFaqDetail(
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "FAQ ID", required = true) @PathVariable Long faqId) {
-      return ApiResponse.success(
-          SuccessCode.SCHOOL_GUIDE_DETAIL_SUCCESS, schoolGuideService.getFaqDetail(userId, faqId));
+    return ApiResponse.success(
+        SuccessCode.SCHOOL_GUIDE_DETAIL_SUCCESS, schoolGuideService.getFaqDetail(userId, faqId));
   }
 
   /** FAQ 등록 (관리용). */

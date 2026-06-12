@@ -10,7 +10,6 @@ import com.gachi.be.domain.calendar.service.CalendarQueryService;
 import com.gachi.be.domain.checklist.entity.Checklist;
 import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
-import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.repository.UserRepository;
@@ -28,7 +27,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -129,10 +127,10 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
 
     List<CalendarWeeklyResponse.DayEvents> days = new ArrayList<>();
     for (LocalDate d : sortedDates) {
-       List<CalendarEvent> dayEvents = groupedByDate.get(d);
-       if (dayEvents == null || dayEvents.isEmpty()) {
-           continue;
-       }
+      List<CalendarEvent> dayEvents = groupedByDate.get(d);
+      if (dayEvents == null || dayEvents.isEmpty()) {
+        continue;
+      }
 
       // 각 일정에 체크리스트 붙이기
       List<CalendarEventResponse> eventResponses =
@@ -200,7 +198,8 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
   }
 
   /** 일정 엔티티 → 응답 DTO 변환 (체크리스트 조회 포함). */
-  private CalendarEventResponse toEventResponse(CalendarEvent event, LocalDate today, String language) {
+  private CalendarEventResponse toEventResponse(
+      CalendarEvent event, LocalDate today, String language) {
     // 가정통신문 제목 조회
     String newsletterTitle =
         newsletterRepository
@@ -215,26 +214,28 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
 
     return CalendarEventResponse.of(event, newsletterTitle, checklists, today, language);
   }
+
   private String resolveUserLanguage(Long userId) {
-      return userRepository
-          .findById(userId)
-          .map(User::getLanguageCode)
-          .filter(code -> code != null && !code.isBlank())
-          .orElse(DEFAULT_LANGUAGE);
+    return userRepository
+        .findById(userId)
+        .map(User::getLanguageCode)
+        .filter(code -> code != null && !code.isBlank())
+        .orElse(DEFAULT_LANGUAGE);
   }
+
   private String i18nText(Map<String, String> values, String language, String fallback) {
-      if (values == null || values.isEmpty()) {
-          return fallback;
-      }
-      String text = values.get(language);
-      if (text != null && !text.isBlank()) {
-          return text;
-      }
-      text = values.get(DEFAULT_LANGUAGE);
-      if (text != null && !text.isBlank()) {
-          return text;
-      }
+    if (values == null || values.isEmpty()) {
       return fallback;
+    }
+    String text = values.get(language);
+    if (text != null && !text.isBlank()) {
+      return text;
+    }
+    text = values.get(DEFAULT_LANGUAGE);
+    if (text != null && !text.isBlank()) {
+      return text;
+    }
+    return fallback;
   }
 
   /** 주별 날짜 정렬 순서 생성 */

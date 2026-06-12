@@ -90,7 +90,7 @@ public class NewsletterAiAnalyzer {
    * checklistItems[].content,detail/conversationTopics[].topic)를 모아 id를 부여하고, KO가 아니면 Papago로 1차 번역
    * → AI 서버로 2차 검증을 거쳐 최종 텍스트 맵을 반환한다.
    *
-   * language=KO이거나 번역 대상 텍스트가 없으면 한국어 원본을 그대로 반환한다 (id → 원본 텍스트).
+   * <p>language=KO이거나 번역 대상 텍스트가 없으면 한국어 원본을 그대로 반환한다 (id → 원본 텍스트).
    */
   private Map<String, String> translateAndRefineDisplayTexts(
       String originalText,
@@ -176,58 +176,68 @@ public class NewsletterAiAnalyzer {
   }
 
   private List<SavedExtractedItem> saveExtractedItems(
-      Long newsletterId, Long userId, List<ExtractedItem> items, Map<String, String> displayTexts, String language) {
-      if (items == null || items.isEmpty()) {
-          log.warn("[AiAnalyzer] AI 서버 항목 추출 결과 없음. newsletterId={}", newsletterId);
-          return List.of();
-      }
+      Long newsletterId,
+      Long userId,
+      List<ExtractedItem> items,
+      Map<String, String> displayTexts,
+      String language) {
+    if (items == null || items.isEmpty()) {
+      log.warn("[AiAnalyzer] AI 서버 항목 추출 결과 없음. newsletterId={}", newsletterId);
+      return List.of();
+    }
 
-      List<Checklist> entitiesToSave = new ArrayList<>();
-      List<Integer> ownerItemIndex = new ArrayList<>();
+    List<Checklist> entitiesToSave = new ArrayList<>();
+    List<Integer> ownerItemIndex = new ArrayList<>();
 
-      for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
-          ExtractedItem item = items.get(itemIndex);
-          if (item.checklistItems() == null || item.checklistItems().isEmpty()) {
-              continue;
-          }
-          for (int checklistIndex = 0;
-               checklistIndex < item.checklistItems().size();
-               checklistIndex++) {
-              AiNewsletterClient.ChecklistItemDto checklistItem =
-                  item.checklistItems().get(checklistIndex);
-              if (checklistItem.content() == null || checklistItem.content().isBlank()) {
-                  continue; // 빈 content는 저장하지 않음
-              }
-              entitiesToSave.add(
-                    toChecklist(
-                        newsletterId, userId, checklistItem, itemIndex, checklistIndex, displayTexts, language));
-              ownerItemIndex.add(itemIndex);
-          }
+    for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+      ExtractedItem item = items.get(itemIndex);
+      if (item.checklistItems() == null || item.checklistItems().isEmpty()) {
+        continue;
       }
+      for (int checklistIndex = 0;
+          checklistIndex < item.checklistItems().size();
+          checklistIndex++) {
+        AiNewsletterClient.ChecklistItemDto checklistItem =
+            item.checklistItems().get(checklistIndex);
+        if (checklistItem.content() == null || checklistItem.content().isBlank()) {
+          continue; // 빈 content는 저장하지 않음
+        }
+        entitiesToSave.add(
+            toChecklist(
+                newsletterId,
+                userId,
+                checklistItem,
+                itemIndex,
+                checklistIndex,
+                displayTexts,
+                language));
+        ownerItemIndex.add(itemIndex);
+      }
+    }
 
-      if (!entitiesToSave.isEmpty()) {
-          checklistRepository.saveAll(entitiesToSave);
-          log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", entitiesToSave.size());
-      }
+    if (!entitiesToSave.isEmpty()) {
+      checklistRepository.saveAll(entitiesToSave);
+      log.debug("[AiAnalyzer] AI 서버 추출 체크리스트 {}개 저장 완료.", entitiesToSave.size());
+    }
 
-      Map<Integer, List<Checklist>> checklistsByItemIndex = new LinkedHashMap<>();
-      for (int i = 0; i < entitiesToSave.size(); i++) {
-          checklistsByItemIndex
-              .computeIfAbsent(ownerItemIndex.get(i), k -> new ArrayList<>())
-              .add(entitiesToSave.get(i));
-      }
+    Map<Integer, List<Checklist>> checklistsByItemIndex = new LinkedHashMap<>();
+    for (int i = 0; i < entitiesToSave.size(); i++) {
+      checklistsByItemIndex
+          .computeIfAbsent(ownerItemIndex.get(i), k -> new ArrayList<>())
+          .add(entitiesToSave.get(i));
+    }
 
-      List<SavedExtractedItem> result = new ArrayList<>();
-      for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
-          ExtractedItem item = items.get(itemIndex);
-          if (item.title() == null || item.title().isBlank()) {
-              // 제목 없는 일정은 캘린더 preview 대상에서 제외 (체크리스트는 이미 저장됨)
-              continue;
-          }
-          List<Checklist> linkedChecklists = checklistsByItemIndex.getOrDefault(itemIndex, List.of());
-          result.add(new SavedExtractedItem(itemIndex, item, linkedChecklists));
+    List<SavedExtractedItem> result = new ArrayList<>();
+    for (int itemIndex = 0; itemIndex < items.size(); itemIndex++) {
+      ExtractedItem item = items.get(itemIndex);
+      if (item.title() == null || item.title().isBlank()) {
+        // 제목 없는 일정은 캘린더 preview 대상에서 제외 (체크리스트는 이미 저장됨)
+        continue;
       }
-      return result;
+      List<Checklist> linkedChecklists = checklistsByItemIndex.getOrDefault(itemIndex, List.of());
+      result.add(new SavedExtractedItem(itemIndex, item, linkedChecklists));
+    }
+    return result;
   }
 
   private Checklist toChecklist(
@@ -254,18 +264,21 @@ public class NewsletterAiAnalyzer {
     }
     Map<String, String> detailI18n;
     if (detail == null) {
-        detailI18n = Map.of();
+      detailI18n = Map.of();
     } else {
-        Map<String, String> base = new LinkedHashMap<>(
-            trimI18nValues(checklistItem.detailI18n(), CHECKLIST_TEXT_MAX_LENGTH));
-        String normalizedLanguage = (language == null || language.isBlank()) ? "KO" : language.trim().toUpperCase();
-        if (!"KO".equals(normalizedLanguage)) {
-            String translatedDetail = displayTexts.get(detailKey);
-            if (translatedDetail != null && !translatedDetail.isBlank()) {
-                base.put(normalizedLanguage, trimToMax(compact(translatedDetail), CHECKLIST_TEXT_MAX_LENGTH));
-            }
+      Map<String, String> base =
+          new LinkedHashMap<>(
+              trimI18nValues(checklistItem.detailI18n(), CHECKLIST_TEXT_MAX_LENGTH));
+      String normalizedLanguage =
+          (language == null || language.isBlank()) ? "KO" : language.trim().toUpperCase();
+      if (!"KO".equals(normalizedLanguage)) {
+        String translatedDetail = displayTexts.get(detailKey);
+        if (translatedDetail != null && !translatedDetail.isBlank()) {
+          base.put(
+              normalizedLanguage, trimToMax(compact(translatedDetail), CHECKLIST_TEXT_MAX_LENGTH));
         }
-        detailI18n = base;
+      }
+      detailI18n = base;
     }
 
     return Checklist.builder()

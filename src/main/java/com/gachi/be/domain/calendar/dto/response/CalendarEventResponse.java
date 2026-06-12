@@ -18,20 +18,24 @@ public record CalendarEventResponse(
     String newsletterTitle,
     List<ChecklistItem> checklists) {
 
-    private static final String DEFAULT_LANGUAGE = "KO";
+  private static final String DEFAULT_LANGUAGE = "KO";
 
-    public record ChecklistItem(
+  public record ChecklistItem(
       Long checklistId, String content, String detail, boolean isCompleted) {
 
-      public static ChecklistItem from(Checklist c, String language) {
-          String content = i18nText(c.getContentI18n(), language, c.getContent());
-          String detail = i18nText(c.getDetailI18n(), language, c.getDetail());
-          return new ChecklistItem(c.getId(), content, detail, c.isCompleted());
-      }
+    public static ChecklistItem from(Checklist c, String language) {
+      String content = i18nText(c.getContentI18n(), language, c.getContent());
+      String detail = i18nText(c.getDetailI18n(), language, c.getDetail());
+      return new ChecklistItem(c.getId(), content, detail, c.isCompleted());
+    }
   }
 
   public static CalendarEventResponse of(
-      CalendarEvent event,  String newsletterTitle, List<Checklist> checklists, LocalDate today, String language) {
+      CalendarEvent event,
+      String newsletterTitle,
+      List<Checklist> checklists,
+      LocalDate today,
+      String language) {
 
     ZoneOffset kst = ZoneOffset.ofHours(9);
     String startAtStr = event.getStartAt().withOffsetSameInstant(kst).toString();
@@ -63,18 +67,19 @@ public record CalendarEventResponse(
         newsletterTitle,
         checklistItems);
   }
+
   private static String i18nText(Map<String, String> values, String language, String fallback) {
-        if (values == null || values.isEmpty()) {
-            return fallback;
-        }
-        String text = values.get(language);
-        if (text != null && !text.isBlank()) {
-            return text;
-        }
-        text = values.get(DEFAULT_LANGUAGE);
-        if (text != null && !text.isBlank()) {
-            return text;
-        }
-        return fallback;
+    if (values == null || values.isEmpty()) {
+      return fallback;
     }
+    String text = values.get(language);
+    if (text != null && !text.isBlank()) {
+      return text;
+    }
+    text = values.get(DEFAULT_LANGUAGE);
+    if (text != null && !text.isBlank()) {
+      return text;
+    }
+    return fallback;
+  }
 }

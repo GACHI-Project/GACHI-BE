@@ -13,8 +13,8 @@ public class SchoolGuidePopularResponse {
   private List<PopularItem> items;
 
   public static SchoolGuidePopularResponse of(List<SchoolGuide> faqs, String language) {
-      List<PopularItem> items = faqs.stream().map(faq -> PopularItem.of(faq, language)).toList();
-      return SchoolGuidePopularResponse.builder().items(items).build();
+    List<PopularItem> items = faqs.stream().map(faq -> PopularItem.of(faq, language)).toList();
+    return SchoolGuidePopularResponse.builder().items(items).build();
   }
 
   @Getter
@@ -24,10 +24,10 @@ public class SchoolGuidePopularResponse {
     private String question;
 
     public static PopularItem of(SchoolGuide faq, String language) {
-        return PopularItem.builder()
-            .faqId(faq.getId())
-            .question(I18nTextResolver.resolve(faq.getQuestionI18n(), language, faq.getQuestion()))
-            .build();
+      return PopularItem.builder()
+          .faqId(faq.getId())
+          .question(I18nTextResolver.resolve(faq.getQuestionI18n(), language, faq.getQuestion()))
+          .build();
     }
   }
 }

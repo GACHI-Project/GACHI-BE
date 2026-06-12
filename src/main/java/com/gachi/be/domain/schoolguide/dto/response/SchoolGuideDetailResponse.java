@@ -16,11 +16,11 @@ public class SchoolGuideDetailResponse {
   private String answer;
 
   public static SchoolGuideDetailResponse of(SchoolGuide faq, String language) {
-      return SchoolGuideDetailResponse.builder()
-          .faqId(faq.getId())
-          .category(faq.getCategory())
-          .question(I18nTextResolver.resolve(faq.getQuestionI18n(), language, faq.getQuestion()))
-          .answer(I18nTextResolver.resolve(faq.getAnswerI18n(), language, faq.getAnswer()))
-          .build();
+    return SchoolGuideDetailResponse.builder()
+        .faqId(faq.getId())
+        .category(faq.getCategory())
+        .question(I18nTextResolver.resolve(faq.getQuestionI18n(), language, faq.getQuestion()))
+        .answer(I18nTextResolver.resolve(faq.getAnswerI18n(), language, faq.getAnswer()))
+        .build();
   }
 }

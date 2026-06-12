@@ -15,8 +15,9 @@ public class SchoolGuideListResponse {
   private List<SchoolGuideItem> items;
 
   public static SchoolGuideListResponse of(List<SchoolGuide> faqs, String language) {
-      List<SchoolGuideItem> items = faqs.stream().map(faq -> SchoolGuideItem.of(faq, language)).toList();
-      return SchoolGuideListResponse.builder().totalCount(items.size()).items(items).build();
+    List<SchoolGuideItem> items =
+        faqs.stream().map(faq -> SchoolGuideItem.of(faq, language)).toList();
+    return SchoolGuideListResponse.builder().totalCount(items.size()).items(items).build();
   }
 
   @Getter
@@ -27,11 +28,11 @@ public class SchoolGuideListResponse {
     private String question;
 
     public static SchoolGuideItem of(SchoolGuide faq, String language) {
-        return SchoolGuideItem.builder()
-            .faqId(faq.getId())
-            .category(faq.getCategory())
-            .question(I18nTextResolver.resolve(faq.getQuestionI18n(), language, faq.getQuestion()))
-            .build();
+      return SchoolGuideItem.builder()
+          .faqId(faq.getId())
+          .category(faq.getCategory())
+          .question(I18nTextResolver.resolve(faq.getQuestionI18n(), language, faq.getQuestion()))
+          .build();
     }
   }
 }

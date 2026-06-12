@@ -65,13 +65,13 @@ public class SchoolGuide {
       Map<String, String> questionI18n,
       String answer,
       Map<String, String> answerI18n) {
-      this.category = category;
-      this.question = question;
-      this.questionI18n =
-          questionI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(questionI18n);
-      this.answer = answer;
-      this.answerI18n = answerI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(answerI18n);
-      this.weeklyViewCount = 0;
+    this.category = category;
+    this.question = question;
+    this.questionI18n =
+        questionI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(questionI18n);
+    this.answer = answer;
+    this.answerI18n = answerI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(answerI18n);
+    this.weeklyViewCount = 0;
   }
 
   @PrePersist
@@ -95,14 +95,15 @@ public class SchoolGuide {
 
   /** 질문 수정 */
   public void updateQuestion(String question, Map<String, String> questionI18n) {
-      this.question = question;
-      this.questionI18n =
-          questionI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(questionI18n);
+    this.question = question;
+    this.questionI18n =
+        questionI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(questionI18n);
   }
+
   /** 답변 수정 */
   public void updateAnswer(String answer, Map<String, String> answerI18n) {
-      this.answer = answer;
-      this.answerI18n = answerI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(answerI18n);
+    this.answer = answer;
+    this.answerI18n = answerI18n == null ? new LinkedHashMap<>() : new LinkedHashMap<>(answerI18n);
   }
 
   /** 카테고리 수정 */
