@@ -261,6 +261,7 @@ public class NewsletterAiAnalyzer {
         .content(content)
         .contentI18n(trimI18nValues(checklistItem.contentI18n(), CHECKLIST_TEXT_MAX_LENGTH))
         .detail(detail)
+        .detailI18n(trimI18nValues(checklistItem.detailI18n(), CHECKLIST_TEXT_MAX_LENGTH))
         .targetDate(null) // 체크리스트는 날짜를 갖지 않음 (일정의 날짜를 따라감)
         .targetDateLabel(null)
         .build();
