@@ -151,11 +151,12 @@ public class ChecklistServiceImpl implements ChecklistService {
         checklistId,
         checklist.getType());
   }
-    private String resolveUserLanguage(Long userId) {
-        return userRepository
-            .findById(userId)
-            .map(User::getLanguageCode)
-            .filter(code -> code != null && !code.isBlank())
-            .orElse(I18nTextResolver.DEFAULT_LANGUAGE);
-    }
+
+  private String resolveUserLanguage(Long userId) {
+    return userRepository
+        .findById(userId)
+        .map(User::getLanguageCode)
+        .filter(code -> code != null && !code.isBlank())
+        .orElse(I18nTextResolver.DEFAULT_LANGUAGE);
+  }
 }

@@ -60,6 +60,9 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+
+    systemProperty 'http.keepAlive', 'false'
+    systemProperty 'jdk.httpclient.keepalive.timeout', '0'
 }
 
 spotless {
