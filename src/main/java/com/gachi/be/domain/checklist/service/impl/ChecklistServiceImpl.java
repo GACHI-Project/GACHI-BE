@@ -10,8 +10,11 @@ import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.checklist.service.ChecklistService;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
+import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
+import com.gachi.be.global.util.I18nTextResolver;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -32,6 +35,7 @@ public class ChecklistServiceImpl implements ChecklistService {
   private final ChecklistRepository checklistRepository;
   private final CalendarEventRepository calendarEventRepository;
   private final NewsletterRepository newsletterRepository;
+  private final UserRepository userRepository;
   private static final ZoneId KST_ZONE = ZoneId.of("Asia/Seoul");
   private static final ZoneOffset KST_OFFSET = ZoneOffset.ofHours(9);
 
@@ -39,6 +43,7 @@ public class ChecklistServiceImpl implements ChecklistService {
   @Override
   @Transactional(readOnly = true)
   public ChecklistTodayResponse getTodayChecklists(Long userId) {
+    String language = resolveUserLanguage(userId);
 
     // KST 오늘 날짜 범위 계산
     LocalDate todayKst = LocalDate.now(KST_ZONE);
@@ -93,7 +98,7 @@ public class ChecklistServiceImpl implements ChecklistService {
                   CalendarEvent linkedEvent = eventMap.get(c.getCalendarEventId());
                   String childName = linkedEvent != null ? linkedEvent.getChildName() : null;
 
-                  return ChecklistTodayItem.of(c, newsletterTitle, childName);
+                  return ChecklistTodayItem.of(c, newsletterTitle, childName, language);
                 })
             .toList();
 
@@ -145,5 +150,13 @@ public class ChecklistServiceImpl implements ChecklistService {
         userId,
         checklistId,
         checklist.getType());
+  }
+
+  private String resolveUserLanguage(Long userId) {
+    return userRepository
+        .findById(userId)
+        .map(User::getLanguageCode)
+        .filter(code -> code != null && !code.isBlank())
+        .orElse(I18nTextResolver.DEFAULT_LANGUAGE);
   }
 }
