@@ -98,22 +98,28 @@ public class ChatServiceImpl implements ChatService {
               newsletter.getOriginalText());
     }
 
-    // 세션 대화 범위 검증.
-    // 이미 다른 범위(GENERAL ↔ DOCUMENT, 또는 다른 문서)로 시작된 세션이면 히스토리가 오염되므로 거부한다.
+    // 세션 대화 범위 검증을 GET+SET(check-then-act)에서 원자적 바인딩 한 번으로 변경.
+    // 기존에는 동일 sessionId로 서로 다른 chatType 요청이 동시에 들어오면
+    // 둘 다 boundScope == null을 통과해 히스토리가 섞일 수 있었다(TOCTOU).
     String requestScope = buildSessionScope(chatType, documentNewsletterId);
-    String boundScope = chatRedisService.getSessionScope(sessionId);
-    if (boundScope != null && !boundScope.equals(requestScope)) {
-      log.warn(
-          "[ChatService] 세션 대화 범위 불일치. sessionId={}, bound={}, request={}",
-          sessionId,
-          boundScope,
-          requestScope);
-      throw new BusinessException(ErrorCode.CHAT_SESSION_SCOPE_MISMATCH);
+    ChatRedisService.SessionScopeResult scopeResult =
+        chatRedisService.bindSessionScope(sessionId, requestScope);
+
+    if (scopeResult == ChatRedisService.SessionScopeResult.MISMATCH) {
+        log.warn(
+            "[ChatService] 세션 대화 범위 불일치. sessionId={}, request={}", sessionId, requestScope);
+        throw new BusinessException(ErrorCode.CHAT_SESSION_SCOPE_MISMATCH);
     }
 
     // Redis에서 이전 히스토리 조회
-    List<Map<String, String>> history = chatRedisService.getHistory(sessionId);
-
+    List<Map<String, String>> history;
+    if (scopeResult == ChatRedisService.SessionScopeResult.UNAVAILABLE) {
+        log.warn(
+            "[ChatService] 세션 범위를 판별할 수 없어 히스토리 없이 처리합니다. sessionId={}", sessionId);
+        history = List.of();
+    } else {
+        history = chatRedisService.getHistory(sessionId);
+    }
     log.info(
         "[ChatService] 채팅 요청. userId={}, sessionId={}, chatType={}, newsletterId={},"
             + " historySize={}",
@@ -133,10 +139,9 @@ public class ChatServiceImpl implements ChatService {
         CHAT_TYPE_DOCUMENT.equals(chatType)
             ? ChatRedisService.MAX_DOCUMENT_MESSAGES
             : ChatRedisService.MAX_MESSAGES;
-    // Redis 히스토리 업데이트 (유저 메시지 + AI 응답 추가)
-    chatRedisService.appendAndSave(sessionId, request.message(), reply);
 
-    chatRedisService.saveSessionScope(sessionId, requestScope);
+    // Redis 히스토리 업데이트 (유저 메시지 + AI 응답 추가)
+    chatRedisService.appendAndSave(sessionId, request.message(), reply, maxMessages);
 
     log.info("[ChatService] 채팅 응답 완료. userId={}, sessionId={}", userId, sessionId);
 

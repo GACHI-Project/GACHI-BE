@@ -33,6 +33,18 @@ public class ChatRedisService {
   // 히스토리를 10턴(메시지 20개)으로 더 짧게 유지한다.
   public static final int MAX_DOCUMENT_MESSAGES = 20;
 
+  // 세션 대화 범위 바인딩 결과.
+  // 기존에는 getSessionScope()가 "미바인딩"과 "Redis 조회 실패"를 둘 다 null로 반환해서
+  // 호출부가 구분할 수 없었고, 조회 실패 시 검증이 그냥 통과되는 문제가 있었다.
+  public enum SessionScopeResult {
+      /** 이번 요청 범위로 바인딩 완료 (신규 바인딩 또는 동일 범위 재사용). */
+      BOUND,
+      /** 이미 다른 범위로 바인딩된 세션. 요청을 거부해야 한다. */
+      MISMATCH,
+      /** Redis 장애 등으로 범위를 판별할 수 없음. 히스토리를 사용하지 말아야 한다. */
+      UNAVAILABLE
+  }
+
   /** 히스토리 전체 조회. */
   public List<Map<String, String>> getHistory(String sessionId) {
     String key = buildKey(sessionId);
@@ -60,12 +72,6 @@ public class ChatRedisService {
       log.error("[ChatRedis] 히스토리 파싱 실패. sessionId={}", sessionId, e);
       return new ArrayList<>();
     }
-  }
-
-  /** 유저 메시지 + AI 응답을 히스토리에 원자적으로 추가. */
-  public void appendAndSave(String sessionId, String userMessage, String assistantReply) {
-    // 상한값을 받는 오버로드로 위임. 기존 호출부는 그대로 동작
-    appendAndSave(sessionId, userMessage, assistantReply, MAX_MESSAGES);
   }
 
   // 히스토리 상한(maxMessages)을 지정할 수 있는 오버로드.
@@ -100,24 +106,58 @@ public class ChatRedisService {
     }
   }
 
-  public String getSessionScope(String sessionId) {
-    try {
-      return redisTemplate.opsForValue().get(buildScopeKey(sessionId));
-    } catch (Exception e) {
-      log.error("[ChatRedis] 세션 scope 조회 실패. sessionId={}", sessionId, e);
-      return null;
-    }
+  // 세션 대화 범위를 원자적으로 바인딩한다.
+  // 최초 바인딩은 Redis SETNX(setIfAbsent)로 처리하므로 동시 요청 중 하나만 성공한다.
+  /**
+   * 세션에 대화 범위를 바인딩하고 결과를 반환한다.
+   *
+   * 이미 같은 범위로 바인딩되어 있으면 TTL만 갱신하고 {@link SessionScopeResult#BOUND}를 반환한다. 다른 범위로 바인딩되어
+   * 있으면 {@link SessionScopeResult#MISMATCH}를 반환한다.
+   *
+   * @param scope "GENERAL" 또는 "DOCUMENT:{newsletterId}"
+   */
+  public SessionScopeResult bindSessionScope(String sessionId, String scope) {
+      String key = buildScopeKey(sessionId);
+
+      try {
+          // SETNX + TTL을 한 번의 명령으로 실행 → 최초 바인딩 경쟁을 Redis가 직렬화한다.
+          Boolean created = redisTemplate.opsForValue().setIfAbsent(key, scope, SESSION_TTL);
+          if (Boolean.TRUE.equals(created)) {
+              log.debug("[ChatRedis] 세션 scope 신규 바인딩. sessionId={}, scope={}", sessionId, scope);
+              return SessionScopeResult.BOUND;
+          }
+
+          String boundScope = redisTemplate.opsForValue().get(key);
+
+          // setIfAbsent 실패 직후 TTL 만료 등으로 키가 사라진 경우 → 다시 원자적으로 시도
+          if (boundScope == null) {
+              Boolean retried = redisTemplate.opsForValue().setIfAbsent(key, scope, SESSION_TTL);
+              return Boolean.TRUE.equals(retried)
+                  ? SessionScopeResult.BOUND
+                  : SessionScopeResult.MISMATCH;
+          }
+
+          if (!boundScope.equals(scope)) {
+              log.warn(
+                  "[ChatRedis] 세션 scope 불일치. sessionId={}, bound={}, request={}",
+                  sessionId,
+                  boundScope,
+                  scope);
+              return SessionScopeResult.MISMATCH;
+          }
+
+          // 같은 범위의 후속 요청 → TTL만 연장
+          redisTemplate.expire(key, SESSION_TTL);
+          return SessionScopeResult.BOUND;
+
+      } catch (Exception e) {
+          // 예외를 전파하면 Redis 장애 시 챗봇 전체가 죽는다.
+          // UNAVAILABLE을 반환하고, 호출부가 히스토리를 쓰지 않는 방식으로 안전하게 처리한다.
+          log.error("[ChatRedis] 세션 scope 바인딩 실패. sessionId={}, scope={}", sessionId, scope, e);
+          return SessionScopeResult.UNAVAILABLE;
+      }
   }
 
-  /** 세션에 대화 범위를 바인딩한다. 히스토리와 동일한 TTL로 갱신된다. */
-  public void saveSessionScope(String sessionId, String scope) {
-    try {
-      redisTemplate.opsForValue().set(buildScopeKey(sessionId), scope, SESSION_TTL);
-      log.debug("[ChatRedis] 세션 scope 저장. sessionId={}, scope={}", sessionId, scope);
-    } catch (Exception e) {
-      log.error("[ChatRedis] 세션 scope 저장 실패. sessionId={}, scope={}", sessionId, scope, e);
-    }
-  }
 
   private String buildKey(String sessionId) {
     return SESSION_KEY_PREFIX + sessionId;
