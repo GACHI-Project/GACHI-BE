@@ -241,6 +241,7 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     checklistRepository.deleteByNewsletterId(newsletterId);
     calendarEventRepository.deleteByNewsletterIdAndUserId(newsletterId, userId);
+    conversationTopicRepository.deleteByNewsletterId(newsletterId);
     newsletterCulturalGuideRepository.deleteByNewsletterId(newsletterId);
     Newsletter saved = findNewsletterById(newsletterId);
 
