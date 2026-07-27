@@ -106,19 +106,17 @@ public class ChatServiceImpl implements ChatService {
         chatRedisService.bindSessionScope(sessionId, requestScope);
 
     if (scopeResult == ChatRedisService.SessionScopeResult.MISMATCH) {
-        log.warn(
-            "[ChatService] 세션 대화 범위 불일치. sessionId={}, request={}", sessionId, requestScope);
-        throw new BusinessException(ErrorCode.CHAT_SESSION_SCOPE_MISMATCH);
+      log.warn("[ChatService] 세션 대화 범위 불일치. sessionId={}, request={}", sessionId, requestScope);
+      throw new BusinessException(ErrorCode.CHAT_SESSION_SCOPE_MISMATCH);
     }
 
     // Redis에서 이전 히스토리 조회
     List<Map<String, String>> history;
     if (scopeResult == ChatRedisService.SessionScopeResult.UNAVAILABLE) {
-        log.warn(
-            "[ChatService] 세션 범위를 판별할 수 없어 히스토리 없이 처리합니다. sessionId={}", sessionId);
-        history = List.of();
+      log.warn("[ChatService] 세션 범위를 판별할 수 없어 히스토리 없이 처리합니다. sessionId={}", sessionId);
+      history = List.of();
     } else {
-        history = chatRedisService.getHistory(sessionId);
+      history = chatRedisService.getHistory(sessionId);
     }
     log.info(
         "[ChatService] 채팅 요청. userId={}, sessionId={}, chatType={}, newsletterId={},"

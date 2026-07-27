@@ -37,12 +37,12 @@ public class ChatRedisService {
   // 기존에는 getSessionScope()가 "미바인딩"과 "Redis 조회 실패"를 둘 다 null로 반환해서
   // 호출부가 구분할 수 없었고, 조회 실패 시 검증이 그냥 통과되는 문제가 있었다.
   public enum SessionScopeResult {
-      /** 이번 요청 범위로 바인딩 완료 (신규 바인딩 또는 동일 범위 재사용). */
-      BOUND,
-      /** 이미 다른 범위로 바인딩된 세션. 요청을 거부해야 한다. */
-      MISMATCH,
-      /** Redis 장애 등으로 범위를 판별할 수 없음. 히스토리를 사용하지 말아야 한다. */
-      UNAVAILABLE
+    /** 이번 요청 범위로 바인딩 완료 (신규 바인딩 또는 동일 범위 재사용). */
+    BOUND,
+    /** 이미 다른 범위로 바인딩된 세션. 요청을 거부해야 한다. */
+    MISMATCH,
+    /** Redis 장애 등으로 범위를 판별할 수 없음. 히스토리를 사용하지 말아야 한다. */
+    UNAVAILABLE
   }
 
   /** 히스토리 전체 조회. */
@@ -111,53 +111,52 @@ public class ChatRedisService {
   /**
    * 세션에 대화 범위를 바인딩하고 결과를 반환한다.
    *
-   * 이미 같은 범위로 바인딩되어 있으면 TTL만 갱신하고 {@link SessionScopeResult#BOUND}를 반환한다. 다른 범위로 바인딩되어
-   * 있으면 {@link SessionScopeResult#MISMATCH}를 반환한다.
+   * <p>이미 같은 범위로 바인딩되어 있으면 TTL만 갱신하고 {@link SessionScopeResult#BOUND}를 반환한다. 다른 범위로 바인딩되어 있으면
+   * {@link SessionScopeResult#MISMATCH}를 반환한다.
    *
    * @param scope "GENERAL" 또는 "DOCUMENT:{newsletterId}"
    */
   public SessionScopeResult bindSessionScope(String sessionId, String scope) {
-      String key = buildScopeKey(sessionId);
+    String key = buildScopeKey(sessionId);
 
-      try {
-          // SETNX + TTL을 한 번의 명령으로 실행 → 최초 바인딩 경쟁을 Redis가 직렬화한다.
-          Boolean created = redisTemplate.opsForValue().setIfAbsent(key, scope, SESSION_TTL);
-          if (Boolean.TRUE.equals(created)) {
-              log.debug("[ChatRedis] 세션 scope 신규 바인딩. sessionId={}, scope={}", sessionId, scope);
-              return SessionScopeResult.BOUND;
-          }
-
-          String boundScope = redisTemplate.opsForValue().get(key);
-
-          // setIfAbsent 실패 직후 TTL 만료 등으로 키가 사라진 경우 → 다시 원자적으로 시도
-          if (boundScope == null) {
-              Boolean retried = redisTemplate.opsForValue().setIfAbsent(key, scope, SESSION_TTL);
-              return Boolean.TRUE.equals(retried)
-                  ? SessionScopeResult.BOUND
-                  : SessionScopeResult.MISMATCH;
-          }
-
-          if (!boundScope.equals(scope)) {
-              log.warn(
-                  "[ChatRedis] 세션 scope 불일치. sessionId={}, bound={}, request={}",
-                  sessionId,
-                  boundScope,
-                  scope);
-              return SessionScopeResult.MISMATCH;
-          }
-
-          // 같은 범위의 후속 요청 → TTL만 연장
-          redisTemplate.expire(key, SESSION_TTL);
-          return SessionScopeResult.BOUND;
-
-      } catch (Exception e) {
-          // 예외를 전파하면 Redis 장애 시 챗봇 전체가 죽는다.
-          // UNAVAILABLE을 반환하고, 호출부가 히스토리를 쓰지 않는 방식으로 안전하게 처리한다.
-          log.error("[ChatRedis] 세션 scope 바인딩 실패. sessionId={}, scope={}", sessionId, scope, e);
-          return SessionScopeResult.UNAVAILABLE;
+    try {
+      // SETNX + TTL을 한 번의 명령으로 실행 → 최초 바인딩 경쟁을 Redis가 직렬화한다.
+      Boolean created = redisTemplate.opsForValue().setIfAbsent(key, scope, SESSION_TTL);
+      if (Boolean.TRUE.equals(created)) {
+        log.debug("[ChatRedis] 세션 scope 신규 바인딩. sessionId={}, scope={}", sessionId, scope);
+        return SessionScopeResult.BOUND;
       }
-  }
 
+      String boundScope = redisTemplate.opsForValue().get(key);
+
+      // setIfAbsent 실패 직후 TTL 만료 등으로 키가 사라진 경우 → 다시 원자적으로 시도
+      if (boundScope == null) {
+        Boolean retried = redisTemplate.opsForValue().setIfAbsent(key, scope, SESSION_TTL);
+        return Boolean.TRUE.equals(retried)
+            ? SessionScopeResult.BOUND
+            : SessionScopeResult.MISMATCH;
+      }
+
+      if (!boundScope.equals(scope)) {
+        log.warn(
+            "[ChatRedis] 세션 scope 불일치. sessionId={}, bound={}, request={}",
+            sessionId,
+            boundScope,
+            scope);
+        return SessionScopeResult.MISMATCH;
+      }
+
+      // 같은 범위의 후속 요청 → TTL만 연장
+      redisTemplate.expire(key, SESSION_TTL);
+      return SessionScopeResult.BOUND;
+
+    } catch (Exception e) {
+      // 예외를 전파하면 Redis 장애 시 챗봇 전체가 죽는다.
+      // UNAVAILABLE을 반환하고, 호출부가 히스토리를 쓰지 않는 방식으로 안전하게 처리한다.
+      log.error("[ChatRedis] 세션 scope 바인딩 실패. sessionId={}, scope={}", sessionId, scope, e);
+      return SessionScopeResult.UNAVAILABLE;
+    }
+  }
 
   private String buildKey(String sessionId) {
     return SESSION_KEY_PREFIX + sessionId;
