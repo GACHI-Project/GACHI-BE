@@ -5,6 +5,9 @@ import com.gachi.be.domain.chat.dto.request.ChatMessageRequest;
 import com.gachi.be.domain.chat.dto.response.ChatMessageResponse;
 import com.gachi.be.domain.chat.service.ChatRedisService;
 import com.gachi.be.domain.chat.service.ChatService;
+import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
+import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
@@ -28,9 +31,14 @@ public class ChatServiceImpl implements ChatService {
   private final AiChatClient aiChatClient;
   private final ChatRedisService chatRedisService;
   private final UserRepository userRepository;
+  private final NewsletterRepository newsletterRepository;
 
-  // chatType 기본값: GENERAL (추후 DOCUMENT 추가 시 분기)
+  // chatType 기본값: GENERAL
   private static final String DEFAULT_CHAT_TYPE = "GENERAL";
+
+  private static final String CHAT_TYPE_GENERAL = "GENERAL";
+  private static final String CHAT_TYPE_DOCUMENT = "DOCUMENT";
+  private static final String SCOPE_DOCUMENT_PREFIX = "DOCUMENT:";
 
   // 응답 시간 KST 기준
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -51,33 +59,107 @@ public class ChatServiceImpl implements ChatService {
             .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     String language = user.getLanguageCode(); // String 타입
 
-    // chatType 기본값 처리
-    String chatType =
-        (request.chatType() != null && !request.chatType().isBlank())
-            ? request.chatType()
-            : DEFAULT_CHAT_TYPE;
+    // chatType 기본값 처리 + 대소문자 정규화 + 허용값 검증 추가
+    String chatType = normalizeChatType(request.chatType());
+
+    // DOCUMENT 모드 검증 및 문서 컨텍스트 구성.
+    // GENERAL이면 document는 null로 유지
+    AiChatClient.DocumentContext document = null;
+    Long documentNewsletterId = null;
+
+    if (CHAT_TYPE_DOCUMENT.equals(chatType)) {
+        if (request.newsletterId() == null) {
+            throw new BusinessException(ErrorCode.CHAT_NEWSLETTER_ID_REQUIRED);
+        }
+
+        Newsletter newsletter =
+            newsletterRepository
+                .findById(request.newsletterId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND));
+
+        // 소유권 검증 (다른 사용자의 문서 열람 차단. 존재 여부 노출을 막기 위해 동일 에러 사용)
+        if (!newsletter.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND);
+        }
+
+        // 분석이 끝나지 않았으면 본문이 없어 근거 없는 답변이 나갈 수 있으므로 차단
+        if (newsletter.getStatus() != NewsletterStatus.COMPLETED
+            || newsletter.getOriginalText() == null
+            || newsletter.getOriginalText().isBlank()) {
+            throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
+        }
+
+        documentNewsletterId = newsletter.getId();
+        document =
+            new AiChatClient.DocumentContext(
+                newsletter.getId(),
+                newsletter.getTitle(),
+                newsletter.getSummary(),
+                newsletter.getOriginalText());
+    }
+
+    // 세션 대화 범위 검증.
+    // 이미 다른 범위(GENERAL ↔ DOCUMENT, 또는 다른 문서)로 시작된 세션이면 히스토리가 오염되므로 거부한다.
+    String requestScope = buildSessionScope(chatType, documentNewsletterId);
+    String boundScope = chatRedisService.getSessionScope(sessionId);
+    if (boundScope != null && !boundScope.equals(requestScope)) {
+        log.warn(
+            "[ChatService] 세션 대화 범위 불일치. sessionId={}, bound={}, request={}",
+            sessionId,
+            boundScope,
+            requestScope);
+        throw new BusinessException(ErrorCode.CHAT_SESSION_SCOPE_MISMATCH);
+    }
 
     // Redis에서 이전 히스토리 조회
     List<Map<String, String>> history = chatRedisService.getHistory(sessionId);
 
     log.info(
-        "[ChatService] 채팅 요청. userId={}, sessionId={}, chatType={}, historySize={}",
+        "[ChatService] 채팅 요청. userId={}, sessionId={}, chatType={}, newsletterId={},"
+            + " historySize={}",
         userId,
         sessionId,
         chatType,
+        documentNewsletterId,
         history.size());
 
     // AI 서버 호출
-    String reply = aiChatClient.chat(request.message(), history, language, chatType);
+    String reply = aiChatClient.chat(request.message(), history, language, chatType, document);
 
     // AI 응답 시간 (KST)
     String sentAt = ZonedDateTime.now(KST).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
 
+    int maxMessages =
+        CHAT_TYPE_DOCUMENT.equals(chatType)
+            ? ChatRedisService.MAX_DOCUMENT_MESSAGES
+            : ChatRedisService.MAX_MESSAGES;
     // Redis 히스토리 업데이트 (유저 메시지 + AI 응답 추가)
     chatRedisService.appendAndSave(sessionId, request.message(), reply);
+
+    chatRedisService.saveSessionScope(sessionId, requestScope);
 
     log.info("[ChatService] 채팅 응답 완료. userId={}, sessionId={}", userId, sessionId);
 
     return new ChatMessageResponse(sessionId, reply, sentAt);
+  }
+
+  // chatType 정규화 및 검증. null/blank는 GENERAL로 간주한다.
+  private String normalizeChatType(String rawChatType) {
+      if (rawChatType == null || rawChatType.isBlank()) {
+          return DEFAULT_CHAT_TYPE;
+      }
+      String normalized = rawChatType.trim().toUpperCase();
+      if (!CHAT_TYPE_GENERAL.equals(normalized) && !CHAT_TYPE_DOCUMENT.equals(normalized)) {
+          throw new BusinessException(ErrorCode.CHAT_TYPE_INVALID);
+      }
+      return normalized;
+  }
+
+  /** 세션에 바인딩할 대화 범위 문자열 생성. GENERAL: "GENERAL" / DOCUMENT: "DOCUMENT:{newsletterId}" */
+  private String buildSessionScope(String chatType, Long newsletterId) {
+      if (CHAT_TYPE_DOCUMENT.equals(chatType)) {
+          return SCOPE_DOCUMENT_PREFIX + newsletterId;
+      }
+      return CHAT_TYPE_GENERAL;
   }
 }
