@@ -43,7 +43,8 @@ public class AiChatClient {
       DocumentContext document) {
     try {
       String requestBody =
-          new ChatRequest(message, history, language, chatType, document));
+          objectMapper.writeValueAsString(
+              new ChatRequest(message, history, language, chatType, document));
 
       log.info(
           "[AiChatClient] 채팅 요청. language={}, chatType={}, historySize={}, newsletterId={},"

@@ -28,7 +28,7 @@ public class ChatRedisService {
   private static final String SCOPE_KEY_SUFFIX = ":scope";
   // 최대 20턴 = 메시지 40개 (유저+AI 각 1개)
   // LTRIM으로 최근 40개만 유지 → 원자적 처리
-  private static final int MAX_MESSAGES = 40;
+  public static final int MAX_MESSAGES = 40;
 
   // 히스토리를 10턴(메시지 20개)으로 더 짧게 유지한다.
   public static final int MAX_DOCUMENT_MESSAGES = 20;
