@@ -68,34 +68,34 @@ public class ChatServiceImpl implements ChatService {
     Long documentNewsletterId = null;
 
     if (CHAT_TYPE_DOCUMENT.equals(chatType)) {
-        if (request.newsletterId() == null) {
-            throw new BusinessException(ErrorCode.CHAT_NEWSLETTER_ID_REQUIRED);
-        }
+      if (request.newsletterId() == null) {
+        throw new BusinessException(ErrorCode.CHAT_NEWSLETTER_ID_REQUIRED);
+      }
 
-        Newsletter newsletter =
-            newsletterRepository
-                .findById(request.newsletterId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND));
+      Newsletter newsletter =
+          newsletterRepository
+              .findById(request.newsletterId())
+              .orElseThrow(() -> new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND));
 
-        // 소유권 검증 (다른 사용자의 문서 열람 차단. 존재 여부 노출을 막기 위해 동일 에러 사용)
-        if (!newsletter.getUserId().equals(userId)) {
-            throw new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND);
-        }
+      // 소유권 검증 (다른 사용자의 문서 열람 차단. 존재 여부 노출을 막기 위해 동일 에러 사용)
+      if (!newsletter.getUserId().equals(userId)) {
+        throw new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND);
+      }
 
-        // 분석이 끝나지 않았으면 본문이 없어 근거 없는 답변이 나갈 수 있으므로 차단
-        if (newsletter.getStatus() != NewsletterStatus.COMPLETED
-            || newsletter.getOriginalText() == null
-            || newsletter.getOriginalText().isBlank()) {
-            throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
-        }
+      // 분석이 끝나지 않았으면 본문이 없어 근거 없는 답변이 나갈 수 있으므로 차단
+      if (newsletter.getStatus() != NewsletterStatus.COMPLETED
+          || newsletter.getOriginalText() == null
+          || newsletter.getOriginalText().isBlank()) {
+        throw new BusinessException(ErrorCode.NEWSLETTER_NOT_COMPLETED);
+      }
 
-        documentNewsletterId = newsletter.getId();
-        document =
-            new AiChatClient.DocumentContext(
-                newsletter.getId(),
-                newsletter.getTitle(),
-                newsletter.getSummary(),
-                newsletter.getOriginalText());
+      documentNewsletterId = newsletter.getId();
+      document =
+          new AiChatClient.DocumentContext(
+              newsletter.getId(),
+              newsletter.getTitle(),
+              newsletter.getSummary(),
+              newsletter.getOriginalText());
     }
 
     // 세션 대화 범위 검증.
@@ -103,12 +103,12 @@ public class ChatServiceImpl implements ChatService {
     String requestScope = buildSessionScope(chatType, documentNewsletterId);
     String boundScope = chatRedisService.getSessionScope(sessionId);
     if (boundScope != null && !boundScope.equals(requestScope)) {
-        log.warn(
-            "[ChatService] 세션 대화 범위 불일치. sessionId={}, bound={}, request={}",
-            sessionId,
-            boundScope,
-            requestScope);
-        throw new BusinessException(ErrorCode.CHAT_SESSION_SCOPE_MISMATCH);
+      log.warn(
+          "[ChatService] 세션 대화 범위 불일치. sessionId={}, bound={}, request={}",
+          sessionId,
+          boundScope,
+          requestScope);
+      throw new BusinessException(ErrorCode.CHAT_SESSION_SCOPE_MISMATCH);
     }
 
     // Redis에서 이전 히스토리 조회
@@ -145,21 +145,21 @@ public class ChatServiceImpl implements ChatService {
 
   // chatType 정규화 및 검증. null/blank는 GENERAL로 간주한다.
   private String normalizeChatType(String rawChatType) {
-      if (rawChatType == null || rawChatType.isBlank()) {
-          return DEFAULT_CHAT_TYPE;
-      }
-      String normalized = rawChatType.trim().toUpperCase();
-      if (!CHAT_TYPE_GENERAL.equals(normalized) && !CHAT_TYPE_DOCUMENT.equals(normalized)) {
-          throw new BusinessException(ErrorCode.CHAT_TYPE_INVALID);
-      }
-      return normalized;
+    if (rawChatType == null || rawChatType.isBlank()) {
+      return DEFAULT_CHAT_TYPE;
+    }
+    String normalized = rawChatType.trim().toUpperCase();
+    if (!CHAT_TYPE_GENERAL.equals(normalized) && !CHAT_TYPE_DOCUMENT.equals(normalized)) {
+      throw new BusinessException(ErrorCode.CHAT_TYPE_INVALID);
+    }
+    return normalized;
   }
 
   /** 세션에 바인딩할 대화 범위 문자열 생성. GENERAL: "GENERAL" / DOCUMENT: "DOCUMENT:{newsletterId}" */
   private String buildSessionScope(String chatType, Long newsletterId) {
-      if (CHAT_TYPE_DOCUMENT.equals(chatType)) {
-          return SCOPE_DOCUMENT_PREFIX + newsletterId;
-      }
-      return CHAT_TYPE_GENERAL;
+    if (CHAT_TYPE_DOCUMENT.equals(chatType)) {
+      return SCOPE_DOCUMENT_PREFIX + newsletterId;
+    }
+    return CHAT_TYPE_GENERAL;
   }
 }

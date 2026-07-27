@@ -39,7 +39,10 @@ public class AiChatClient {
 
   /** AI 서버에 채팅 요청. */
   public String chat(
-      String message, List<Map<String, String>> history, String language, String chatType,
+      String message,
+      List<Map<String, String>> history,
+      String language,
+      String chatType,
       DocumentContext document) {
     try {
       String requestBody =
@@ -101,14 +104,19 @@ public class AiChatClient {
     }
     return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
   }
- // 문서 챗봇(DOCUMENT)에서 AI 서버로 보내는 문서 컨텍스트.
- // AI 서버 schemas.py의 ChatDocumentContext와 필드명이 1:1 대응
+
+  // 문서 챗봇(DOCUMENT)에서 AI 서버로 보내는 문서 컨텍스트.
+  // AI 서버 schemas.py의 ChatDocumentContext와 필드명이 1:1 대응
   public record DocumentContext(
-    Long newsletterId, String title, String summary, String originalText) {}
+      Long newsletterId, String title, String summary, String originalText) {}
 
   // AI 서버로 보내는 요청 body
   record ChatRequest(
-      String message, List<Map<String, String>> history, String language, String chatType, DocumentContext document) {}
+      String message,
+      List<Map<String, String>> history,
+      String language,
+      String chatType,
+      DocumentContext document) {}
 
   // AI 서버에서 받는 응답 body
   record ChatResponse(String reply) {}

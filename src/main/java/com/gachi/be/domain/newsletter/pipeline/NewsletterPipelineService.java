@@ -142,15 +142,15 @@ public class NewsletterPipelineService {
       // (문화 맥락은 부가 정보이고, 캘린더 preview 저장 실패 처리와 동일한 정책)
       failureStage = "CULTURAL_GUIDE";
       try {
-          log.debug("[Pipeline][STEP8] 문화 맥락 안내 선정 시작.");
-          newsletterCulturalGuideService.extractAndReplace(newsletterId, originalText);
-          log.debug("[Pipeline][STEP8] 문화 맥락 안내 선정 완료.");
+        log.debug("[Pipeline][STEP8] 문화 맥락 안내 선정 시작.");
+        newsletterCulturalGuideService.extractAndReplace(newsletterId, originalText);
+        log.debug("[Pipeline][STEP8] 문화 맥락 안내 선정 완료.");
       } catch (Exception e) {
-          log.warn(
-              "[Pipeline][STEP8] 문화 맥락 안내 선정 실패. 분석 결과는 그대로 유지합니다. newsletterId={}, error={}",
-              newsletterId,
-              e.getMessage(),
-              e);
+        log.warn(
+            "[Pipeline][STEP8] 문화 맥락 안내 선정 실패. 분석 결과는 그대로 유지합니다. newsletterId={}, error={}",
+            newsletterId,
+            e.getMessage(),
+            e);
       }
 
       log.info("[Pipeline] 파이프라인 완료. newsletterId={}", newsletterId);
