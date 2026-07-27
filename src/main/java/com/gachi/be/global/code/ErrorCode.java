@@ -255,6 +255,25 @@ public enum ErrorCode {
       "AI 서버 /ai/chat/messages 호출 실패",
       ErrorLogLevel.ERROR),
 
+  CHAT_TYPE_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "CHAT4001",
+      "지원하지 않는 채팅 타입입니다. (GENERAL, DOCUMENT 중 하나여야 합니다.)",
+      "chatType 값이 GENERAL/DOCUMENT가 아님",
+      ErrorLogLevel.WARN),
+  CHAT_NEWSLETTER_ID_REQUIRED(
+      HttpStatus.BAD_REQUEST,
+      "CHAT4002",
+      "문서 챗봇은 newsletterId가 필요합니다.",
+      "chatType=DOCUMENT 요청에 newsletterId 누락",
+      ErrorLogLevel.WARN),
+  CHAT_SESSION_SCOPE_MISMATCH(
+      HttpStatus.BAD_REQUEST,
+      "CHAT4003",
+      "이미 다른 대화가 진행 중인 세션입니다. 새 대화로 시작해 주세요.",
+      "세션에 바인딩된 대화 범위(GENERAL/DOCUMENT:{newsletterId})와 요청 범위 불일치",
+      ErrorLogLevel.WARN),
+
   SCHOOL_GUIDE_NOT_FOUND(
       HttpStatus.NOT_FOUND,
       "SG4041",
