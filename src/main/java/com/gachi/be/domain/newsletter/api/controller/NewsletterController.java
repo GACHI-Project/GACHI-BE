@@ -42,7 +42,7 @@ public class NewsletterController {
   /**
    * 가정통신문 업로드 API.
    *
-   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -318,5 +318,25 @@ public class NewsletterController {
     ConversationTopicResponse response =
         newsletterService.getConversationTopics(userId, newsletterId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_CONVERSATION_TOPICS_SUCCESS, response);
+  }
+
+  /**문화 맥락 안내 조회*/
+  @Operation(
+      summary = "문화 맥락 안내 조회",
+      description =
+          """
+       AI가 가정통신문과 관련 있다고 판단한 학교 생활 가이드(FAQ)를 Q/A 형태로 반환합니다. (최대 2개)
+       질문과 답변은 school_guide DB에 저장된 검수된 원문을 사용자 언어로 반환합니다.
+       관련 FAQ가 없으면 빈 배열([])을 반환합니다.
+       AI 요약 탭 안에 노출되는 항목이므로, 캘린더 미등록 문서에서도 빈 배열이 반환됩니다.
+       """)
+  @GetMapping("/{newsletterId}/cultural-guides")
+  public ApiResponse<NewsletterCulturalGuideResponse> getCulturalGuides(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+
+      NewsletterCulturalGuideResponse response =
+          newsletterService.getCulturalGuides(userId, newsletterId);
+      return ApiResponse.success(SuccessCode.NEWSLETTER_CULTURAL_GUIDES_SUCCESS, response);
   }
 }
