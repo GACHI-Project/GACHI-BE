@@ -15,11 +15,15 @@ import com.gachi.be.domain.newsletter.dto.response.NewsletterRecentResponse.Date
 import com.gachi.be.domain.newsletter.dto.response.NewsletterRecentResponse.RecentItem;
 import com.gachi.be.domain.newsletter.entity.ConversationTopic;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.entity.NewsletterCulturalGuide;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterPipelineService;
 import com.gachi.be.domain.newsletter.repository.ConversationTopicRepository;
+import com.gachi.be.domain.newsletter.repository.NewsletterCulturalGuideRepository;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.newsletter.service.NewsletterService;
+import com.gachi.be.domain.schoolguide.entity.SchoolGuide;
+import com.gachi.be.domain.schoolguide.repository.SchoolGuideRepository;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.file.service.S3FileService;
@@ -67,6 +71,8 @@ public class NewsletterServiceImpl implements NewsletterService {
   private final NewsletterPipelineService newsletterPipelineService;
   private final UserRepository userRepository;
   private final ConversationTopicRepository conversationTopicRepository;
+  private final NewsletterCulturalGuideRepository newsletterCulturalGuideRepository;
+  private final SchoolGuideRepository schoolGuideRepository;
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final int PAGE_SIZE = 20;
 
@@ -235,6 +241,8 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     checklistRepository.deleteByNewsletterId(newsletterId);
     calendarEventRepository.deleteByNewsletterIdAndUserId(newsletterId, userId);
+    conversationTopicRepository.deleteByNewsletterId(newsletterId);
+    newsletterCulturalGuideRepository.deleteByNewsletterId(newsletterId);
     Newsletter saved = findNewsletterById(newsletterId);
 
     TransactionSynchronizationManager.registerSynchronization(
@@ -480,6 +488,48 @@ public class NewsletterServiceImpl implements NewsletterService {
         conversationTopicRepository.findAllByNewsletterIdOrderByIdAsc(newsletterId);
 
     return ConversationTopicResponse.from(topics);
+  }
+
+  // 문화 맥락 안내 조회.
+  // AI 요약 탭 안에 노출되는 항목이므로, 캘린더 미등록 문서에서는 빈 배열을 반환.
+  // 답변 텍스트는 school_guide DB 원문을 사용자 언어로 해석해서 그대로 내려준다 (추가 번역 없음).
+  @Override
+  @Transactional(readOnly = true)
+  public NewsletterCulturalGuideResponse getCulturalGuides(Long userId, Long newsletterId) {
+
+    Newsletter newsletter = findNewsletterById(newsletterId);
+    validateOwnership(newsletter, userId);
+    validateCompleted(newsletter);
+
+    boolean calendarRegistered =
+        calendarEventRepository.existsByNewsletterIdAndUserId(newsletterId, userId);
+    if (!calendarRegistered) {
+      log.debug("[Newsletter] 캘린더 미등록 문서로 문화 맥락 안내를 노출하지 않습니다. newsletterId={}", newsletterId);
+      return new NewsletterCulturalGuideResponse(List.of());
+    }
+
+    List<NewsletterCulturalGuide> mappings =
+        newsletterCulturalGuideRepository.findAllByNewsletterIdOrderByDisplayOrderAsc(newsletterId);
+    if (mappings.isEmpty()) {
+      return new NewsletterCulturalGuideResponse(List.of());
+    }
+
+    // N+1 방지: faqId 목록으로 한 번에 조회한 뒤 Map으로 O(1) 매칭
+    List<Long> faqIds =
+        mappings.stream().map(NewsletterCulturalGuide::getSchoolGuideId).distinct().toList();
+    Map<Long, SchoolGuide> faqById =
+        schoolGuideRepository.findAllById(faqIds).stream()
+            .collect(Collectors.toMap(SchoolGuide::getId, faq -> faq));
+
+    // display_order 순서를 유지한 채 정렬. FAQ가 삭제된 경우는 건너뛴다.
+    List<SchoolGuide> orderedFaqs =
+        mappings.stream()
+            .map(mapping -> faqById.get(mapping.getSchoolGuideId()))
+            .filter(Objects::nonNull)
+            .toList();
+
+    String language = resolveUserLanguage(userId);
+    return NewsletterCulturalGuideResponse.of(orderedFaqs, language);
   }
 
   /** 조회된 newsletter 목록에서 캘린더 등록된 newsletterId 집합을 반환 */

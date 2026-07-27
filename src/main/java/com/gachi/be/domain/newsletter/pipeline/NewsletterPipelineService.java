@@ -34,6 +34,7 @@ public class NewsletterPipelineService {
   private final NewsletterDateCandidateService newsletterDateCandidateService;
   private final NewsletterPipelineStatusService newsletterPipelineStatusService;
   private final NewsletterContentHasher newsletterContentHasher;
+  private final NewsletterCulturalGuideService newsletterCulturalGuideService;
 
   @Async
   public void runPipeline(Long newsletterId) {
@@ -135,6 +136,22 @@ public class NewsletterPipelineService {
           aiResult.title(),
           aiResult.titleI18n(),
           aiResult.summary());
+
+      // STEP8: 문화 맥락 안내(FAQ) 선정.
+      // markCompleted 이후에 실행하며, 실패하더라도 파이프라인 전체를 실패로 만들지 않는다.
+      // (문화 맥락은 부가 정보이고, 캘린더 preview 저장 실패 처리와 동일한 정책)
+      failureStage = "CULTURAL_GUIDE";
+      try {
+        log.debug("[Pipeline][STEP8] 문화 맥락 안내 선정 시작.");
+        newsletterCulturalGuideService.extractAndReplace(newsletterId, originalText);
+        log.debug("[Pipeline][STEP8] 문화 맥락 안내 선정 완료.");
+      } catch (Exception e) {
+        log.warn(
+            "[Pipeline][STEP8] 문화 맥락 안내 선정 실패. 분석 결과는 그대로 유지합니다. newsletterId={}, error={}",
+            newsletterId,
+            e.getMessage(),
+            e);
+      }
 
       log.info("[Pipeline] 파이프라인 완료. newsletterId={}", newsletterId);
     } catch (Exception e) {

@@ -48,4 +48,7 @@ public interface NewsletterService {
 
   /** 자녀와의 대화 주제 추천 조회 */
   ConversationTopicResponse getConversationTopics(Long userId, Long newsletterId);
+
+  /** 문화 맥락 안내(관련 학교 생활 가이드 FAQ) 조회. 최대 2개, 없으면 빈 배열. */
+  NewsletterCulturalGuideResponse getCulturalGuides(Long userId, Long newsletterId);
 }
