@@ -91,6 +91,47 @@ class UserControllerIntegrationTest {
   }
 
   @Test
+  void changeLanguageUpdatesLockedActiveUser() throws Exception {
+    String loginId = "language_change_user";
+    createUser(loginId, "language-change@gachi.com", "01010001014", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken(loginId, "Policy12!");
+
+    mockMvc
+        .perform(
+            patch("/api/v1/users/me/language")
+                .header("Authorization", bearer(accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("languageCode", "US"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("USER2001"));
+
+    User user = userRepository.findByLoginId(loginId).orElseThrow();
+    assertThat(user.getLanguageCode()).isEqualTo("US");
+  }
+
+  @Test
+  void changeNotificationPreferenceUpdatesLockedActiveUser() throws Exception {
+    String loginId = "notification_change_user";
+    createUser(loginId, "notification-change@gachi.com", "01010001015", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken(loginId, "Policy12!");
+
+    mockMvc
+        .perform(
+            patch("/api/v1/users/me/notification")
+                .header("Authorization", bearer(accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        Map.of("notificationPreference", NotificationPreference.OFF))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("USER2002"));
+
+    User user = userRepository.findByLoginId(loginId).orElseThrow();
+    assertThat(user.getNotificationPreference()).isEqualTo(NotificationPreference.OFF);
+    assertThat(user.isNotificationEnabled()).isFalse();
+  }
+
+  @Test
   void emailChangeCompletesAndRevokesRefreshToken() throws Exception {
     String loginId = "email_change_user";
     createUser(loginId, "email-change-old@gachi.com", "01010001001", UserStatus.ACTIVE);
