@@ -28,6 +28,7 @@ public class AiNewsletterClient {
   private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Seoul");
   private static final String ANALYZE_PATH = "/ai/newsletters/analyze";
   private static final String REFINE_TRANSLATION_PATH = "/ai/newsletters/refine-translation";
+    private static final String CULTURAL_GUIDE_PATH = "/ai/newsletters/cultural-guides";
   private final AiServerProperties aiServerProperties;
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
@@ -143,6 +144,60 @@ public class AiNewsletterClient {
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 오류: " + e.getMessage(), e);
     }
+  }
+
+  // 문화 맥락 안내용 FAQ 선정 요청.
+  // FAQ 후보(질문 텍스트만)를 통째로 보내고, AI는 관련 있는 faqId만 최대 2개 반환.
+  // 답변(answer) 본문은 AI가 생성하지 않는다. (BE가 school_guide DB 원문을 그대로 사용)
+  public CulturalGuideResponse selectCulturalGuides(
+      String originalText, String title, String summary, List<CulturalGuideFaqCandidate> candidates) {
+      if (candidates == null || candidates.isEmpty()) {
+          return new CulturalGuideResponse(List.of());
+      }
+
+      try {
+          String requestBody =
+              objectMapper.writeValueAsString(
+                  new CulturalGuideRequest(originalText, title, summary, candidates));
+
+          // FAQ 후보가 180건 수준이라 body 전체 로깅은 하지 않는다 (로그 폭증 방지).
+          log.debug(
+              "[AiNewsletterClient] 문화 맥락 선정 요청. candidateCount={}, originalTextLength={}",
+              candidates.size(),
+              originalText != null ? originalText.length() : 0);
+
+          HttpRequest request =
+              HttpRequest.newBuilder()
+                  .uri(URI.create(normalizedBaseUrl() + CULTURAL_GUIDE_PATH))
+                  .header("Content-Type", "application/json")
+                  .header("Accept", "application/json")
+                  .timeout(Duration.ofSeconds(aiServerProperties.getReadTimeoutSeconds()))
+                  .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                  .build();
+
+          HttpResponse<String> response =
+              httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+          if (response.statusCode() < 200 || response.statusCode() >= 300) {
+              log.error(
+                  "[AiNewsletterClient] 문화 맥락 선정 실패. status={}, body={}",
+                  response.statusCode(),
+                  response.body());
+              throw new ExternalApiException(
+                  ErrorCode.EXTERNAL_API_ERROR, "AI 서버 문화 맥락 선정 실패. status=" + response.statusCode());
+          }
+
+          return objectMapper.readValue(response.body(), CulturalGuideResponse.class).normalized();
+      } catch (ExternalApiException e) {
+          throw e;
+      } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new ExternalApiException(
+              ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 인터럽트: " + e.getMessage(), e);
+      } catch (IOException e) {
+          throw new ExternalApiException(
+              ErrorCode.EXTERNAL_API_ERROR, "AI 서버 통신 오류: " + e.getMessage(), e);
+      }
   }
 
   private String normalizedBaseUrl() {
@@ -345,5 +400,31 @@ public class AiNewsletterClient {
       }
       return result;
     }
+  }
+
+  /** AI 서버로 보내는 FAQ 후보. question은 반드시 한국어 원문을 사용한다 (프롬프트가 한국어 기준). */
+  public record CulturalGuideFaqCandidate(Long faqId, String category, String question) {}
+  record CulturalGuideRequest(
+      String originalText,
+      String title,
+      String summary,
+      List<CulturalGuideFaqCandidate> faqCandidates) {}
+
+  /** AI가 선정한 FAQ 1건. relevanceReason은 화면 미노출(품질 점검/로깅용). */
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record SelectedCulturalGuide(Long faqId, String relevanceReason) {}
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record CulturalGuideResponse(List<SelectedCulturalGuide> selectedFaqs) {
+
+      CulturalGuideResponse normalized() {
+          return new CulturalGuideResponse(
+              selectedFaqs != null
+                  ? selectedFaqs.stream()
+                  .filter(Objects::nonNull)
+                  .filter(item -> item.faqId() != null)
+                  .toList()
+                  : List.of());
+      }
   }
 }
