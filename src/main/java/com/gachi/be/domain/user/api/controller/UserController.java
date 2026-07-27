@@ -13,6 +13,7 @@ import com.gachi.be.domain.user.dto.request.EmailChangeRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeVerifyRequest;
 import com.gachi.be.domain.user.dto.request.PasswordChangeRequest;
 import com.gachi.be.domain.user.dto.request.ProfileUpdateRequest;
+import com.gachi.be.domain.user.dto.request.UserWithdrawalRequest;
 import com.gachi.be.domain.user.dto.response.EmailChangeResponse;
 import com.gachi.be.domain.user.dto.response.ProfileUpdateResponse;
 import com.gachi.be.domain.user.dto.response.UserMeResponse;
@@ -177,5 +178,15 @@ public class UserController {
     User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
     userProfileService.changePassword(user, request);
     return ApiResponse.success(SuccessCode.USER_PASSWORD_UPDATED, null);
+  }
+
+  @Operation(summary = "회원 탈퇴", description = "현재 비밀번호를 확인한 후 계정을 탈퇴 처리합니다.")
+  @DeleteMapping("/me")
+  public ApiResponse<Void> withdraw(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @RequestBody @Valid UserWithdrawalRequest request) {
+    User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
+    userProfileService.withdraw(user, request);
+    return ApiResponse.success(SuccessCode.USER_WITHDRAWAL_SUCCESS, null);
   }
 }

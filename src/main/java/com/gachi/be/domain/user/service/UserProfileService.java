@@ -9,11 +9,14 @@ import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.auth.service.impl.NoopAuthMailService;
 import com.gachi.be.domain.auth.service.password.PasswordPolicyValidator;
+import com.gachi.be.domain.notification.entity.PushDeviceToken;
+import com.gachi.be.domain.notification.repository.PushDeviceTokenRepository;
 import com.gachi.be.domain.user.dto.request.EmailChangeCodeSendRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeVerifyRequest;
 import com.gachi.be.domain.user.dto.request.PasswordChangeRequest;
 import com.gachi.be.domain.user.dto.request.ProfileUpdateRequest;
+import com.gachi.be.domain.user.dto.request.UserWithdrawalRequest;
 import com.gachi.be.domain.user.dto.response.EmailChangeResponse;
 import com.gachi.be.domain.user.dto.response.ProfileUpdateResponse;
 import com.gachi.be.domain.user.entity.User;
@@ -40,6 +43,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class UserProfileService {
   private final UserRepository userRepository;
   private final AuthRefreshTokenRepository authRefreshTokenRepository;
+  private final PushDeviceTokenRepository pushDeviceTokenRepository;
   private final PasswordEncoder passwordEncoder;
   private final AuthMailService authMailService;
   private final EmailVerificationStore emailVerificationStore;
@@ -85,6 +89,20 @@ public class UserProfileService {
         currentUser.getPhoneNumber());
     currentUser.resetPassword(passwordEncoder.encode(request.newPassword()), OffsetDateTime.now());
     revokeActiveRefreshTokens(currentUser.getId());
+  }
+
+  @Transactional
+  public void withdraw(User user, UserWithdrawalRequest request) {
+    User currentUser = findActiveUserWithLock(user.getId());
+    if (!passwordEncoder.matches(request.currentPassword(), currentUser.getPasswordHash())) {
+      throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
+    }
+
+    currentUser.withdraw(OffsetDateTime.now());
+    revokeActiveRefreshTokens(currentUser.getId());
+    pushDeviceTokenRepository
+        .findAllByUserIdAndEnabledTrueAndDeletedAtIsNull(currentUser.getId())
+        .forEach(PushDeviceToken::softDelete);
   }
 
   @Transactional
