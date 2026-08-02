@@ -501,13 +501,6 @@ public class NewsletterServiceImpl implements NewsletterService {
     validateOwnership(newsletter, userId);
     validateCompleted(newsletter);
 
-    boolean calendarRegistered =
-        calendarEventRepository.existsByNewsletterIdAndUserId(newsletterId, userId);
-    if (!calendarRegistered) {
-      log.debug("[Newsletter] 캘린더 미등록 문서로 문화 맥락 안내를 노출하지 않습니다. newsletterId={}", newsletterId);
-      return new NewsletterCulturalGuideResponse(List.of());
-    }
-
     List<NewsletterCulturalGuide> mappings =
         newsletterCulturalGuideRepository.findAllByNewsletterIdOrderByDisplayOrderAsc(newsletterId);
     if (mappings.isEmpty()) {

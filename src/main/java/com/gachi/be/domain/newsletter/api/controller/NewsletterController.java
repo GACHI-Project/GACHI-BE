@@ -328,7 +328,8 @@ public class NewsletterController {
        AI가 가정통신문과 관련 있다고 판단한 학교 생활 가이드(FAQ)를 Q/A 형태로 반환합니다. (최대 2개)
        질문과 답변은 school_guide DB에 저장된 검수된 원문을 사용자 언어로 반환합니다.
        관련 FAQ가 없으면 빈 배열([])을 반환합니다.
-       AI 요약 탭 안에 노출되는 항목이므로, 캘린더 미등록 문서에서도 빈 배열이 반환됩니다.
+       스캔 직후와 문서 상세보기 모두에서 사용됩니다.
+       탭 노출 여부는 프론트엔드가 GET /newsletters/{id}의 isCalendarRegistered 값으로 제어합니다.
        """)
   @GetMapping("/{newsletterId}/cultural-guides")
   public ApiResponse<NewsletterCulturalGuideResponse> getCulturalGuides(
