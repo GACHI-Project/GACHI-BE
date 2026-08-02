@@ -79,7 +79,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
    *
-   * <p>처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
+   * 처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
    * file_key 획득 childId가 있으면 children 테이블에서 자녀 정보 조회 (스냅샷용) newsletter 레코드 DB 저장 (status=PENDING 으로
    * 변경) AI 분석 파이프라인 비동기 트리거 -> Asyncㅏ로 별도 스레드에서 실행하게 함.
    */
@@ -501,13 +501,6 @@ public class NewsletterServiceImpl implements NewsletterService {
     validateOwnership(newsletter, userId);
     validateCompleted(newsletter);
 
-    boolean calendarRegistered =
-        calendarEventRepository.existsByNewsletterIdAndUserId(newsletterId, userId);
-    if (!calendarRegistered) {
-      log.debug("[Newsletter] 캘린더 미등록 문서로 문화 맥락 안내를 노출하지 않습니다. newsletterId={}", newsletterId);
-      return new NewsletterCulturalGuideResponse(List.of());
-    }
-
     List<NewsletterCulturalGuide> mappings =
         newsletterCulturalGuideRepository.findAllByNewsletterIdOrderByDisplayOrderAsc(newsletterId);
     if (mappings.isEmpty()) {
@@ -545,7 +538,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 파일 유효성 검사.
    *
-   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
    * 최대 크기: 10MB
    */
   private void validateFile(MultipartFile file) {
