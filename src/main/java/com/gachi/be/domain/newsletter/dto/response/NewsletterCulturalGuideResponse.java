@@ -10,6 +10,7 @@ public record NewsletterCulturalGuideResponse(List<GuideItem> guides) {
 
   public record GuideItem(
       Long faqId, SchoolGuideCategory category, String question, String answer) {}
+
   /**
    * @param orderedFaqs display_order 순서로 정렬된 SchoolGuide 목록
    * @param language 사용자 언어 (KO/US/ZH/VI)
