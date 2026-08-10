@@ -1,6 +1,7 @@
 package com.gachi.be.domain.user.api.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,6 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.service.AuthMailService;
+import com.gachi.be.domain.notification.entity.PushDeviceToken;
+import com.gachi.be.domain.notification.entity.enums.PushPlatform;
+import com.gachi.be.domain.notification.repository.PushDeviceTokenRepository;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
@@ -53,6 +57,7 @@ class UserControllerIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
   @Autowired private WebApplicationContext webApplicationContext;
   @Autowired private UserRepository userRepository;
+  @Autowired private PushDeviceTokenRepository pushDeviceTokenRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private CapturingAuthMailService capturingAuthMailService;
 
@@ -83,6 +88,47 @@ class UserControllerIntegrationTest {
     User updatedUser = userRepository.findByLoginId("profile_user").orElseThrow();
     assertThat(updatedUser.getName()).isEqualTo("새 이름");
     assertThat(updatedUser.getPhoneNumber()).isEqualTo("01022223333");
+  }
+
+  @Test
+  void changeLanguageUpdatesLockedActiveUser() throws Exception {
+    String loginId = "language_change_user";
+    createUser(loginId, "language-change@gachi.com", "01010001014", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken(loginId, "Policy12!");
+
+    mockMvc
+        .perform(
+            patch("/api/v1/users/me/language")
+                .header("Authorization", bearer(accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("languageCode", "US"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("USER2001"));
+
+    User user = userRepository.findByLoginId(loginId).orElseThrow();
+    assertThat(user.getLanguageCode()).isEqualTo("US");
+  }
+
+  @Test
+  void changeNotificationPreferenceUpdatesLockedActiveUser() throws Exception {
+    String loginId = "notification_change_user";
+    createUser(loginId, "notification-change@gachi.com", "01010001015", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken(loginId, "Policy12!");
+
+    mockMvc
+        .perform(
+            patch("/api/v1/users/me/notification")
+                .header("Authorization", bearer(accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        Map.of("notificationPreference", NotificationPreference.OFF))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("USER2002"));
+
+    User user = userRepository.findByLoginId(loginId).orElseThrow();
+    assertThat(user.getNotificationPreference()).isEqualTo(NotificationPreference.OFF);
+    assertThat(user.isNotificationEnabled()).isFalse();
   }
 
   @Test
@@ -233,6 +279,62 @@ class UserControllerIntegrationTest {
         .andExpect(jsonPath("$.code").value("AUTH4009"));
   }
 
+  @Test
+  void withdrawalChangesAccountStatusAndInvalidatesTokens() throws Exception {
+    String loginId = "withdrawal_user";
+    createUser(loginId, "withdrawal@gachi.com", "01010001012", UserStatus.ACTIVE);
+    User user = userRepository.findByLoginId(loginId).orElseThrow();
+    JsonNode loginBody = login(loginId, "Policy12!");
+    String accessToken = loginBody.path("result").path("accessToken").asText();
+    String refreshToken = loginBody.path("result").path("refreshToken").asText();
+    PushDeviceToken pushToken =
+        pushDeviceTokenRepository.saveAndFlush(
+            PushDeviceToken.builder()
+                .userId(user.getId())
+                .platform(PushPlatform.ANDROID)
+                .token("withdrawal-push-token")
+                .tokenHash("a".repeat(64))
+                .deviceId("withdrawal-device")
+                .appVersion("1.0.0")
+                .build());
+
+    withdraw(accessToken, "Policy12!")
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.code").value("USER2008"));
+
+    User withdrawnUser = userRepository.findById(user.getId()).orElseThrow();
+    assertThat(withdrawnUser.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
+    assertThat(withdrawnUser.getDeletedAt()).isNotNull();
+
+    PushDeviceToken deletedPushToken =
+        pushDeviceTokenRepository.findById(pushToken.getId()).orElseThrow();
+    assertThat(deletedPushToken.isEnabled()).isFalse();
+    assertThat(deletedPushToken.getDeletedAt()).isNotNull();
+
+    reissue(refreshToken)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4014"));
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("AUTH4031"));
+  }
+
+  @Test
+  void withdrawalRejectsWrongCurrentPassword() throws Exception {
+    String loginId = "withdrawal_wrong_password";
+    createUser(loginId, "withdrawal-wrong-password@gachi.com", "01010001013", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken(loginId, "Policy12!");
+
+    withdraw(accessToken, "Wrong12!")
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4011"));
+
+    User user = userRepository.findByLoginId(loginId).orElseThrow();
+    assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+    assertThat(user.getDeletedAt()).isNull();
+  }
+
   private org.springframework.test.web.servlet.ResultActions sendEmailChangeCode(
       String accessToken, String email, String currentPassword) throws Exception {
     return mockMvc.perform(
@@ -278,6 +380,15 @@ class UserControllerIntegrationTest {
                         newPassword,
                         "newPasswordConfirm",
                         newPasswordConfirm))));
+  }
+
+  private org.springframework.test.web.servlet.ResultActions withdraw(
+      String accessToken, String currentPassword) throws Exception {
+    return mockMvc.perform(
+        delete("/api/v1/users/me")
+            .header("Authorization", bearer(accessToken))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of("currentPassword", currentPassword))));
   }
 
   private org.springframework.test.web.servlet.ResultActions reissue(String refreshToken)
