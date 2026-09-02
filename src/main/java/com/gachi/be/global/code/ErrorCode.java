@@ -19,6 +19,12 @@ public enum ErrorCode {
       "지원하지 않는 HTTP 메서드입니다.",
       "허용하지 않은 메서드 요청",
       ErrorLogLevel.WARN),
+  FILE_UPLOAD_SIZE_EXCEEDED(
+      HttpStatus.PAYLOAD_TOO_LARGE,
+      "COMMON4131",
+      "업로드 가능한 용량을 초과했습니다.",
+      "multipart 파싱 단계에서 max-file-size 또는 max-request-size 초과",
+      ErrorLogLevel.WARN),
   BUSINESS_RULE_VIOLATION(
       HttpStatus.BAD_REQUEST, "BUS4001", "비즈니스 규칙 위반입니다.", "도메인 정책 위반", ErrorLogLevel.WARN),
   RESOURCE_NOT_FOUND(
