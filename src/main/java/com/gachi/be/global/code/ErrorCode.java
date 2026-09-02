@@ -219,7 +219,24 @@ public enum ErrorCode {
       "실패한 가정통신문만 다시 분석할 수 있습니다.",
       "FAILED 상태가 아닌 newsletter 분석 재시도 요청",
       ErrorLogLevel.WARN),
-
+  NEWSLETTER_FILE_COUNT_EXCEEDED(
+      HttpStatus.BAD_REQUEST,
+      "NL4006",
+      "가정통신문 이미지는 한 번에 최대 10장까지 업로드할 수 있습니다.",
+      "이미지 10장 초과 업로드 시도 (클로바 OCR PDF 페이지 상한과 동일 기준)",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_FILE_MIXED_TYPE(
+      HttpStatus.BAD_REQUEST,
+      "NL4007",
+      "PDF는 한 번에 1개만 업로드할 수 있으며, 이미지와 함께 보낼 수 없습니다.",
+      "files에 PDF가 포함된 상태로 2개 이상 전달됨",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_FILE_TOTAL_SIZE_EXCEEDED(
+      HttpStatus.BAD_REQUEST,
+      "NL4008",
+      "업로드한 파일의 총 크기는 50MB 이하여야 합니다.",
+      "files 전체 용량 합계 50MB 초과",
+      ErrorLogLevel.WARN),
   CHECKLIST_NOT_FOUND(
       HttpStatus.NOT_FOUND,
       "CL4041",
