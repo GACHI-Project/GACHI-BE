@@ -123,6 +123,14 @@ public class User {
     return status == UserStatus.ACTIVE;
   }
 
+  public void withdraw(OffsetDateTime withdrawnAt) {
+    if (withdrawnAt == null) {
+      throw new IllegalArgumentException("withdrawnAt은 비어 있을 수 없습니다.");
+    }
+    this.status = UserStatus.WITHDRAWN;
+    this.deletedAt = withdrawnAt;
+  }
+
   public void resetPassword(String passwordHash, OffsetDateTime passwordUpdatedAt) {
     if (passwordHash == null || passwordHash.isBlank()) {
       throw new IllegalArgumentException("passwordHash는 비어 있을 수 없습니다.");

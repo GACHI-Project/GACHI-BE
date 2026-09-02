@@ -4,8 +4,6 @@ import com.gachi.be.domain.auth.dto.response.EmailSendResponse;
 import com.gachi.be.domain.auth.service.AuthRateLimitService;
 import com.gachi.be.domain.auth.service.AuthenticatedUserResolver;
 import com.gachi.be.domain.auth.service.ClientIpExtractor;
-import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
-import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.user.dto.request.ChangeLanguageRequest;
 import com.gachi.be.domain.user.dto.request.ChangeNotificationRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeCodeSendRequest;
@@ -13,26 +11,21 @@ import com.gachi.be.domain.user.dto.request.EmailChangeRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeVerifyRequest;
 import com.gachi.be.domain.user.dto.request.PasswordChangeRequest;
 import com.gachi.be.domain.user.dto.request.ProfileUpdateRequest;
+import com.gachi.be.domain.user.dto.request.UserWithdrawalRequest;
 import com.gachi.be.domain.user.dto.response.EmailChangeResponse;
 import com.gachi.be.domain.user.dto.response.ProfileUpdateResponse;
 import com.gachi.be.domain.user.dto.response.UserMeResponse;
 import com.gachi.be.domain.user.entity.User;
-import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.domain.user.service.UserProfileService;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import java.util.List;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 /** 로그인 사용자 기준 내 정보 조회 API를 제공한다. */
-@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/users")
@@ -41,8 +34,6 @@ public class UserController {
   private final AuthRateLimitService authRateLimitService;
   private final ClientIpExtractor clientIpExtractor;
   private final UserProfileService userProfileService;
-  private final UserRepository userRepository;
-  private final NewsletterRepository newsletterRepository;
 
   @Operation(
       summary = "사용자 내 정보 조회",
@@ -78,50 +69,21 @@ public class UserController {
         마이페이지에서 내가 회원가입 시에 설정했떤 언어를 변경할 수 있습니다. 해당 언어를 변경한 뒤에 스캔된 문서들은 전부 해당 언어로 번역됩니다.
         """)
   @PatchMapping("/me/language")
-  @Transactional
   public ApiResponse<Void> changeLanguage(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @RequestBody @Valid ChangeLanguageRequest request) {
-
     User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
-
-    String previousLanguage = user.getLanguageCode();
-    String newLanguage = request.languageCode();
-
-    if (Objects.equals(previousLanguage, newLanguage)) {
-      return ApiResponse.success(SuccessCode.USER_LANGUAGE_UPDATED, null);
-    }
-
-    user.updateLanguage(newLanguage);
-    userRepository.save(user);
-
-    // 진행 중인 파이프라인 FAILED 처리
-    int cancelledCount =
-        newsletterRepository.cancelInProgressByUserId(
-            user.getId(),
-            List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING),
-            NewsletterStatus.FAILED,
-            request.languageCode());
-
-    log.info(
-        "[Language] 언어 설정 변경. userId={}, {} -> {}, cancelledPipelines={}",
-        user.getId(),
-        previousLanguage,
-        newLanguage,
-        cancelledCount);
-
+    userProfileService.changeLanguage(user, request);
     return ApiResponse.success(SuccessCode.USER_LANGUAGE_UPDATED, null);
   }
 
   @Operation(summary = "사용자 알림 설정 변경", description = "마이페이지에서 알림 수신 단계를 변경합니다.")
   @PatchMapping("/me/notification")
-  @Transactional
   public ApiResponse<Void> changeNotificationPreference(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
       @RequestBody @Valid ChangeNotificationRequest request) {
     User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
-    user.updateNotificationPreference(request.notificationPreference());
-    userRepository.save(user);
+    userProfileService.changeNotificationPreference(user, request);
     return ApiResponse.success(SuccessCode.USER_NOTIFICATION_UPDATED, null);
   }
 
@@ -177,5 +139,15 @@ public class UserController {
     User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
     userProfileService.changePassword(user, request);
     return ApiResponse.success(SuccessCode.USER_PASSWORD_UPDATED, null);
+  }
+
+  @Operation(summary = "회원 탈퇴", description = "현재 비밀번호를 확인한 후 계정을 탈퇴 처리합니다.")
+  @DeleteMapping("/me")
+  public ApiResponse<Void> withdraw(
+      @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
+      @RequestBody @Valid UserWithdrawalRequest request) {
+    User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
+    userProfileService.withdraw(user, request);
+    return ApiResponse.success(SuccessCode.USER_WITHDRAWAL_SUCCESS, null);
   }
 }
