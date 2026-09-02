@@ -6,6 +6,7 @@ import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisRe
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.file.config.S3Properties;
 import com.gachi.be.global.exception.ExternalApiException;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,17 +50,36 @@ public class NewsletterPipelineService {
     newsletterPipelineStatusService.markProcessing(newsletterId);
     log.debug("[Pipeline] PROCESSING 전환 완료. newsletterId={}", newsletterId);
 
-    String tempFileKey = null;
+    List<String> tempFileKeys = new ArrayList<>();
     String failureStage = "PIPELINE_START";
     String ocrText = null;
     String originalText = null;
     String translatedText = null;
 
     try {
-      failureStage = "S3_DOWNLOAD";
-      log.debug("[Pipeline][STEP1] S3 다운로드 시작. fileKey={}", newsletter.getFileKey());
-      byte[] fileBytes = downloadFromS3(newsletter.getFileKey());
-      log.debug("[Pipeline][STEP1] 다운로드 완료. size={}bytes", fileBytes.length);
+        // 페이지 파일 키 목록 조회.
+        // file_keys(JSONB)가 비어있는 과거 데이터는 file_key 단건으로 대체되므로 기존 문서도 그대로 동작한다.
+        List<String> fileKeys = newsletter.resolveFileKeys();
+        if (fileKeys.isEmpty()) {
+            throw new IllegalStateException("OCR 대상 파일 키가 없습니다. newsletterId=" + newsletterId);
+        }
+        log.debug("[Pipeline] OCR 대상 페이지 수={}. newsletterId={}", fileKeys.size(), newsletterId);
+
+        // STEP1~3을 페이지 단위 루프로 변경.
+        // 페이지 순서를 보장해야 하므로 순차 호출한다. (병렬 호출은 외부 API rate limit·부분 실패 처리가 복잡해짐)
+        List<List<OcrField>> ocrPageFields = new ArrayList<>();
+
+        for (int pageIndex = 0; pageIndex < fileKeys.size(); pageIndex++) {
+            String fileKey = fileKeys.get(pageIndex);
+
+            failureStage = "S3_DOWNLOAD";
+            log.debug(
+                "[Pipeline][STEP1] S3 다운로드 시작. page={}/{}, fileKey={}",
+                pageIndex + 1,
+                fileKeys.size(),
+                fileKey);
+            byte[] fileBytes = downloadFromS3(fileKey);
+            log.debug("[Pipeline][STEP1] 다운로드 완료. size={}bytes", fileBytes.length);
 
       boolean isPdf = newsletter.getFileKey().toLowerCase().endsWith(".pdf");
       String ocrTargetKey;
@@ -165,25 +185,23 @@ public class NewsletterPipelineService {
       newsletterPipelineStatusService.markFailedWithSnapshot(
           newsletterId, ocrText, originalText, translatedText, failureStage, failureReason(e));
     } finally {
-      if (tempFileKey != null) {
-        try {
-          deleteFromS3(tempFileKey);
-          log.debug("[Pipeline] 임시 파일 삭제 완료. tempFileKey={}", tempFileKey);
-        } catch (Exception ex) {
-          log.warn(
-              "[Pipeline] 임시 파일 삭제 실패. tempFileKey={}, error={}", tempFileKey, ex.getMessage());
+            for (String tempFileKey : tempFileKeys) {
+                try {
+                    deleteFromS3(tempFileKey);
+                    log.debug("[Pipeline] 임시 파일 삭제 완료. tempFileKey={}", tempFileKey);
+                } catch (Exception ex) {
+                    log.warn(
+                        "[Pipeline] 임시 파일 삭제 실패. tempFileKey={}, error={}", tempFileKey, ex.getMessage());
+                }
+            }
         }
-      }
     }
-  }
-
-  private String failureReason(Exception e) {
-    String message = e.getMessage();
-    if (message == null || message.isBlank()) {
-      return e.getClass().getSimpleName();
-    }
-    return e.getClass().getSimpleName() + ": " + message;
-  }
+  private String failureReason(Exception e){
+        String message = e.getMessage();
+        if (message == null || message.isBlank()) {
+            return e.getClass().getSimpleName();
+        }
+        return e.getClass().getSimpleName() + ": " + message;}
 
   private byte[] downloadFromS3(String fileKey) {
     GetObjectRequest request =
