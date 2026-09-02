@@ -28,6 +28,15 @@ public class KakaoUnlinkOutboxProcessor {
       return;
     }
 
+    var account =
+        socialAccountRepository
+            .findByUserIdAndProviderForUpdate(event.getUserId(), SocialProvider.KAKAO)
+            .orElse(null);
+    if (account == null || !event.getProviderUserId().equals(account.getProviderUserId())) {
+      event.complete(now);
+      return;
+    }
+
     try {
       kakaoClient.unlink(event.getProviderUserId());
     } catch (ExternalApiException exception) {
@@ -36,9 +45,7 @@ public class KakaoUnlinkOutboxProcessor {
       return;
     }
 
-    socialAccountRepository
-        .findByProviderAndProviderUserId(SocialProvider.KAKAO, event.getProviderUserId())
-        .ifPresent(disconnectService::disconnect);
+    disconnectService.disconnect(account);
     event.complete(now);
   }
 }

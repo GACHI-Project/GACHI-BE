@@ -1,12 +1,17 @@
 package com.gachi.be.domain.auth.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
 import com.gachi.be.domain.auth.dto.request.KakaoSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
+import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox;
+import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
@@ -18,7 +23,9 @@ import com.gachi.be.domain.auth.service.KakaoClient;
 import com.gachi.be.domain.auth.service.KakaoLoginStore;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
+import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,6 +79,66 @@ class KakaoAuthIntegrationTest {
     assertThat(jwtTokenProvider.parseAccessToken(tokens.accessToken()).getUserId())
         .isEqualTo(user.getId());
     assertThat(tokens.refreshToken()).isNotBlank();
+  }
+
+  @Test
+  void staleUnlinkEventDoesNotDisconnectReconnectedAccount() {
+    User originalUser = userRepository.saveAndFlush(socialUser("original@gachi.com", "기존 회원"));
+    SocialAccount originalAccount =
+        socialAccountRepository.saveAndFlush(
+            SocialAccount.builder()
+                .user(originalUser)
+                .provider(SocialProvider.KAKAO)
+                .providerUserId("kakao-reconnected")
+                .build());
+    KakaoUnlinkOutbox event =
+        kakaoUnlinkOutboxRepository.saveAndFlush(
+            KakaoUnlinkOutbox.builder()
+                .userId(originalUser.getId())
+                .providerUserId("kakao-reconnected")
+                .build());
+
+    socialAccountRepository.delete(originalAccount);
+    socialAccountRepository.flush();
+    User newUser = userRepository.saveAndFlush(socialUser("new-owner@gachi.com", "새 회원"));
+    socialAccountRepository.saveAndFlush(
+        SocialAccount.builder()
+            .user(newUser)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-reconnected")
+            .build());
+
+    KakaoClient kakaoClient = mock(KakaoClient.class);
+    KakaoUnlinkOutboxProcessor processor =
+        new KakaoUnlinkOutboxProcessor(
+            kakaoUnlinkOutboxRepository,
+            socialAccountRepository,
+            new SocialAccountDisconnectService(socialAccountRepository, authRefreshTokenRepository),
+            kakaoClient);
+
+    processor.process(event.getId());
+
+    verify(kakaoClient, never()).unlink(anyString());
+    assertThat(
+            socialAccountRepository.findByUserIdAndProvider(newUser.getId(), SocialProvider.KAKAO))
+        .isPresent();
+    assertThat(kakaoUnlinkOutboxRepository.findById(event.getId()).orElseThrow().isProcessed())
+        .isTrue();
+  }
+
+  private User socialUser(String email, String name) {
+    OffsetDateTime now = OffsetDateTime.now();
+    return User.builder()
+        .email(email)
+        .name(name)
+        .status(UserStatus.ACTIVE)
+        .languageCode("KO")
+        .notificationPreference(NotificationPreference.IMPORTANT)
+        .emailVerifiedAt(now)
+        .consentAgreedAt(now)
+        .consentVersion("2026-04-v1")
+        .passwordUpdatedAt(now)
+        .build();
   }
 
   private AuthProperties kakaoEnabledAuthProperties() {

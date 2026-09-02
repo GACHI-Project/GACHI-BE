@@ -43,7 +43,7 @@ class KakaoUnlinkOutboxProcessorTest {
     SocialAccount account =
         SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
     when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
-    when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "kakao-42"))
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
 
     processor.process(1L);
@@ -56,7 +56,11 @@ class KakaoUnlinkOutboxProcessorTest {
   @Test
   void failedExternalUnlinkSchedulesRetryWithoutLocalDisconnect() {
     KakaoUnlinkOutbox event = event();
+    SocialAccount account =
+        SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
     when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
     org.mockito.Mockito.doThrow(new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR))
         .when(kakaoClient)
         .unlink("kakao-42");
@@ -67,6 +71,20 @@ class KakaoUnlinkOutboxProcessorTest {
     assertThat(event.getNextAttemptAt()).isAfter(event.getCreatedAt());
     assertThat(event.isProcessed()).isFalse();
     verify(disconnectService, never()).disconnect(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void staleEventDoesNotUnlinkAccountOwnedByAnotherUser() {
+    KakaoUnlinkOutbox event = event();
+    when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.empty());
+
+    processor.process(1L);
+
+    verify(kakaoClient, never()).unlink("kakao-42");
+    verify(disconnectService, never()).disconnect(org.mockito.ArgumentMatchers.any());
+    assertThat(event.isProcessed()).isTrue();
   }
 
   private KakaoUnlinkOutbox event() {

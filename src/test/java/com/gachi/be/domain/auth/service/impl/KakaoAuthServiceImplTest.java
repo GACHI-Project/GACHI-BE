@@ -186,10 +186,14 @@ class KakaoAuthServiceImplTest {
             .rememberMe(false)
             .expiresAt(OffsetDateTime.now().plusDays(7))
             .build();
+    KakaoUnlinkOutbox event =
+        KakaoUnlinkOutbox.builder().userId(42L).providerUserId("kakao-5").build();
     when(kakaoProperties.adminKey()).thenReturn("admin-key");
     when(kakaoProperties.appId()).thenReturn("1546693");
     when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "kakao-5"))
         .thenReturn(Optional.of(account));
+    when(kakaoUnlinkOutboxRepository.findByProviderUserIdAndProcessedAtIsNull("kakao-5"))
+        .thenReturn(Optional.of(event));
     when(authRefreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(42L))
         .thenReturn(List.of(refreshToken));
 
@@ -199,6 +203,7 @@ class KakaoAuthServiceImplTest {
     assertThat(user.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
     assertThat(user.getDeletedAt()).isNotNull();
     assertThat(refreshToken.getRevokedAt()).isNotNull();
+    assertThat(event.isProcessed()).isTrue();
     verify(authRefreshTokenRepository).findAllByUserIdAndRevokedAtIsNull(42L);
   }
 
