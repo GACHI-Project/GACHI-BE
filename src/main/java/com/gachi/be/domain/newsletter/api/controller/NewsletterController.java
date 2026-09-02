@@ -13,12 +13,14 @@ import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -42,7 +44,7 @@ public class NewsletterController {
   /**
    * 가정통신문 업로드 API.
    *
-   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -57,19 +59,20 @@ public class NewsletterController {
   public ApiResponse<NewsletterUploadResponse> upload(
       @AuthenticationPrincipal Long userId,
       @Parameter(
-              description = "가정통신문 파일 (jpg/png/pdf, 최대 10MB)",
-              required = true,
-              content =
-                  @Content(
-                      mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
-                      schema = @Schema(type = "string", format = "binary")))
-          @RequestPart("file")
-          MultipartFile file,
+          description = "가정통신문 파일 목록 (jpg/png 최대 10장 또는 pdf 1개, 장당 최대 10MB)",
+          required = true,
+          content =
+          @Content(
+              mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+              array =
+              @ArraySchema(schema = @Schema(type = "string", format = "binary"))))
+      @RequestPart("files")
+      List<MultipartFile> files,
       @Parameter(description = "연결할 자녀 ID. 미선택 시 생략") @RequestParam(required = false)
-          Long childId) {
+      Long childId) {
 
-    NewsletterUploadResponse response = newsletterService.upload(userId, file, childId);
-    return ApiResponse.success(SuccessCode.NEWSLETTER_UPLOAD_SUCCESS, response);
+      NewsletterUploadResponse response = newsletterService.upload(userId, files, childId);
+      return ApiResponse.success(SuccessCode.NEWSLETTER_UPLOAD_SUCCESS, response);
   }
 
   /** 가정통신문 분석 상태 조회 (폴링) API */
