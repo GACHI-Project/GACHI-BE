@@ -21,7 +21,7 @@
 - `DELETE /api/v1/auth/kakao/link` (GACHI Bearer token 필요)
 - `POST /api/v1/auth/kakao/unlink-webhook`
 
-`state`, `ticket`, `signupToken`, `linkToken`은 Redis에 TTL과 함께 저장되고 조회 시 즉시 삭제된다. 카카오 access/refresh token과 앱 키는 URL, DB, Redis에 저장하지 않는다.
+`state`, `ticket`, `signupToken`, `linkToken`은 Redis에 TTL과 함께 저장되고 조회 시 즉시 삭제된다. REST API 키는 공개 식별자인 OAuth `client_id`로 인가 URL에 포함된다. 반면 Client Secret, Admin Key, 카카오 access/refresh token은 URL이나 로그에 노출하지 않고 저장소, DB, Redis에도 저장하지 않는다.
 
 ## 카카오 콘솔 설정
 
@@ -38,4 +38,5 @@
 
 - 로컬 로그인 수단이 있는 회원: 카카오 연동만 삭제
 - 카카오만 로그인 수단으로 사용하는 회원: 회원을 `WITHDRAWN`으로 전환하고 활성 GACHI refresh token을 모두 철회
+- 서비스의 연결 해제 요청은 outbox에 먼저 기록하고 비동기로 카카오 API를 호출한다. 실패 시 지수 백오프로 재시도하며, 카카오 해제가 확인된 뒤 로컬 연동과 토큰을 한 트랜잭션에서 정리한다.
 - 웹훅은 대표 Admin Key와 앱 ID를 모두 검증하며, 재전송되어도 동일하게 처리한다.

@@ -184,14 +184,6 @@ public class User {
     this.notificationEnabled = this.notificationPreference.isPushEnabled();
   }
 
-  public void withdraw(OffsetDateTime withdrawnAt) {
-    if (withdrawnAt == null) {
-      throw new IllegalArgumentException("withdrawnAt은 비어 있을 수 없습니다.");
-    }
-    this.status = UserStatus.WITHDRAWN;
-    this.deletedAt = withdrawnAt;
-  }
-
   public NotificationPreference getNotificationPreference() {
     return notificationPreference != null
         ? notificationPreference

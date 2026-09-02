@@ -1,27 +1,46 @@
 package com.gachi.be.domain.auth.service.impl;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.config.AuthProperties;
 import com.gachi.be.domain.auth.service.KakaoClient;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.ExternalApiException;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.Objects;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
-@RequiredArgsConstructor
 public class KakaoRestClient implements KakaoClient {
   private static final String TOKEN_URL = "https://kauth.kakao.com/oauth/token";
   private static final String USER_URL = "https://kapi.kakao.com/v2/user/me";
   private static final String UNLINK_URL = "https://kapi.kakao.com/v1/user/unlink";
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
+  private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
   private final AuthProperties authProperties;
+  private final RestClient restClient;
+  private final ObjectMapper objectMapper;
+
+  public KakaoRestClient(
+      AuthProperties authProperties,
+      RestClient.Builder restClientBuilder,
+      ObjectMapper objectMapper) {
+    this.authProperties = authProperties;
+    this.objectMapper = objectMapper;
+    HttpClient httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+    JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+    requestFactory.setReadTimeout(READ_TIMEOUT);
+    this.restClient = restClientBuilder.requestFactory(requestFactory).build();
+  }
 
   @Override
   public KakaoIdentity authenticate(String authorizationCode) {
@@ -52,7 +71,7 @@ public class KakaoRestClient implements KakaoClient {
     body.add("target_id_type", "user_id");
     body.add("target_id", providerUserId);
     try {
-      RestClient.create()
+      restClient
           .post()
           .uri(UNLINK_URL)
           .header("Authorization", "KakaoAK " + authProperties.getKakao().adminKey())
@@ -60,9 +79,25 @@ public class KakaoRestClient implements KakaoClient {
           .body(body)
           .retrieve()
           .toBodilessEntity();
+    } catch (RestClientResponseException e) {
+      if (isAlreadyUnlinked(e)) {
+        return;
+      }
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, "Kakao unlink request failed.", e);
     } catch (RestClientException e) {
       throw new ExternalApiException(
           ErrorCode.EXTERNAL_API_ERROR, "Kakao unlink request failed.", e);
+    }
+  }
+
+  private boolean isAlreadyUnlinked(RestClientResponseException exception) {
+    try {
+      return exception.getStatusCode().value() == 400
+          && objectMapper.readTree(exception.getResponseBodyAsString()).path("code").asInt()
+              == -101;
+    } catch (Exception exceptionWhileReadingBody) {
+      return false;
     }
   }
 
@@ -74,7 +109,7 @@ public class KakaoRestClient implements KakaoClient {
     body.add("redirect_uri", kakao.redirectUri());
     body.add("code", authorizationCode);
     body.add("client_secret", kakao.clientSecret());
-    return RestClient.create()
+    return restClient
         .post()
         .uri(TOKEN_URL)
         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -84,7 +119,7 @@ public class KakaoRestClient implements KakaoClient {
   }
 
   private UserResponse requestUser(String accessToken) {
-    return RestClient.create()
+    return restClient
         .get()
         .uri(USER_URL)
         .header("Authorization", "Bearer " + accessToken)

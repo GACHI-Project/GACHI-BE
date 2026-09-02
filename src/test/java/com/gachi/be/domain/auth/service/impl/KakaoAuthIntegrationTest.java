@@ -9,6 +9,7 @@ import com.gachi.be.domain.auth.dto.request.KakaoSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
+import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
@@ -34,6 +35,7 @@ class KakaoAuthIntegrationTest {
   @Autowired private JwtTokenProvider jwtTokenProvider;
   @Autowired private AuthTokenIssuer authTokenIssuer;
   @Autowired private AuthRefreshTokenRepository authRefreshTokenRepository;
+  @Autowired private KakaoUnlinkOutboxRepository kakaoUnlinkOutboxRepository;
 
   @Test
   void socialSignupPersistsAccountAndIssuesUsableGachiTokens() {
@@ -50,7 +52,9 @@ class KakaoAuthIntegrationTest {
             socialAccountRepository,
             userRepository,
             authTokenIssuer,
-            authRefreshTokenRepository);
+            kakaoUnlinkOutboxRepository,
+            new SocialAccountDisconnectService(
+                socialAccountRepository, authRefreshTokenRepository));
 
     AuthTokenResponse tokens =
         kakaoAuthService.signup(

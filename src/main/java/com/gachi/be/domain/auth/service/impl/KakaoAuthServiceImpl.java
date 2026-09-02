@@ -6,9 +6,10 @@ import com.gachi.be.domain.auth.dto.request.KakaoLinkRequest;
 import com.gachi.be.domain.auth.dto.request.KakaoSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.dto.response.KakaoCompleteResponse;
+import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
-import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
+import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.auth.service.KakaoAuthService;
@@ -48,7 +49,8 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
   private final SocialAccountRepository socialAccountRepository;
   private final UserRepository userRepository;
   private final AuthTokenIssuer authTokenIssuer;
-  private final AuthRefreshTokenRepository authRefreshTokenRepository;
+  private final KakaoUnlinkOutboxRepository kakaoUnlinkOutboxRepository;
+  private final SocialAccountDisconnectService disconnectService;
 
   @Override
   public URI createAuthorizationUri() {
@@ -216,11 +218,18 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
   public void unlink(Long userId) {
     enabledProperties();
     socialAccountRepository
-        .findByUserIdAndProvider(userId, SocialProvider.KAKAO)
+        .findByUserIdAndProviderForUpdate(userId, SocialProvider.KAKAO)
         .ifPresent(
             account -> {
-              kakaoClient.unlink(account.getProviderUserId());
-              disconnect(account);
+              account.requestDisconnect();
+              if (!kakaoUnlinkOutboxRepository.existsByProviderUserIdAndProcessedAtIsNull(
+                  account.getProviderUserId())) {
+                kakaoUnlinkOutboxRepository.save(
+                    KakaoUnlinkOutbox.builder()
+                        .userId(userId)
+                        .providerUserId(account.getProviderUserId())
+                        .build());
+              }
             });
   }
 
@@ -238,7 +247,10 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
     }
     socialAccountRepository
         .findByProviderAndProviderUserId(SocialProvider.KAKAO, providerUserId)
-        .ifPresent(this::disconnect);
+        .ifPresent(disconnectService::disconnect);
+    kakaoUnlinkOutboxRepository
+        .findByProviderUserIdAndProcessedAtIsNull(providerUserId)
+        .ifPresent(event -> event.complete(OffsetDateTime.now()));
   }
 
   private AuthProperties.Kakao enabledProperties() {
@@ -260,17 +272,6 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
   private void ensureActive(User user) {
     if (!user.isActive()) {
       throw new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN);
-    }
-  }
-
-  private void disconnect(SocialAccount account) {
-    User user = account.getUser();
-    socialAccountRepository.delete(account);
-    if (!StringUtils.hasText(user.getLoginId()) || !StringUtils.hasText(user.getPasswordHash())) {
-      user.withdraw(OffsetDateTime.now());
-      authRefreshTokenRepository
-          .findAllByUserIdAndRevokedAtIsNull(user.getId())
-          .forEach(token -> token.revoke());
     }
   }
 

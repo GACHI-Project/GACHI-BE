@@ -50,6 +50,10 @@ public class SocialAccount {
   @Column(name = "provider_user_id", nullable = false, length = 100)
   private String providerUserId;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "connection_status", nullable = false, length = 30)
+  private SocialAccountConnectionStatus connectionStatus;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
 
@@ -61,11 +65,23 @@ public class SocialAccount {
     this.user = user;
     this.provider = provider;
     this.providerUserId = providerUserId;
+    this.connectionStatus = SocialAccountConnectionStatus.ACTIVE;
+  }
+
+  public void requestDisconnect() {
+    this.connectionStatus = SocialAccountConnectionStatus.DISCONNECT_PENDING;
+  }
+
+  public boolean isDisconnectPending() {
+    return connectionStatus == SocialAccountConnectionStatus.DISCONNECT_PENDING;
   }
 
   @PrePersist
   void onCreate() {
     OffsetDateTime now = OffsetDateTime.now();
+    if (connectionStatus == null) {
+      connectionStatus = SocialAccountConnectionStatus.ACTIVE;
+    }
     createdAt = now;
     updatedAt = now;
   }
