@@ -25,6 +25,7 @@ import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository.RefreshTokenStatus;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.auth.service.AuthService;
+import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
@@ -40,7 +41,6 @@ import com.gachi.be.global.exception.BusinessException;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.time.OffsetDateTime;
 import java.util.Locale;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -65,6 +65,7 @@ public class AuthServiceImpl implements AuthService {
   private final EmailVerificationStore emailVerificationStore;
   private final AuthMailService authMailService;
   private final AuthProperties authProperties;
+  private final AuthTokenIssuer authTokenIssuer;
 
   @Override
   @Transactional(readOnly = true)
@@ -348,9 +349,14 @@ public class AuthServiceImpl implements AuthService {
   }
 
   private User findUserByEmailOrThrow(String email) {
-    return userRepository
-        .findByEmail(email)
-        .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_EMAIL_NOT_REGISTERED));
+    User user =
+        userRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_EMAIL_NOT_REGISTERED));
+    if (!StringUtils.hasText(user.getLoginId()) || !StringUtils.hasText(user.getPasswordHash())) {
+      throw new BusinessException(ErrorCode.AUTH_EMAIL_NOT_REGISTERED);
+    }
+    return user;
   }
 
   private User findActiveUserForPasswordReset(String loginId, String email) {
@@ -409,38 +415,7 @@ public class AuthServiceImpl implements AuthService {
   /** 로그인/재발급 공통 토큰 발급 + refresh token 세션 저장 로직. */
   private AuthTokenResponse issueTokens(
       User user, boolean rememberMe, String deviceInfo, String ipAddress) {
-    OffsetDateTime now = OffsetDateTime.now();
-    OffsetDateTime refreshExpiresAt =
-        now.plusDays(
-            rememberMe
-                ? authProperties.getJwt().getRefreshTokenRememberDays()
-                : authProperties.getJwt().getRefreshTokenDays());
-
-    JwtTokenProvider.JwtToken accessToken = jwtTokenProvider.issueAccessToken(user);
-    String jti = UUID.randomUUID().toString();
-    JwtTokenProvider.JwtToken refreshToken =
-        jwtTokenProvider.issueRefreshToken(user, jti, refreshExpiresAt);
-
-    AuthRefreshToken refreshTokenEntity =
-        AuthRefreshToken.builder()
-            .user(user)
-            .tokenHash(tokenHashService.sha256(refreshToken.getToken()))
-            .jti(jti)
-            .deviceInfo(deviceInfo)
-            .ipAddress(ipAddress)
-            .rememberMe(rememberMe)
-            .expiresAt(refreshToken.getExpiresAt())
-            .lastUsedAt(now)
-            .build();
-    authRefreshTokenRepository.save(refreshTokenEntity);
-
-    return new AuthTokenResponse(
-        "Bearer",
-        accessToken.getToken(),
-        refreshToken.getToken(),
-        accessToken.getExpiresAt(),
-        refreshToken.getExpiresAt(),
-        rememberMe);
+    return authTokenIssuer.issue(user, rememberMe, deviceInfo, ipAddress);
   }
 
   private String normalizeEmail(String email) {

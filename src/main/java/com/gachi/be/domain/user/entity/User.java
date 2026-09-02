@@ -33,16 +33,16 @@ public class User {
   @Column(nullable = false, unique = true, length = 255)
   private String email;
 
-  @Column(name = "login_id", nullable = false, unique = true, length = 50)
+  @Column(name = "login_id", unique = true, length = 50)
   private String loginId;
 
-  @Column(name = "password_hash", nullable = false, length = 255)
+  @Column(name = "password_hash", length = 255)
   private String passwordHash;
 
   @Column(nullable = false, length = 50)
   private String name;
 
-  @Column(name = "phone_number", nullable = false, unique = true, length = 20)
+  @Column(name = "phone_number", unique = true, length = 20)
   private String phoneNumber;
 
   @Enumerated(EnumType.STRING)
@@ -174,6 +174,14 @@ public class User {
             ? notificationPreference
             : NotificationPreference.defaultValue();
     this.notificationEnabled = this.notificationPreference.isPushEnabled();
+  }
+
+  public void withdraw(OffsetDateTime withdrawnAt) {
+    if (withdrawnAt == null) {
+      throw new IllegalArgumentException("withdrawnAt은 비어 있을 수 없습니다.");
+    }
+    this.status = UserStatus.WITHDRAWN;
+    this.deletedAt = withdrawnAt;
   }
 
   public NotificationPreference getNotificationPreference() {
