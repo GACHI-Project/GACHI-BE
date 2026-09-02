@@ -1,0 +1,2 @@
+ALTER TABLE newsletter
+    ADD COLUMN IF NOT EXISTS file_keys JSONB NULL;
