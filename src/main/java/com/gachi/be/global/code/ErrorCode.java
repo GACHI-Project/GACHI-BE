@@ -159,6 +159,48 @@ public enum ErrorCode {
       "철회된 리프레시 토큰입니다.",
       "로그아웃/회전으로 무효화된 토큰",
       ErrorLogLevel.WARN),
+  AUTH_KAKAO_NOT_CONFIGURED(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      "AUTH5031",
+      "카카오 로그인을 사용할 수 없습니다.",
+      "카카오 OAuth 비활성화 또는 설정 누락",
+      ErrorLogLevel.ERROR),
+  AUTH_KAKAO_STATE_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4018",
+      "유효하지 않거나 만료된 카카오 로그인 요청입니다.",
+      "카카오 OAuth state 누락/불일치/재사용",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_TICKET_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4019",
+      "유효하지 않거나 만료된 카카오 인증 정보입니다.",
+      "카카오 일회용 ticket/signup/link token 누락/만료/재사용",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_EMAIL_REQUIRED(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4020",
+      "카카오계정의 인증된 이메일 제공에 동의해 주세요.",
+      "카카오 이메일 누락 또는 미인증",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_LINK_REQUIRED(
+      HttpStatus.CONFLICT,
+      "AUTH4094",
+      "같은 이메일의 기존 계정과 연동이 필요합니다.",
+      "동일 이메일 계정 자동 병합 차단",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_ALREADY_LINKED(
+      HttpStatus.CONFLICT,
+      "AUTH4095",
+      "이미 카카오계정이 연동되어 있습니다.",
+      "사용자 또는 카카오 식별자 중복 연동",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_LINK_EMAIL_MISMATCH(
+      HttpStatus.FORBIDDEN,
+      "AUTH4033",
+      "카카오계정 이메일이 현재 계정과 일치하지 않습니다.",
+      "명시적 계정 연동 이메일 불일치",
+      ErrorLogLevel.WARN),
 
   // child
   CHILD_NOT_FOUND(

@@ -16,17 +16,20 @@ public record AuthProperties(
     @DefaultValue("2026-04-v1") String consentVersion,
     @Valid Jwt jwt,
     @Valid Email email,
-    @Valid RateLimit rateLimit) {
+    @Valid RateLimit rateLimit,
+    @Valid Kakao kakao) {
 
   public AuthProperties(
       String consentVersion,
       @DefaultValue Jwt jwt,
       @DefaultValue Email email,
-      @DefaultValue RateLimit rateLimit) {
+      @DefaultValue RateLimit rateLimit,
+      @DefaultValue Kakao kakao) {
     this.consentVersion = consentVersion;
     this.jwt = jwt;
     this.email = email;
     this.rateLimit = rateLimit;
+    this.kakao = kakao;
   }
 
   public String getConsentVersion() {
@@ -43,6 +46,10 @@ public record AuthProperties(
 
   public RateLimit getRateLimit() {
     return rateLimit;
+  }
+
+  public Kakao getKakao() {
+    return kakao;
   }
 
   public record Jwt(
@@ -174,6 +181,40 @@ public record AuthProperties(
 
     public long getWindowSeconds() {
       return windowSeconds;
+    }
+  }
+
+  public record Kakao(
+      @DefaultValue("false") boolean enabled,
+      @DefaultValue("") String restApiKey,
+      @DefaultValue("") String clientSecret,
+      @DefaultValue("") String adminKey,
+      @DefaultValue("") String appId,
+      @DefaultValue("") String redirectUri,
+      @DefaultValue("gachi://kakao-auth") String appRedirectUri,
+      @DefaultValue("300") @Min(1) long stateTtlSeconds,
+      @DefaultValue("120") @Min(1) long ticketTtlSeconds,
+      @DefaultValue("600") @Min(1) long signupTokenTtlSeconds) {
+
+    public Kakao() {
+      this(false, "", "", "", "", "", "gachi://kakao-auth", 300, 120, 600);
+    }
+
+    @AssertTrue(message = "Kakao OAuth credentials and redirect URIs are required when enabled.")
+    public boolean isConfigurationValid() {
+      if (!enabled) {
+        return true;
+      }
+      return hasText(restApiKey)
+          && hasText(clientSecret)
+          && hasText(adminKey)
+          && hasText(appId)
+          && hasText(redirectUri)
+          && hasText(appRedirectUri);
+    }
+
+    private boolean hasText(String value) {
+      return value != null && !value.isBlank();
     }
   }
 }
