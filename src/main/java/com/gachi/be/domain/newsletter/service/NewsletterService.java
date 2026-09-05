@@ -1,9 +1,8 @@
 package com.gachi.be.domain.newsletter.service;
 
 import com.gachi.be.domain.newsletter.dto.response.*;
-import org.springframework.web.multipart.MultipartFile;
-
 import java.util.List;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface NewsletterService {
 

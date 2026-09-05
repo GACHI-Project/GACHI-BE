@@ -49,9 +49,9 @@ public class Newsletter {
   @Column(name = "file_key", nullable = false, length = 500)
   private String fileKey;
 
-  /**여러 장 업로드 시 페이지 순서를 유지한 전체 S3 키 목록
-   * file_key는 대표(첫 장) 키로 계속 유지하므로 기존 유니크 인덱스와 조회 코드는 그대로 동작. 단일 업로드 시절에 저장된 레코드는 이 값이 NULL이므로,
-   * 실제 사용은 항상 resolveFileKeys()를 통해
+  /**
+   * 여러 장 업로드 시 페이지 순서를 유지한 전체 S3 키 목록 file_key는 대표(첫 장) 키로 계속 유지하므로 기존 유니크 인덱스와 조회 코드는 그대로 동작. 단일
+   * 업로드 시절에 저장된 레코드는 이 값이 NULL이므로, 실제 사용은 항상 resolveFileKeys()를 통해
    */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "file_keys", columnDefinition = "jsonb")
@@ -152,14 +152,14 @@ public class Newsletter {
   }
 
   /**
-   * OCR 대상 파일 키 목록을 페이지 순서대로 반환.
-   * file_keys 컬럼이 없던 시절에 저장된 레코드(NULL 또는 빈 배열)는 file_key 단건으로 대체 반환하므로, 파이프라인은 데이터 마이그레이션 없이 과거 문서도 그대로 재분석 가능.
+   * OCR 대상 파일 키 목록을 페이지 순서대로 반환. file_keys 컬럼이 없던 시절에 저장된 레코드(NULL 또는 빈 배열)는 file_key 단건으로 대체
+   * 반환하므로, 파이프라인은 데이터 마이그레이션 없이 과거 문서도 그대로 재분석 가능.
    */
   public List<String> resolveFileKeys() {
-      if (fileKeys == null || fileKeys.isEmpty()) {
-          return fileKey == null ? List.of() : List.of(fileKey);
-      }
-      return List.copyOf(fileKeys);
+    if (fileKeys == null || fileKeys.isEmpty()) {
+      return fileKey == null ? List.of() : List.of(fileKey);
+    }
+    return List.copyOf(fileKeys);
   }
 
   /** AI 분석 시작 시 PROCESSING 상태로 전환합니다. */

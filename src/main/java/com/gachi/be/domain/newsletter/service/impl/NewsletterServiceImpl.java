@@ -85,7 +85,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
    *
-   * 처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
+   * <p>처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
    * file_key 획득 childId가 있으면 children 테이블에서 자녀 정보 조회 (스냅샷용) newsletter 레코드 DB 저장 (status=PENDING 으로
    * 변경) AI 분석 파이프라인 비동기 트리거 -> Asyncㅏ로 별도 스레드에서 실행하게 함.
    */
@@ -134,50 +134,50 @@ public class NewsletterServiceImpl implements NewsletterService {
     log.debug("[Newsletter] 사용자 언어 설정 조회 완료. userId={}, language={}", userId, userLanguage);
 
     // S3 업로드 - 가정통신문 전용 경로에 저장 + 디버깅 로그 추가해서 체크
-      List<String> fileKeys = uploadAllToS3(userId, files);
+    List<String> fileKeys = uploadAllToS3(userId, files);
 
-      return saveAndTriggerPipeline(
-          userId, childName, childGrade, childColor, fileKeys, fileHash, userLanguage);
+    return saveAndTriggerPipeline(
+        userId, childName, childGrade, childColor, fileKeys, fileHash, userLanguage);
   }
 
   /**
-  * 파일 목록을 배열 순서 그대로 S3에 업로드하고 file_key 목록을 반환한다.중간에 실패하면 이미 올라간 파일이 S3에 고아로 남으므로 즉시 정리한다. (DB 저장 이후의 롤백 정리는 saveAndTriggerPipeline의 트랜잭션 동기화가
-  * 담당하지만, 이 시점은 아직 newsletter 레코드가 없어 별도 정리가 필요하다.)
-  */
+   * 파일 목록을 배열 순서 그대로 S3에 업로드하고 file_key 목록을 반환한다.중간에 실패하면 이미 올라간 파일이 S3에 고아로 남으므로 즉시 정리한다. (DB 저장
+   * 이후의 롤백 정리는 saveAndTriggerPipeline의 트랜잭션 동기화가 담당하지만, 이 시점은 아직 newsletter 레코드가 없어 별도 정리가 필요하다.)
+   */
   private List<String> uploadAllToS3(Long userId, List<MultipartFile> files) {
-      List<String> fileKeys = new ArrayList<>();
-      try {
-          for (MultipartFile file : files) {
-              String fileKey = s3FileService.uploadNewsletter(file).key();
-              fileKeys.add(fileKey);
-              log.debug(
-                  "[Newsletter] S3 업로드 완료. userId={}, page={}/{}, fileKey={}",
-                  userId,
-                  fileKeys.size(),
-                  files.size(),
-                  fileKey);
-          }
-          return fileKeys;
-      } catch (RuntimeException e) {
-          log.error(
-              "[Newsletter] S3 업로드 중 실패. 이미 업로드된 {}건을 정리합니다. userId={}, error={}",
-              fileKeys.size(),
-              userId,
-              e.getMessage());
-          deleteQuietly(fileKeys);
-          throw e;
+    List<String> fileKeys = new ArrayList<>();
+    try {
+      for (MultipartFile file : files) {
+        String fileKey = s3FileService.uploadNewsletter(file).key();
+        fileKeys.add(fileKey);
+        log.debug(
+            "[Newsletter] S3 업로드 완료. userId={}, page={}/{}, fileKey={}",
+            userId,
+            fileKeys.size(),
+            files.size(),
+            fileKey);
       }
+      return fileKeys;
+    } catch (RuntimeException e) {
+      log.error(
+          "[Newsletter] S3 업로드 중 실패. 이미 업로드된 {}건을 정리합니다. userId={}, error={}",
+          fileKeys.size(),
+          userId,
+          e.getMessage());
+      deleteQuietly(fileKeys);
+      throw e;
+    }
   }
 
   /** S3 파일 목록을 삭제. 삭제 실패는 로그만 남기고 진행한다 (별도 정리 배치 가능). */
   private void deleteQuietly(List<String> fileKeys) {
-      for (String fileKey : fileKeys) {
-          try {
-              s3FileService.deleteFile(fileKey);
-          } catch (Exception ex) {
-              log.error("[Newsletter] S3 파일 삭제 실패. fileKey={}, error={}", fileKey, ex.getMessage());
-          }
+    for (String fileKey : fileKeys) {
+      try {
+        s3FileService.deleteFile(fileKey);
+      } catch (Exception ex) {
+        log.error("[Newsletter] S3 파일 삭제 실패. fileKey={}, error={}", fileKey, ex.getMessage());
       }
+    }
   }
 
   // userId로 users 테이블에서 language_code를 조회하는 내부 메서드.
@@ -236,25 +236,25 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     TransactionSynchronizationManager.registerSynchronization(
         new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                // 트랜잭션 커밋 후 파이프라인 비동기 실행
-                log.debug("[Newsletter] 트랜잭션 커밋. 파이프라인 트리거. newsletterId={}", savedId);
-                newsletterPipelineService.runPipeline(savedId);
-            }
+          @Override
+          public void afterCommit() {
+            // 트랜잭션 커밋 후 파이프라인 비동기 실행
+            log.debug("[Newsletter] 트랜잭션 커밋. 파이프라인 트리거. newsletterId={}", savedId);
+            newsletterPipelineService.runPipeline(savedId);
+          }
 
-            @Override
-            public void afterCompletion(int status) {
-                // 트랜잭션 롤백 시 S3 고아 파일 삭제
-                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
-                    // 업로드된 모든 장을 정리한다. 삭제 실패는 로그만 남기고 진행.
-                    log.warn("[Newsletter] 트랜잭션 롤백. S3 파일 정리. fileKeys={}", savedFileKeys);
-                    deleteQuietly(savedFileKeys);
-                }
+          @Override
+          public void afterCompletion(int status) {
+            // 트랜잭션 롤백 시 S3 고아 파일 삭제
+            if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+              // 업로드된 모든 장을 정리한다. 삭제 실패는 로그만 남기고 진행.
+              log.warn("[Newsletter] 트랜잭션 롤백. S3 파일 정리. fileKeys={}", savedFileKeys);
+              deleteQuietly(savedFileKeys);
             }
+          }
         });
 
-      return new NewsletterUploadResponse(saved.getId(), saved.getStatus());
+    return new NewsletterUploadResponse(saved.getId(), saved.getStatus());
   }
 
   /**
@@ -580,85 +580,84 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 파일 목록 유효성 검사.
    *
-   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
-   * 최대 크기: 10MB->합계 최대 50MB
-   * 최대 10장
-   *
+   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * 최대 크기: 10MB->합계 최대 50MB 최대 10장
    */
   private void validateFiles(List<MultipartFile> files) {
     if (files == null || files.isEmpty()) {
       throw new BusinessException(ErrorCode.NEWSLETTER_FILE_EMPTY);
     }
-  // 개수 초과는 개별 파일 검사보다 먼저 확인한다 (불필요한 순회 방지)
+    // 개수 초과는 개별 파일 검사보다 먼저 확인한다 (불필요한 순회 방지)
     if (files.size() > MAX_FILE_COUNT) {
-        throw new BusinessException(
-            ErrorCode.NEWSLETTER_FILE_COUNT_EXCEEDED, "업로드 장 수=" + files.size());
+      throw new BusinessException(
+          ErrorCode.NEWSLETTER_FILE_COUNT_EXCEEDED, "업로드 장 수=" + files.size());
     }
 
     long totalSize = 0L;
     boolean containsPdf = false;
 
     for (int i = 0; i < files.size(); i++) {
-        MultipartFile file = files.get(i);
+      MultipartFile file = files.get(i);
 
-        // 한 장이라도 비어 있으면 프론트 전송 누락일 가능성이 높으므로 조기에 실패시킨다.
-        if (file == null || file.isEmpty()) {
-            throw new BusinessException(ErrorCode.NEWSLETTER_FILE_EMPTY, "비어있는 파일 index=" + i);
-        }
+      // 한 장이라도 비어 있으면 프론트 전송 누락일 가능성이 높으므로 조기에 실패시킨다.
+      if (file == null || file.isEmpty()) {
+        throw new BusinessException(ErrorCode.NEWSLETTER_FILE_EMPTY, "비어있는 파일 index=" + i);
+      }
 
-        String contentType = file.getContentType();
-        boolean allowed =
-            contentType != null
-                && (contentType.equals(CONTENT_TYPE_JPEG)
-                || contentType.equals(CONTENT_TYPE_PNG)
-                || contentType.equals(CONTENT_TYPE_PDF));
+      String contentType = file.getContentType();
+      boolean allowed =
+          contentType != null
+              && (contentType.equals(CONTENT_TYPE_JPEG)
+                  || contentType.equals(CONTENT_TYPE_PNG)
+                  || contentType.equals(CONTENT_TYPE_PDF));
 
-        if (!allowed) {
-            throw new BusinessException(
-                ErrorCode.NEWSLETTER_FILE_TYPE_INVALID, "index=" + i + ", contentType=" + contentType);
-        }
+      if (!allowed) {
+        throw new BusinessException(
+            ErrorCode.NEWSLETTER_FILE_TYPE_INVALID, "index=" + i + ", contentType=" + contentType);
+      }
 
-        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-            throw new BusinessException(
-                ErrorCode.NEWSLETTER_FILE_SIZE_EXCEEDED, "index=" + i + ", size=" + file.getSize());
-        }
+      if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+        throw new BusinessException(
+            ErrorCode.NEWSLETTER_FILE_SIZE_EXCEEDED, "index=" + i + ", size=" + file.getSize());
+      }
 
-        if (CONTENT_TYPE_PDF.equals(contentType)) {
-            containsPdf = true;
-        }
-        totalSize += file.getSize();
+      if (CONTENT_TYPE_PDF.equals(contentType)) {
+        containsPdf = true;
+      }
+      totalSize += file.getSize();
     }
 
     // PDF는 단독 1개만 허용 (이미지와 혼합 불가, PDF 여러 개 불가)
-     if (containsPdf && files.size() > 1) {
-         throw new BusinessException(
-             ErrorCode.NEWSLETTER_FILE_MIXED_TYPE, "PDF 포함 상태로 " + files.size() + "개 전달됨");
-     }
+    if (containsPdf && files.size() > 1) {
+      throw new BusinessException(
+          ErrorCode.NEWSLETTER_FILE_MIXED_TYPE, "PDF 포함 상태로 " + files.size() + "개 전달됨");
+    }
 
-     if (totalSize > MAX_TOTAL_SIZE_BYTES) {
-         throw new BusinessException(
-             ErrorCode.NEWSLETTER_FILE_TOTAL_SIZE_EXCEEDED, "총 용량=" + totalSize + "bytes");
-     }}
+    if (totalSize > MAX_TOTAL_SIZE_BYTES) {
+      throw new BusinessException(
+          ErrorCode.NEWSLETTER_FILE_TOTAL_SIZE_EXCEEDED, "총 용량=" + totalSize + "bytes");
+    }
+  }
 
   /** 파일의 SHA-256 해시값 계산 */
   private String computeSha256(List<MultipartFile> files) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       for (MultipartFile file : files) {
-          try (InputStream is = file.getInputStream()) {
-              byte[] buffer = new byte[8192]; // 8KB 버퍼
-              int bytesRead;
-              while ((bytesRead = is.read(buffer)) != -1) {
-                  digest.update(buffer, 0, bytesRead);
-              }
+        try (InputStream is = file.getInputStream()) {
+          byte[] buffer = new byte[8192]; // 8KB 버퍼
+          int bytesRead;
+          while ((bytesRead = is.read(buffer)) != -1) {
+            digest.update(buffer, 0, bytesRead);
           }
+        }
       }
       return HexFormat.of().formatHex(digest.digest());
     } catch (NoSuchAlgorithmException e) {
       // SHA-256은 Java 표준 알고리즘이라 실제로 발생하지 않음
       throw new RuntimeException("SHA-256 알고리즘 없음. JVM 환경 확인 필요.", e);
     } catch (IOException e) {
-        throw new BusinessException(ErrorCode.NEWSLETTER_FILE_READ_FAILED);
+      throw new BusinessException(ErrorCode.NEWSLETTER_FILE_READ_FAILED);
     }
   }
 
