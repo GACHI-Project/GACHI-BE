@@ -206,6 +206,21 @@ public class NewsletterServiceImpl implements NewsletterService {
       String userLanguage) {
     String representativeFileKey = fileKeys.get(0);
 
+    // 롤백 시 S3 정리 등록을 save() 앞으로 이동.
+    final List<String> savedFileKeys = List.copyOf(fileKeys);
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCompletion(int status) {
+            // 트랜잭션 롤백 시 S3 고아 파일 삭제
+            if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+              // 업로드된 모든 장을 정리한다. 삭제 실패는 로그만 남기고 진행.
+              log.warn("[Newsletter] 트랜잭션 롤백. S3 파일 정리. fileKeys={}", savedFileKeys);
+              deleteQuietly(savedFileKeys);
+            }
+          }
+        });
+
     Newsletter newsletter =
         Newsletter.builder()
             .userId(userId)
@@ -231,9 +246,13 @@ public class NewsletterServiceImpl implements NewsletterService {
     }
 
     final Long savedId = saved.getId();
-    final List<String> savedFileKeys = List.copyOf(fileKeys);
-    log.info("[Newsletter] 업로드 완료. userId={}, newsletterId={}", userId, savedId);
+    log.info(
+        "[Newsletter] 업로드 완료. userId={}, newsletterId={}, pageCount={}",
+        userId,
+        savedId,
+        savedFileKeys.size());
 
+    // 파이프라인 트리거는 저장된 ID가 필요하므로 save() 이후에 별도로 등록
     TransactionSynchronizationManager.registerSynchronization(
         new TransactionSynchronization() {
           @Override
@@ -241,16 +260,6 @@ public class NewsletterServiceImpl implements NewsletterService {
             // 트랜잭션 커밋 후 파이프라인 비동기 실행
             log.debug("[Newsletter] 트랜잭션 커밋. 파이프라인 트리거. newsletterId={}", savedId);
             newsletterPipelineService.runPipeline(savedId);
-          }
-
-          @Override
-          public void afterCompletion(int status) {
-            // 트랜잭션 롤백 시 S3 고아 파일 삭제
-            if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
-              // 업로드된 모든 장을 정리한다. 삭제 실패는 로그만 남기고 진행.
-              log.warn("[Newsletter] 트랜잭션 롤백. S3 파일 정리. fileKeys={}", savedFileKeys);
-              deleteQuietly(savedFileKeys);
-            }
           }
         });
 

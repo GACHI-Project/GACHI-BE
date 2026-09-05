@@ -8,6 +8,7 @@ import com.gachi.be.file.config.S3Properties;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -93,8 +94,11 @@ public class NewsletterPipelineService {
         } else {
           log.debug("[Pipeline][STEP2] 이미지 EXIF 회전 보정 시작. page={}", pageIndex + 1);
           byte[] processedBytes = imagePreprocessor.preprocessImage(fileBytes);
-          // tempFileKey를 루프 지역 변수로 선언하고, 페이지 키 기준으로 임시 키를 만든다.
-          String tempFileKey = fileKey + "_processed";
+          // 임시 키에 실행 단위 UUID를 붙여 파이프라인 실행끼리 키가 겹치지 않게 한다.
+          //   기존(fileKey + "_processed")은 같은 newsletter를 재분석할 때 항상 같은 키가 되어,
+          //   재시도 버튼 연타 등으로 두 실행이 겹치면 먼저 끝난 쪽의 finally 정리가
+          //   다른 실행이 OCR 입력으로 쓰고 있는 파일을 삭제해버릴 수 있었다.
+          String tempFileKey = fileKey + "_processed_" + UUID.randomUUID();
           uploadBytesToS3(processedBytes, tempFileKey, "image/png");
           // finally에서 정리할 수 있도록 임시 키를 목록에 누적한다. (누락 시 S3에 고아 파일이 남음)
           tempFileKeys.add(tempFileKey);
