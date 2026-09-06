@@ -13,12 +13,14 @@ import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -50,25 +52,29 @@ public class NewsletterController {
       description =
           """
       가정통신문 이미지(jpg/png) 또는 PDF를 S3에 업로드하고 AI 분석을 시작합니다.
-      응답으로 받은 newsletterId로 /status API를 폴링하여 진행률을 확인하세요.
+      이미지는 한 번에 최대 10장까지 보낼 수 있으며, files 배열 순서가 그대로 문서 페이지 순서가 됩니다.
+      PDF는 그 자체가 여러 페이지를 담는 형식이므로 1개만 허용하며 이미지와 함께 보낼 수 없습니다.
+      크기 제한: 장당 최대 10MB, 전체 합계 최대 50MB.
+      1장만 올릴 때도 반드시 files로 전송해야 합니다.
+      응답으로 받은 newsletterId로 /status API를 폴링하여 진행률을 확인합니다.
       """)
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.CREATED)
   public ApiResponse<NewsletterUploadResponse> upload(
       @AuthenticationPrincipal Long userId,
       @Parameter(
-              description = "가정통신문 파일 (jpg/png/pdf, 최대 10MB)",
+              description = "가정통신문 파일 목록 (jpg/png 최대 10장 또는 pdf 1개, 장당 최대 10MB)",
               required = true,
               content =
                   @Content(
                       mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
-                      schema = @Schema(type = "string", format = "binary")))
-          @RequestPart("file")
-          MultipartFile file,
+                      array = @ArraySchema(schema = @Schema(type = "string", format = "binary"))))
+          @RequestPart("files")
+          List<MultipartFile> files,
       @Parameter(description = "연결할 자녀 ID. 미선택 시 생략") @RequestParam(required = false)
           Long childId) {
 
-    NewsletterUploadResponse response = newsletterService.upload(userId, file, childId);
+    NewsletterUploadResponse response = newsletterService.upload(userId, files, childId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_UPLOAD_SUCCESS, response);
   }
 

@@ -6,7 +6,9 @@ import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisRe
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.file.config.S3Properties;
 import com.gachi.be.global.exception.ExternalApiException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -49,40 +51,78 @@ public class NewsletterPipelineService {
     newsletterPipelineStatusService.markProcessing(newsletterId);
     log.debug("[Pipeline] PROCESSING 전환 완료. newsletterId={}", newsletterId);
 
-    String tempFileKey = null;
+    List<String> tempFileKeys = new ArrayList<>();
     String failureStage = "PIPELINE_START";
     String ocrText = null;
     String originalText = null;
     String translatedText = null;
 
     try {
-      failureStage = "S3_DOWNLOAD";
-      log.debug("[Pipeline][STEP1] S3 다운로드 시작. fileKey={}", newsletter.getFileKey());
-      byte[] fileBytes = downloadFromS3(newsletter.getFileKey());
-      log.debug("[Pipeline][STEP1] 다운로드 완료. size={}bytes", fileBytes.length);
-
-      boolean isPdf = newsletter.getFileKey().toLowerCase().endsWith(".pdf");
-      String ocrTargetKey;
-
-      failureStage = "IMAGE_PREPROCESS";
-      if (isPdf) {
-        log.debug("[Pipeline][STEP2] PDF 파일. Clova OCR에 원본 파일을 전달합니다.");
-        ocrTargetKey = newsletter.getFileKey();
-      } else {
-        log.debug("[Pipeline][STEP2] 이미지 EXIF 회전 보정 시작.");
-        byte[] processedBytes = imagePreprocessor.preprocessImage(fileBytes);
-        tempFileKey = newsletter.getFileKey() + "_processed";
-        uploadBytesToS3(processedBytes, tempFileKey, "image/png");
-        ocrTargetKey = tempFileKey;
-        log.debug("[Pipeline][STEP2] 전처리 파일 임시 업로드 완료. tempFileKey={}", tempFileKey);
+      // 페이지 파일 키 목록 조회.
+      // file_keys(JSONB)가 비어있는 과거 데이터는 file_key 단건으로 대체되므로 기존 문서도 그대로 동작한다.
+      List<String> fileKeys = newsletter.resolveFileKeys();
+      if (fileKeys.isEmpty()) {
+        throw new IllegalStateException("OCR 대상 파일 키가 없습니다. newsletterId=" + newsletterId);
       }
+      log.debug("[Pipeline] OCR 대상 페이지 수={}. newsletterId={}", fileKeys.size(), newsletterId);
 
-      failureStage = "CLOVA_OCR";
-      log.debug("[Pipeline][STEP3] Clova OCR 호출 시작. ocrTargetKey={}", ocrTargetKey);
-      List<List<OcrField>> ocrPageFields =
-          clovaOcrClient.callOcr(s3Properties.getBucket(), ocrTargetKey);
-      log.debug("[Pipeline][STEP3] OCR 완료. totalFieldsCount={}", ocrPageFields.size());
+      // STEP1~3을 페이지 단위 루프로 처리.
+      // 페이지 순서를 보장해야 하므로 순차 호출한다. (병렬 호출은 외부 API rate limit·부분 실패 처리가 복잡해짐)
+      List<List<OcrField>> ocrPageFields = new ArrayList<>();
 
+      for (int pageIndex = 0; pageIndex < fileKeys.size(); pageIndex++) {
+        String fileKey = fileKeys.get(pageIndex);
+
+        failureStage = "S3_DOWNLOAD";
+        log.debug(
+            "[Pipeline][STEP1] S3 다운로드 시작. page={}/{}, fileKey={}",
+            pageIndex + 1,
+            fileKeys.size(),
+            fileKey);
+        byte[] fileBytes = downloadFromS3(fileKey);
+        log.debug("[Pipeline][STEP1] 다운로드 완료. size={}bytes", fileBytes.length);
+
+        // newsletter.getFileKey()(대표 키)가 아니라 현재 페이지의 fileKey를 기준으로 판단해야 한다.
+        boolean isPdf = fileKey.toLowerCase().endsWith(".pdf");
+        String ocrTargetKey;
+
+        failureStage = "IMAGE_PREPROCESS";
+        if (isPdf) {
+          log.debug("[Pipeline][STEP2] PDF 파일. Clova OCR에 원본 파일을 전달합니다.");
+          // 대표 키가 아닌 현재 페이지 키를 OCR 대상으로 사용
+          ocrTargetKey = fileKey;
+        } else {
+          log.debug("[Pipeline][STEP2] 이미지 EXIF 회전 보정 시작. page={}", pageIndex + 1);
+          byte[] processedBytes = imagePreprocessor.preprocessImage(fileBytes);
+          // 임시 키에 실행 단위 UUID를 붙여 파이프라인 실행끼리 키가 겹치지 않게 한다.
+          //   기존(fileKey + "_processed")은 같은 newsletter를 재분석할 때 항상 같은 키가 되어,
+          //   재시도 버튼 연타 등으로 두 실행이 겹치면 먼저 끝난 쪽의 finally 정리가
+          //   다른 실행이 OCR 입력으로 쓰고 있는 파일을 삭제해버릴 수 있었다.
+          String tempFileKey = fileKey + "_processed_" + UUID.randomUUID();
+          uploadBytesToS3(processedBytes, tempFileKey, "image/png");
+          // finally에서 정리할 수 있도록 임시 키를 목록에 누적한다. (누락 시 S3에 고아 파일이 남음)
+          tempFileKeys.add(tempFileKey);
+          ocrTargetKey = tempFileKey;
+          log.debug("[Pipeline][STEP2] 전처리 파일 임시 업로드 완료. tempFileKey={}", tempFileKey);
+        }
+
+        failureStage = "CLOVA_OCR";
+        log.debug("[Pipeline][STEP3] Clova OCR 호출 시작. ocrTargetKey={}", ocrTargetKey);
+        // 루프 밖의 ocrPageFields를 재선언하지 않고, 페이지 결과를 순서대로 누적한다.
+        // PDF는 클로바가 내부적으로 페이지를 나눠 반환하므로 여러 개가 들어올 수 있고,
+        // 이미지는 장당 1개가 들어온다. 두 경우 모두 누적 순서가 문서 페이지 순서가 된다.
+        List<List<OcrField>> pageResult =
+            clovaOcrClient.callOcr(s3Properties.getBucket(), ocrTargetKey);
+        ocrPageFields.addAll(pageResult);
+        log.debug(
+            "[Pipeline][STEP3] OCR 완료. page={}/{}, 인식 페이지 수={}",
+            pageIndex + 1,
+            fileKeys.size(),
+            pageResult.size());
+      }
+      // 여기서 페이지 루프를 닫는다. STEP4 이후는 전체 페이지를 합친 뒤 1회만 실행되어야 한다.
+
+      log.debug("[Pipeline][STEP3] 전체 OCR 완료. totalOcrPages={}", ocrPageFields.size());
       failureStage = "OCR_TEXT_PARSE";
       log.debug("[Pipeline][STEP4] OCR 텍스트 파싱 시작.");
       ocrText = ocrTextRefiner.parseFields(ocrPageFields);
@@ -165,7 +205,7 @@ public class NewsletterPipelineService {
       newsletterPipelineStatusService.markFailedWithSnapshot(
           newsletterId, ocrText, originalText, translatedText, failureStage, failureReason(e));
     } finally {
-      if (tempFileKey != null) {
+      for (String tempFileKey : tempFileKeys) {
         try {
           deleteFromS3(tempFileKey);
           log.debug("[Pipeline] 임시 파일 삭제 완료. tempFileKey={}", tempFileKey);

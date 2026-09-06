@@ -5,8 +5,8 @@ spring:
     default: dev
   servlet:
     multipart:
-      max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:10MB}
-      max-request-size: ${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:10MB}
+      max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:11MB}
+      max-request-size: ${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:55MB}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -53,6 +53,17 @@ app:
       login:
         limit: ${AUTH_RATE_LIMIT_LOGIN_LIMIT:5}
         window-seconds: ${AUTH_RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+    kakao:
+      enabled: ${KAKAO_AUTH_ENABLED:false}
+      rest-api-key: ${KAKAO_REST_API_KEY:}
+      client-secret: ${KAKAO_CLIENT_SECRET:}
+      admin-key: ${KAKAO_ADMIN_KEY:}
+      app-id: ${KAKAO_APP_ID:}
+      redirect-uri: ${KAKAO_REDIRECT_URI:}
+      app-redirect-uri: ${KAKAO_APP_REDIRECT_URI:gachi://kakao-auth}
+      state-ttl-seconds: ${KAKAO_STATE_TTL_SECONDS:300}
+      ticket-ttl-seconds: ${KAKAO_TICKET_TTL_SECONDS:120}
+      signup-token-ttl-seconds: ${KAKAO_SIGNUP_TOKEN_TTL_SECONDS:600}
   s3:
     region: ${AWS_REGION:ap-northeast-2}
     bucket: ${AWS_S3_BUCKET:}

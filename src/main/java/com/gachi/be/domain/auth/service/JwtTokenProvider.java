@@ -40,7 +40,7 @@ public class JwtTokenProvider {
             .issuedAt(Date.from(now.toInstant()))
             .expiration(Date.from(expiresAt.toInstant()))
             .claim(CLAIM_TYPE, "access")
-            .claim(CLAIM_LOGIN_ID, user.getLoginId())
+            .claim(CLAIM_LOGIN_ID, tokenLoginId(user))
             .signWith(signingKey())
             .compact();
 
@@ -58,7 +58,7 @@ public class JwtTokenProvider {
             .issuedAt(Date.from(now.toInstant()))
             .expiration(Date.from(expiresAt.toInstant()))
             .claim(CLAIM_TYPE, "refresh")
-            .claim(CLAIM_LOGIN_ID, user.getLoginId())
+            .claim(CLAIM_LOGIN_ID, tokenLoginId(user))
             .signWith(signingKey())
             .compact();
 
@@ -115,6 +115,10 @@ public class JwtTokenProvider {
     }
     byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
     return Keys.hmacShaKeyFor(keyBytes);
+  }
+
+  private String tokenLoginId(User user) {
+    return StringUtils.hasText(user.getLoginId()) ? user.getLoginId() : "";
   }
 
   @Getter

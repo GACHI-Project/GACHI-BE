@@ -9,11 +9,18 @@ import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.auth.service.impl.NoopAuthMailService;
 import com.gachi.be.domain.auth.service.password.PasswordPolicyValidator;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
+import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
+import com.gachi.be.domain.notification.entity.PushDeviceToken;
+import com.gachi.be.domain.notification.repository.PushDeviceTokenRepository;
+import com.gachi.be.domain.user.dto.request.ChangeLanguageRequest;
+import com.gachi.be.domain.user.dto.request.ChangeNotificationRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeCodeSendRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeRequest;
 import com.gachi.be.domain.user.dto.request.EmailChangeVerifyRequest;
 import com.gachi.be.domain.user.dto.request.PasswordChangeRequest;
 import com.gachi.be.domain.user.dto.request.ProfileUpdateRequest;
+import com.gachi.be.domain.user.dto.request.UserWithdrawalRequest;
 import com.gachi.be.domain.user.dto.response.EmailChangeResponse;
 import com.gachi.be.domain.user.dto.response.ProfileUpdateResponse;
 import com.gachi.be.domain.user.entity.User;
@@ -24,7 +31,9 @@ import com.gachi.be.global.exception.AppException;
 import com.gachi.be.global.exception.BusinessException;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -40,11 +49,43 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class UserProfileService {
   private final UserRepository userRepository;
   private final AuthRefreshTokenRepository authRefreshTokenRepository;
+  private final NewsletterRepository newsletterRepository;
+  private final PushDeviceTokenRepository pushDeviceTokenRepository;
   private final PasswordEncoder passwordEncoder;
   private final AuthMailService authMailService;
   private final EmailVerificationStore emailVerificationStore;
   private final AuthProperties authProperties;
   private final PasswordPolicyValidator passwordPolicyValidator;
+
+  @Transactional
+  public void changeLanguage(User user, ChangeLanguageRequest request) {
+    User currentUser = findActiveUserWithLock(user.getId());
+    String previousLanguage = currentUser.getLanguageCode();
+    String newLanguage = request.languageCode();
+    if (Objects.equals(previousLanguage, newLanguage)) {
+      return;
+    }
+
+    currentUser.updateLanguage(newLanguage);
+    int cancelledCount =
+        newsletterRepository.cancelInProgressByUserId(
+            currentUser.getId(),
+            List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING),
+            NewsletterStatus.FAILED,
+            newLanguage);
+    log.info(
+        "[Language] 언어 설정 변경. userId={}, {} -> {}, cancelledPipelines={}",
+        currentUser.getId(),
+        previousLanguage,
+        newLanguage,
+        cancelledCount);
+  }
+
+  @Transactional
+  public void changeNotificationPreference(User user, ChangeNotificationRequest request) {
+    User currentUser = findActiveUserWithLock(user.getId());
+    currentUser.updateNotificationPreference(request.notificationPreference());
+  }
 
   @Transactional
   public ProfileUpdateResponse updateProfile(User user, ProfileUpdateRequest request) {
@@ -85,6 +126,20 @@ public class UserProfileService {
         currentUser.getPhoneNumber());
     currentUser.resetPassword(passwordEncoder.encode(request.newPassword()), OffsetDateTime.now());
     revokeActiveRefreshTokens(currentUser.getId());
+  }
+
+  @Transactional
+  public void withdraw(User user, UserWithdrawalRequest request) {
+    User currentUser = findActiveUserWithLock(user.getId());
+    if (!passwordEncoder.matches(request.currentPassword(), currentUser.getPasswordHash())) {
+      throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
+    }
+
+    currentUser.withdraw(OffsetDateTime.now());
+    revokeActiveRefreshTokens(currentUser.getId());
+    pushDeviceTokenRepository
+        .findAllByUserIdAndEnabledTrueAndDeletedAtIsNull(currentUser.getId())
+        .forEach(PushDeviceToken::softDelete);
   }
 
   @Transactional

@@ -19,6 +19,12 @@ public enum ErrorCode {
       "지원하지 않는 HTTP 메서드입니다.",
       "허용하지 않은 메서드 요청",
       ErrorLogLevel.WARN),
+  FILE_UPLOAD_SIZE_EXCEEDED(
+      HttpStatus.PAYLOAD_TOO_LARGE,
+      "COMMON4131",
+      "업로드 가능한 용량을 초과했습니다.",
+      "multipart 파싱 단계에서 max-file-size 또는 max-request-size 초과",
+      ErrorLogLevel.WARN),
   BUSINESS_RULE_VIOLATION(
       HttpStatus.BAD_REQUEST, "BUS4001", "비즈니스 규칙 위반입니다.", "도메인 정책 위반", ErrorLogLevel.WARN),
   RESOURCE_NOT_FOUND(
@@ -159,6 +165,48 @@ public enum ErrorCode {
       "철회된 리프레시 토큰입니다.",
       "로그아웃/회전으로 무효화된 토큰",
       ErrorLogLevel.WARN),
+  AUTH_KAKAO_NOT_CONFIGURED(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      "AUTH5031",
+      "카카오 로그인을 사용할 수 없습니다.",
+      "카카오 OAuth 비활성화 또는 설정 누락",
+      ErrorLogLevel.ERROR),
+  AUTH_KAKAO_STATE_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4018",
+      "유효하지 않거나 만료된 카카오 로그인 요청입니다.",
+      "카카오 OAuth state 누락/불일치/재사용",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_TICKET_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4019",
+      "유효하지 않거나 만료된 카카오 인증 정보입니다.",
+      "카카오 일회용 ticket/signup/link token 누락/만료/재사용",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_EMAIL_REQUIRED(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4020",
+      "카카오계정의 인증된 이메일 제공에 동의해 주세요.",
+      "카카오 이메일 누락 또는 미인증",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_LINK_REQUIRED(
+      HttpStatus.CONFLICT,
+      "AUTH4094",
+      "같은 이메일의 기존 계정과 연동이 필요합니다.",
+      "동일 이메일 계정 자동 병합 차단",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_ALREADY_LINKED(
+      HttpStatus.CONFLICT,
+      "AUTH4095",
+      "이미 카카오계정이 연동되어 있습니다.",
+      "사용자 또는 카카오 식별자 중복 연동",
+      ErrorLogLevel.WARN),
+  AUTH_KAKAO_LINK_EMAIL_MISMATCH(
+      HttpStatus.FORBIDDEN,
+      "AUTH4033",
+      "카카오계정 이메일이 현재 계정과 일치하지 않습니다.",
+      "명시적 계정 연동 이메일 불일치",
+      ErrorLogLevel.WARN),
 
   // child
   CHILD_NOT_FOUND(
@@ -213,7 +261,24 @@ public enum ErrorCode {
       "실패한 가정통신문만 다시 분석할 수 있습니다.",
       "FAILED 상태가 아닌 newsletter 분석 재시도 요청",
       ErrorLogLevel.WARN),
-
+  NEWSLETTER_FILE_COUNT_EXCEEDED(
+      HttpStatus.BAD_REQUEST,
+      "NL4006",
+      "가정통신문 이미지는 한 번에 최대 10장까지 업로드할 수 있습니다.",
+      "이미지 10장 초과 업로드 시도 (클로바 OCR PDF 페이지 상한과 동일 기준)",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_FILE_MIXED_TYPE(
+      HttpStatus.BAD_REQUEST,
+      "NL4007",
+      "PDF는 한 번에 1개만 업로드할 수 있으며, 이미지와 함께 보낼 수 없습니다.",
+      "files에 PDF가 포함된 상태로 2개 이상 전달됨",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_FILE_TOTAL_SIZE_EXCEEDED(
+      HttpStatus.BAD_REQUEST,
+      "NL4008",
+      "업로드한 파일의 총 크기는 50MB 이하여야 합니다.",
+      "files 전체 용량 합계 50MB 초과",
+      ErrorLogLevel.WARN),
   CHECKLIST_NOT_FOUND(
       HttpStatus.NOT_FOUND,
       "CL4041",
