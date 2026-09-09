@@ -292,6 +292,21 @@ if [ "$BACKEND_HEALTH" != "healthy" ]; then
   docker compose --env-file .env logs --tail=120 backend || true
   exit 1
 fi
+if [ "$KAKAO_AUTH_ENABLED_INPUT" = "true" ]; then
+  if ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND_CID" \
+      | grep -qx 'KAKAO_AUTH_ENABLED=true'; then
+    echo "backend container is missing KAKAO_AUTH_ENABLED=true."
+    exit 1
+  fi
+  for key in KAKAO_REST_API_KEY KAKAO_CLIENT_SECRET KAKAO_ADMIN_KEY KAKAO_APP_ID KAKAO_REDIRECT_URI KAKAO_APP_REDIRECT_URI; do
+    if ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND_CID" \
+        | grep -q "^${key}=."; then
+      echo "backend container is missing a non-empty ${key}."
+      exit 1
+    fi
+  done
+  echo "[debug] Kakao runtime environment is enabled and complete."
+fi
 docker compose --env-file .env up -d --remove-orphans --force-recreate --no-deps nginx
 
 echo "[7/7] Print deploy status"
