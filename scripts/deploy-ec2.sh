@@ -22,48 +22,26 @@ upsert_env_value() {
   fi
 }
 
-read_ssm_secure_value() {
-  local parameter_name="$1"
-  aws ssm get-parameter \
-    --region "$AWS_REGION_INPUT" \
-    --name "$parameter_name" \
-    --with-decryption \
-    --query Parameter.Value \
-    --output text
-}
-
 sync_kakao_config() {
-  if [ -z "$KAKAO_SSM_PARAMETER_PREFIX_INPUT" ]; then
+  if [ "${KAKAO_AUTH_ENABLED_INPUT}" != "true" ]; then
     return
   fi
-  if ! command -v aws >/dev/null 2>&1; then
-    echo "AWS CLI is required to load Kakao configuration from Parameter Store."
-    exit 1
-  fi
 
-  local rest_api_key client_secret admin_key app_id redirect_uri app_redirect_uri
-  rest_api_key="$(read_ssm_secure_value "$KAKAO_SSM_PARAMETER_PREFIX_INPUT/rest-api-key")"
-  client_secret="$(read_ssm_secure_value "$KAKAO_SSM_PARAMETER_PREFIX_INPUT/client-secret")"
-  admin_key="$(read_ssm_secure_value "$KAKAO_SSM_PARAMETER_PREFIX_INPUT/admin-key")"
-  app_id="$(read_ssm_secure_value "$KAKAO_SSM_PARAMETER_PREFIX_INPUT/app-id")"
-  redirect_uri="$(read_ssm_secure_value "$KAKAO_SSM_PARAMETER_PREFIX_INPUT/redirect-uri")"
-  app_redirect_uri="$(read_ssm_secure_value "$KAKAO_SSM_PARAMETER_PREFIX_INPUT/app-redirect-uri")"
-
-  for value in "$rest_api_key" "$client_secret" "$admin_key" "$app_id" "$redirect_uri" "$app_redirect_uri"; do
-    if [ -z "$value" ] || [ "$value" = "None" ]; then
-      echo "Kakao Parameter Store configuration is incomplete."
+  for value in "$KAKAO_REST_API_KEY_INPUT" "$KAKAO_CLIENT_SECRET_INPUT" "$KAKAO_ADMIN_KEY_INPUT" "$KAKAO_APP_ID_INPUT" "$KAKAO_REDIRECT_URI_INPUT" "$KAKAO_APP_REDIRECT_URI_INPUT"; do
+    if [ -z "$value" ]; then
+      echo "Kakao deployment configuration is incomplete."
       exit 1
     fi
   done
 
   upsert_env_value KAKAO_AUTH_ENABLED true
-  upsert_env_value KAKAO_REST_API_KEY "$rest_api_key"
-  upsert_env_value KAKAO_CLIENT_SECRET "$client_secret"
-  upsert_env_value KAKAO_ADMIN_KEY "$admin_key"
-  upsert_env_value KAKAO_APP_ID "$app_id"
-  upsert_env_value KAKAO_REDIRECT_URI "$redirect_uri"
-  upsert_env_value KAKAO_APP_REDIRECT_URI "$app_redirect_uri"
-  echo "[debug] Kakao configuration synced from Parameter Store."
+  upsert_env_value KAKAO_REST_API_KEY "$KAKAO_REST_API_KEY_INPUT"
+  upsert_env_value KAKAO_CLIENT_SECRET "$KAKAO_CLIENT_SECRET_INPUT"
+  upsert_env_value KAKAO_ADMIN_KEY "$KAKAO_ADMIN_KEY_INPUT"
+  upsert_env_value KAKAO_APP_ID "$KAKAO_APP_ID_INPUT"
+  upsert_env_value KAKAO_REDIRECT_URI "$KAKAO_REDIRECT_URI_INPUT"
+  upsert_env_value KAKAO_APP_REDIRECT_URI "$KAKAO_APP_REDIRECT_URI_INPUT"
+  echo "[debug] Kakao configuration synced from deployment secrets."
 }
 
 to_lower() {
@@ -86,8 +64,13 @@ DEPLOY_PATH_INPUT="${1:-${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}}"
 EC2_HOST_INPUT="${2:-${EC2_HOST:-}}"
 DOCKERHUB_USERNAME_INPUT="${DOCKERHUB_USERNAME:-${3:-}}"
 DOCKERHUB_TOKEN_INPUT="${DOCKERHUB_TOKEN:-}"
-AWS_REGION_INPUT="${AWS_REGION:-ap-northeast-2}"
-KAKAO_SSM_PARAMETER_PREFIX_INPUT="${KAKAO_SSM_PARAMETER_PREFIX:-}"
+KAKAO_AUTH_ENABLED_INPUT="${KAKAO_AUTH_ENABLED:-false}"
+KAKAO_REST_API_KEY_INPUT="${KAKAO_REST_API_KEY:-}"
+KAKAO_CLIENT_SECRET_INPUT="${KAKAO_CLIENT_SECRET:-}"
+KAKAO_ADMIN_KEY_INPUT="${KAKAO_ADMIN_KEY:-}"
+KAKAO_APP_ID_INPUT="${KAKAO_APP_ID:-}"
+KAKAO_REDIRECT_URI_INPUT="${KAKAO_REDIRECT_URI:-}"
+KAKAO_APP_REDIRECT_URI_INPUT="${KAKAO_APP_REDIRECT_URI:-}"
 
 DEPLOY_PATH="$(echo "$DEPLOY_PATH_INPUT" | xargs)"
 EC2_HOST_INPUT="$(echo "$EC2_HOST_INPUT" | xargs)"
