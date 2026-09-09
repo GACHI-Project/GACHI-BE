@@ -137,6 +137,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - GitHub Secrets 권장 구성:
   - `EC2_INSTANCE_ID`(필수)
   - `DOCKERHUB_USERNAME`(필수)
+  - `KAKAO_REST_API_KEY`, `KAKAO_CLIENT_SECRET`, `KAKAO_ADMIN_KEY`, `KAKAO_APP_ID`, `KAKAO_REDIRECT_URI`, `KAKAO_APP_REDIRECT_URI`(카카오 로그인 활성화 시 필수)
   - `EC2_DEPLOY_PATH`(선택, 기본 `/home/ubuntu/GACHI-BE/deploy`)
   - `EC2_HOST`(조건부 필수: `SWAGGER_ENABLED=true` + `SWAGGER_TLS_MODE=letsencrypt_ip` + `.env`에 `SWAGGER_TLS_IP` 미설정 시)
   - `AWS_REGION`(선택, 기본 `ap-northeast-2`)
@@ -153,6 +154,9 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
     - 리소스: `arn:aws:ec2:<region>:<account-id>:instance/<instance-id>`
     - 리소스: `arn:aws:ssm:<region>::document/AWS-RunShellScript`
   - `ssm:GetCommandInvocation`
+  - `ssm:PutParameter`
+    - 리소스: `arn:aws:ssm:<region>:<account-id>:parameter/gachi/prod/kakao/*`
+- EC2 인스턴스 역할에는 `/gachi/prod/kakao/*` SecureString을 읽기 위한 `ssm:GetParameter` 권한과, 고객 관리형 KMS 키를 사용하는 경우 해당 키의 `kms:Decrypt` 권한이 필요함
 - 운영 점검/확장 시 선택 권한:
   - `ssm:ListCommandInvocations`
   - `ec2:DescribeInstances`

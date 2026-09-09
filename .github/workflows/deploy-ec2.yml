@@ -143,6 +143,48 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
+      - name: Sync Kakao configuration to Parameter Store
+        env:
+          AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_ADMIN_KEY: ${{ secrets.KAKAO_ADMIN_KEY }}
+          KAKAO_APP_ID: ${{ secrets.KAKAO_APP_ID }}
+          KAKAO_REDIRECT_URI: ${{ secrets.KAKAO_REDIRECT_URI }}
+          KAKAO_APP_REDIRECT_URI: ${{ secrets.KAKAO_APP_REDIRECT_URI }}
+        run: |
+          set -Eeuo pipefail
+          PARAMETER_PREFIX="/gachi/prod/kakao"
+          for value in \
+            "$KAKAO_REST_API_KEY" \
+            "$KAKAO_CLIENT_SECRET" \
+            "$KAKAO_ADMIN_KEY" \
+            "$KAKAO_APP_ID" \
+            "$KAKAO_REDIRECT_URI" \
+            "$KAKAO_APP_REDIRECT_URI"; do
+            if [ -z "$value" ]; then
+              echo "::error::All KAKAO_* Actions secrets must be configured."
+              exit 1
+            fi
+          done
+
+          put_secure_parameter() {
+            aws ssm put-parameter \
+              --region "$AWS_REGION" \
+              --name "$1" \
+              --type SecureString \
+              --value "$2" \
+              --overwrite >/dev/null
+          }
+
+          put_secure_parameter "$PARAMETER_PREFIX/rest-api-key" "$KAKAO_REST_API_KEY"
+          put_secure_parameter "$PARAMETER_PREFIX/client-secret" "$KAKAO_CLIENT_SECRET"
+          put_secure_parameter "$PARAMETER_PREFIX/admin-key" "$KAKAO_ADMIN_KEY"
+          put_secure_parameter "$PARAMETER_PREFIX/app-id" "$KAKAO_APP_ID"
+          put_secure_parameter "$PARAMETER_PREFIX/redirect-uri" "$KAKAO_REDIRECT_URI"
+          put_secure_parameter "$PARAMETER_PREFIX/app-redirect-uri" "$KAKAO_APP_REDIRECT_URI"
+          echo "Kakao configuration synced to encrypted Parameter Store values."
+
       - name: Build SSM command payload
         id: ssm-payload
         env:
@@ -151,6 +193,7 @@ jobs:
           EC2_HOST: ${{ steps.ec2-host.outputs.value }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN_PARAMETER_NAME: ${{ steps.dockerhub-token-parameter.outputs.value }}
+          KAKAO_SSM_PARAMETER_PREFIX: /gachi/prod/kakao
         run: |
           set -Eeuo pipefail
           SCRIPT_PATH="scripts/deploy-ec2.sh"
@@ -210,6 +253,7 @@ jobs:
             --arg ec2Host "$EC2_HOST" \
             --arg dockerhubUsername "$DOCKERHUB_USERNAME" \
             --arg dockerhubTokenParameterName "$DOCKERHUB_TOKEN_PARAMETER_NAME" \
+            --arg kakaoSsmParameterPrefix "$KAKAO_SSM_PARAMETER_PREFIX" \
             --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
             --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
             --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
@@ -223,7 +267,7 @@ jobs:
                 " && tar -xzf " + ($remoteBundlePath | @sh) + " -C " + ($deployPath | @sh) + " --strip-components=1" +
                 " && if command -v aws >/dev/null 2>&1; then DOCKERHUB_TOKEN=\"$(aws ssm get-parameter --region " + ($awsRegion | @sh) + " --name " + ($dockerhubTokenParameterName | @sh) + " --with-decryption --query Parameter.Value --output text 2>/dev/null || true)\"; else DOCKERHUB_TOKEN=\"\"; fi" +
                 " && if [ -z \"$DOCKERHUB_TOKEN\" ]; then echo \"[warn] DOCKERHUB_TOKEN parameter load skipped or failed. deploy script will try current daemon credentials.\"; fi" +
-                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                " && AWS_REGION=" + ($awsRegion | @sh) + " KAKAO_SSM_PARAMETER_PREFIX=" + ($kakaoSsmParameterPrefix | @sh) + " DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
                 "; status=$?; rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh) + "; exit $status"
               )
             ]')"
