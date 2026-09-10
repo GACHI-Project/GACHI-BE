@@ -137,6 +137,8 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - GitHub Secrets 권장 구성:
   - `EC2_INSTANCE_ID`(필수)
   - `DOCKERHUB_USERNAME`(필수)
+  - `KAKAO_REST_API_KEY`, `KAKAO_APP_ID`, `KAKAO_REDIRECT_URI`, `KAKAO_APP_REDIRECT_URI`(카카오 로그인 활성화 시 필수)
+  - `KAKAO_CLIENT_SECRET_PARAMETER_NAME`, `KAKAO_ADMIN_KEY_PARAMETER_NAME`(선택, 기본 `/gachi/prod/kakao/client-secret`, `/gachi/prod/kakao/admin-key`)
   - `EC2_DEPLOY_PATH`(선택, 기본 `/home/ubuntu/GACHI-BE/deploy`)
   - `EC2_HOST`(조건부 필수: `SWAGGER_ENABLED=true` + `SWAGGER_TLS_MODE=letsencrypt_ip` + `.env`에 `SWAGGER_TLS_IP` 미설정 시)
   - `AWS_REGION`(선택, 기본 `ap-northeast-2`)
@@ -147,12 +149,17 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
   - 대안: EC2 인스턴스 역할로 SSM Parameter Store SecureString/Secrets Manager에서 토큰을 조회해 `scripts/deploy-ec2.sh` 실행 환경의 `DOCKERHUB_TOKEN`으로 주입
   - GitHub Secret `DOCKERHUB_TOKEN`은 deploy-ec2 워크플로우가 SSM 명령 본문으로 전달하지 않음
 - `DOCKERHUB_USERNAME`은 SSM 명령 본문으로 전달되므로 SSM/CloudTrail 이력에 평문으로 남음(토큰이 아닌 계정 식별자)
+- `KAKAO_CLIENT_SECRET`, `KAKAO_ADMIN_KEY` 실제 값은 Parameter Store SecureString에 저장하고, SSM 명령에는 파라미터 이름만 전달함
 - 워크플로우 권한 `id-token: write`는 OIDC 우선 경로를 위한 설정이며, Access Key fallback 사용 시에는 토큰이 발급되더라도 사용되지 않음
 - OIDC Role(IAM) 최소 권한:
   - `ssm:SendCommand`
     - 리소스: `arn:aws:ec2:<region>:<account-id>:instance/<instance-id>`
     - 리소스: `arn:aws:ssm:<region>::document/AWS-RunShellScript`
   - `ssm:GetCommandInvocation`
+- EC2 인스턴스 역할 최소 권한:
+  - `ssm:GetParameter`
+    - 리소스: `arn:aws:ssm:<region>:<account-id>:parameter/gachi/prod/kakao/*`
+  - 고객 관리형 KMS 키로 SecureString을 암호화한 경우 해당 키의 `kms:Decrypt`
 - 운영 점검/확장 시 선택 권한:
   - `ssm:ListCommandInvocations`
   - `ec2:DescribeInstances`

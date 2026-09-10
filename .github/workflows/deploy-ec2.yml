@@ -83,6 +83,21 @@ jobs:
             echo "value=/gachi/prod/dockerhub/token" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve Kakao secret parameters
+        id: kakao-secret-parameters
+        env:
+          KAKAO_CLIENT_SECRET_PARAMETER_NAME_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET_PARAMETER_NAME }}
+          KAKAO_ADMIN_KEY_PARAMETER_NAME_SECRET: ${{ secrets.KAKAO_ADMIN_KEY_PARAMETER_NAME }}
+        run: |
+          CLIENT_SECRET_PARAMETER="${KAKAO_CLIENT_SECRET_PARAMETER_NAME_SECRET:-/gachi/prod/kakao/client-secret}"
+          ADMIN_KEY_PARAMETER="${KAKAO_ADMIN_KEY_PARAMETER_NAME_SECRET:-/gachi/prod/kakao/admin-key}"
+          CLIENT_SECRET_PARAMETER="${CLIENT_SECRET_PARAMETER%$'\r'}"
+          ADMIN_KEY_PARAMETER="${ADMIN_KEY_PARAMETER%$'\r'}"
+          CLIENT_SECRET_PARAMETER="$(printf '%s' "$CLIENT_SECRET_PARAMETER" | sed 's/[[:space:]]*$//')"
+          ADMIN_KEY_PARAMETER="$(printf '%s' "$ADMIN_KEY_PARAMETER" | sed 's/[[:space:]]*$//')"
+          echo "client-secret=$CLIENT_SECRET_PARAMETER" >> "$GITHUB_OUTPUT"
+          echo "admin-key=$ADMIN_KEY_PARAMETER" >> "$GITHUB_OUTPUT"
+
       - name: Validate SSM inputs
         id: auth-check
         env:
@@ -143,16 +158,35 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
-      - name: Build SSM command payload
-        id: ssm-payload
+      - name: Build and send deploy command via SSM
+        id: ssm-send
         env:
           AWS_REGION: ${{ steps.aws-region.outputs.value }}
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
           EC2_DEPLOY_PATH: ${{ steps.deploy-path.outputs.value }}
           EC2_HOST: ${{ steps.ec2-host.outputs.value }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN_PARAMETER_NAME: ${{ steps.dockerhub-token-parameter.outputs.value }}
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET_PARAMETER_NAME: ${{ steps.kakao-secret-parameters.outputs.client-secret }}
+          KAKAO_ADMIN_KEY_PARAMETER_NAME: ${{ steps.kakao-secret-parameters.outputs.admin-key }}
+          KAKAO_APP_ID: ${{ secrets.KAKAO_APP_ID }}
+          KAKAO_REDIRECT_URI: ${{ secrets.KAKAO_REDIRECT_URI }}
+          KAKAO_APP_REDIRECT_URI: ${{ secrets.KAKAO_APP_REDIRECT_URI }}
         run: |
           set -Eeuo pipefail
+          for value in \
+            "$KAKAO_REST_API_KEY" \
+            "$KAKAO_CLIENT_SECRET_PARAMETER_NAME" \
+            "$KAKAO_ADMIN_KEY_PARAMETER_NAME" \
+            "$KAKAO_APP_ID" \
+            "$KAKAO_REDIRECT_URI" \
+            "$KAKAO_APP_REDIRECT_URI"; do
+            if [ -z "$value" ]; then
+              echo "::error::All KAKAO_* Actions secrets must be configured."
+              exit 1
+            fi
+          done
           SCRIPT_PATH="scripts/deploy-ec2.sh"
           if [ ! -f "$SCRIPT_PATH" ]; then
             echo "::error::$SCRIPT_PATH not found."
@@ -210,6 +244,12 @@ jobs:
             --arg ec2Host "$EC2_HOST" \
             --arg dockerhubUsername "$DOCKERHUB_USERNAME" \
             --arg dockerhubTokenParameterName "$DOCKERHUB_TOKEN_PARAMETER_NAME" \
+            --arg kakaoRestApiKey "$KAKAO_REST_API_KEY" \
+            --arg kakaoClientSecretParameterName "$KAKAO_CLIENT_SECRET_PARAMETER_NAME" \
+            --arg kakaoAdminKeyParameterName "$KAKAO_ADMIN_KEY_PARAMETER_NAME" \
+            --arg kakaoAppId "$KAKAO_APP_ID" \
+            --arg kakaoRedirectUri "$KAKAO_REDIRECT_URI" \
+            --arg kakaoAppRedirectUri "$KAKAO_APP_REDIRECT_URI" \
             --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
             --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
             --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
@@ -223,7 +263,7 @@ jobs:
                 " && tar -xzf " + ($remoteBundlePath | @sh) + " -C " + ($deployPath | @sh) + " --strip-components=1" +
                 " && if command -v aws >/dev/null 2>&1; then DOCKERHUB_TOKEN=\"$(aws ssm get-parameter --region " + ($awsRegion | @sh) + " --name " + ($dockerhubTokenParameterName | @sh) + " --with-decryption --query Parameter.Value --output text 2>/dev/null || true)\"; else DOCKERHUB_TOKEN=\"\"; fi" +
                 " && if [ -z \"$DOCKERHUB_TOKEN\" ]; then echo \"[warn] DOCKERHUB_TOKEN parameter load skipped or failed. deploy script will try current daemon credentials.\"; fi" +
-                " && DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                " && AWS_REGION=" + ($awsRegion | @sh) + " KAKAO_AUTH_ENABLED=true KAKAO_REST_API_KEY=" + ($kakaoRestApiKey | @sh) + " KAKAO_CLIENT_SECRET_PARAMETER_NAME=" + ($kakaoClientSecretParameterName | @sh) + " KAKAO_ADMIN_KEY_PARAMETER_NAME=" + ($kakaoAdminKeyParameterName | @sh) + " KAKAO_APP_ID=" + ($kakaoAppId | @sh) + " KAKAO_REDIRECT_URI=" + ($kakaoRedirectUri | @sh) + " KAKAO_APP_REDIRECT_URI=" + ($kakaoAppRedirectUri | @sh) + " DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
                 "; status=$?; rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh) + "; exit $status"
               )
             ]')"
@@ -242,20 +282,6 @@ jobs:
             exit 1
           fi
 
-          {
-            echo "parameters<<EOF"
-            echo "$SSM_PARAMETERS"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Send deploy command via SSM
-        id: ssm-send
-        env:
-          AWS_REGION: ${{ steps.aws-region.outputs.value }}
-          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
-          SSM_PARAMETERS: ${{ steps.ssm-payload.outputs.parameters }}
-        run: |
-          set -Eeuo pipefail
           COMMAND_ID="$(aws ssm send-command \
             --region "$AWS_REGION" \
             --document-name "AWS-RunShellScript" \

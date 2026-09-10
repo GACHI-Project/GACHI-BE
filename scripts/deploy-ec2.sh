@@ -10,6 +10,63 @@ read_env_value() {
     | sed -E 's/^[[:space:]]+|[[:space:]]+$//g; s/^"//; s/"$//'
 }
 
+upsert_env_value() {
+  local key="$1"
+  local value="$2"
+  local escaped_value
+  escaped_value="$(printf '%s' "$value" | sed 's/[&|\\]/\\&/g')"
+  if grep -q "^${key}=" .env; then
+    sed -i "s|^${key}=.*|${key}=${escaped_value}|" .env
+  else
+    printf '%s=%s\n' "$key" "$value" >> .env
+  fi
+}
+
+read_secure_parameter() {
+  local parameter_name="$1"
+  if ! command -v aws >/dev/null 2>&1; then
+    echo "AWS CLI is required to load Kakao SecureString parameters." >&2
+    return 1
+  fi
+  aws ssm get-parameter \
+    --region "$AWS_REGION_INPUT" \
+    --name "$parameter_name" \
+    --with-decryption \
+    --query Parameter.Value \
+    --output text
+}
+
+sync_kakao_config() {
+  if [ "${KAKAO_AUTH_ENABLED_INPUT}" != "true" ]; then
+    return
+  fi
+
+  for value in "$KAKAO_REST_API_KEY_INPUT" "$KAKAO_CLIENT_SECRET_PARAMETER_NAME_INPUT" "$KAKAO_ADMIN_KEY_PARAMETER_NAME_INPUT" "$KAKAO_APP_ID_INPUT" "$KAKAO_REDIRECT_URI_INPUT" "$KAKAO_APP_REDIRECT_URI_INPUT"; do
+    if [ -z "$value" ]; then
+      echo "Kakao deployment configuration is incomplete."
+      exit 1
+    fi
+  done
+
+  local client_secret
+  local admin_key
+  client_secret="$(read_secure_parameter "$KAKAO_CLIENT_SECRET_PARAMETER_NAME_INPUT")"
+  admin_key="$(read_secure_parameter "$KAKAO_ADMIN_KEY_PARAMETER_NAME_INPUT")"
+  if [ -z "$client_secret" ] || [ -z "$admin_key" ]; then
+    echo "Kakao SecureString parameter value is empty."
+    exit 1
+  fi
+
+  upsert_env_value KAKAO_AUTH_ENABLED true
+  upsert_env_value KAKAO_REST_API_KEY "$KAKAO_REST_API_KEY_INPUT"
+  upsert_env_value KAKAO_CLIENT_SECRET "$client_secret"
+  upsert_env_value KAKAO_ADMIN_KEY "$admin_key"
+  upsert_env_value KAKAO_APP_ID "$KAKAO_APP_ID_INPUT"
+  upsert_env_value KAKAO_REDIRECT_URI "$KAKAO_REDIRECT_URI_INPUT"
+  upsert_env_value KAKAO_APP_REDIRECT_URI "$KAKAO_APP_REDIRECT_URI_INPUT"
+  echo "[debug] Kakao configuration synced from deployment secrets."
+}
+
 to_lower() {
   local value="$1"
   printf "%s" "$value" | tr '[:upper:]' '[:lower:]'
@@ -30,6 +87,14 @@ DEPLOY_PATH_INPUT="${1:-${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}}"
 EC2_HOST_INPUT="${2:-${EC2_HOST:-}}"
 DOCKERHUB_USERNAME_INPUT="${DOCKERHUB_USERNAME:-${3:-}}"
 DOCKERHUB_TOKEN_INPUT="${DOCKERHUB_TOKEN:-}"
+KAKAO_AUTH_ENABLED_INPUT="${KAKAO_AUTH_ENABLED:-false}"
+KAKAO_REST_API_KEY_INPUT="${KAKAO_REST_API_KEY:-}"
+KAKAO_CLIENT_SECRET_PARAMETER_NAME_INPUT="${KAKAO_CLIENT_SECRET_PARAMETER_NAME:-}"
+KAKAO_ADMIN_KEY_PARAMETER_NAME_INPUT="${KAKAO_ADMIN_KEY_PARAMETER_NAME:-}"
+KAKAO_APP_ID_INPUT="${KAKAO_APP_ID:-}"
+KAKAO_REDIRECT_URI_INPUT="${KAKAO_REDIRECT_URI:-}"
+KAKAO_APP_REDIRECT_URI_INPUT="${KAKAO_APP_REDIRECT_URI:-}"
+AWS_REGION_INPUT="${AWS_REGION:-ap-northeast-2}"
 
 DEPLOY_PATH="$(echo "$DEPLOY_PATH_INPUT" | xargs)"
 EC2_HOST_INPUT="$(echo "$EC2_HOST_INPUT" | xargs)"
@@ -55,6 +120,8 @@ if [ ! -f .env ]; then
   echo ".env not found in $DEPLOY_PATH. Create .env on EC2 before deploy."
   exit 1
 fi
+
+sync_kakao_config
 
 JWT_SECRET_VALUE="$(read_env_value JWT_SECRET)"
 JWT_SECRET_LENGTH=${#JWT_SECRET_VALUE}
@@ -248,6 +315,21 @@ if [ "$BACKEND_HEALTH" != "healthy" ]; then
   echo "backend health check timed out. Check backend logs."
   docker compose --env-file .env logs --tail=120 backend || true
   exit 1
+fi
+if [ "$KAKAO_AUTH_ENABLED_INPUT" = "true" ]; then
+  if ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND_CID" \
+      | grep -qx 'KAKAO_AUTH_ENABLED=true'; then
+    echo "backend container is missing KAKAO_AUTH_ENABLED=true."
+    exit 1
+  fi
+  for key in KAKAO_REST_API_KEY KAKAO_CLIENT_SECRET KAKAO_ADMIN_KEY KAKAO_APP_ID KAKAO_REDIRECT_URI KAKAO_APP_REDIRECT_URI; do
+    if ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND_CID" \
+        | grep -q "^${key}=."; then
+      echo "backend container is missing a non-empty ${key}."
+      exit 1
+    fi
+  done
+  echo "[debug] Kakao runtime environment is enabled and complete."
 fi
 docker compose --env-file .env up -d --remove-orphans --force-recreate --no-deps nginx
 
