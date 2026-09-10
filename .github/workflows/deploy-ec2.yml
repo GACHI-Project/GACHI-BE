@@ -83,6 +83,21 @@ jobs:
             echo "value=/gachi/prod/dockerhub/token" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve Kakao secret parameters
+        id: kakao-secret-parameters
+        env:
+          KAKAO_CLIENT_SECRET_PARAMETER_NAME_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET_PARAMETER_NAME }}
+          KAKAO_ADMIN_KEY_PARAMETER_NAME_SECRET: ${{ secrets.KAKAO_ADMIN_KEY_PARAMETER_NAME }}
+        run: |
+          CLIENT_SECRET_PARAMETER="${KAKAO_CLIENT_SECRET_PARAMETER_NAME_SECRET:-/gachi/prod/kakao/client-secret}"
+          ADMIN_KEY_PARAMETER="${KAKAO_ADMIN_KEY_PARAMETER_NAME_SECRET:-/gachi/prod/kakao/admin-key}"
+          CLIENT_SECRET_PARAMETER="${CLIENT_SECRET_PARAMETER%$'\r'}"
+          ADMIN_KEY_PARAMETER="${ADMIN_KEY_PARAMETER%$'\r'}"
+          CLIENT_SECRET_PARAMETER="$(printf '%s' "$CLIENT_SECRET_PARAMETER" | sed 's/[[:space:]]*$//')"
+          ADMIN_KEY_PARAMETER="$(printf '%s' "$ADMIN_KEY_PARAMETER" | sed 's/[[:space:]]*$//')"
+          echo "client-secret=$CLIENT_SECRET_PARAMETER" >> "$GITHUB_OUTPUT"
+          echo "admin-key=$ADMIN_KEY_PARAMETER" >> "$GITHUB_OUTPUT"
+
       - name: Validate SSM inputs
         id: auth-check
         env:
@@ -153,8 +168,8 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN_PARAMETER_NAME: ${{ steps.dockerhub-token-parameter.outputs.value }}
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
-          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
-          KAKAO_ADMIN_KEY: ${{ secrets.KAKAO_ADMIN_KEY }}
+          KAKAO_CLIENT_SECRET_PARAMETER_NAME: ${{ steps.kakao-secret-parameters.outputs.client-secret }}
+          KAKAO_ADMIN_KEY_PARAMETER_NAME: ${{ steps.kakao-secret-parameters.outputs.admin-key }}
           KAKAO_APP_ID: ${{ secrets.KAKAO_APP_ID }}
           KAKAO_REDIRECT_URI: ${{ secrets.KAKAO_REDIRECT_URI }}
           KAKAO_APP_REDIRECT_URI: ${{ secrets.KAKAO_APP_REDIRECT_URI }}
@@ -162,8 +177,8 @@ jobs:
           set -Eeuo pipefail
           for value in \
             "$KAKAO_REST_API_KEY" \
-            "$KAKAO_CLIENT_SECRET" \
-            "$KAKAO_ADMIN_KEY" \
+            "$KAKAO_CLIENT_SECRET_PARAMETER_NAME" \
+            "$KAKAO_ADMIN_KEY_PARAMETER_NAME" \
             "$KAKAO_APP_ID" \
             "$KAKAO_REDIRECT_URI" \
             "$KAKAO_APP_REDIRECT_URI"; do
@@ -230,8 +245,8 @@ jobs:
             --arg dockerhubUsername "$DOCKERHUB_USERNAME" \
             --arg dockerhubTokenParameterName "$DOCKERHUB_TOKEN_PARAMETER_NAME" \
             --arg kakaoRestApiKey "$KAKAO_REST_API_KEY" \
-            --arg kakaoClientSecret "$KAKAO_CLIENT_SECRET" \
-            --arg kakaoAdminKey "$KAKAO_ADMIN_KEY" \
+            --arg kakaoClientSecretParameterName "$KAKAO_CLIENT_SECRET_PARAMETER_NAME" \
+            --arg kakaoAdminKeyParameterName "$KAKAO_ADMIN_KEY_PARAMETER_NAME" \
             --arg kakaoAppId "$KAKAO_APP_ID" \
             --arg kakaoRedirectUri "$KAKAO_REDIRECT_URI" \
             --arg kakaoAppRedirectUri "$KAKAO_APP_REDIRECT_URI" \
@@ -248,7 +263,7 @@ jobs:
                 " && tar -xzf " + ($remoteBundlePath | @sh) + " -C " + ($deployPath | @sh) + " --strip-components=1" +
                 " && if command -v aws >/dev/null 2>&1; then DOCKERHUB_TOKEN=\"$(aws ssm get-parameter --region " + ($awsRegion | @sh) + " --name " + ($dockerhubTokenParameterName | @sh) + " --with-decryption --query Parameter.Value --output text 2>/dev/null || true)\"; else DOCKERHUB_TOKEN=\"\"; fi" +
                 " && if [ -z \"$DOCKERHUB_TOKEN\" ]; then echo \"[warn] DOCKERHUB_TOKEN parameter load skipped or failed. deploy script will try current daemon credentials.\"; fi" +
-                " && KAKAO_AUTH_ENABLED=true KAKAO_REST_API_KEY=" + ($kakaoRestApiKey | @sh) + " KAKAO_CLIENT_SECRET=" + ($kakaoClientSecret | @sh) + " KAKAO_ADMIN_KEY=" + ($kakaoAdminKey | @sh) + " KAKAO_APP_ID=" + ($kakaoAppId | @sh) + " KAKAO_REDIRECT_URI=" + ($kakaoRedirectUri | @sh) + " KAKAO_APP_REDIRECT_URI=" + ($kakaoAppRedirectUri | @sh) + " DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
+                " && AWS_REGION=" + ($awsRegion | @sh) + " KAKAO_AUTH_ENABLED=true KAKAO_REST_API_KEY=" + ($kakaoRestApiKey | @sh) + " KAKAO_CLIENT_SECRET_PARAMETER_NAME=" + ($kakaoClientSecretParameterName | @sh) + " KAKAO_ADMIN_KEY_PARAMETER_NAME=" + ($kakaoAdminKeyParameterName | @sh) + " KAKAO_APP_ID=" + ($kakaoAppId | @sh) + " KAKAO_REDIRECT_URI=" + ($kakaoRedirectUri | @sh) + " KAKAO_APP_REDIRECT_URI=" + ($kakaoAppRedirectUri | @sh) + " DOCKERHUB_USERNAME=" + ($dockerhubUsername | @sh) + " DOCKERHUB_TOKEN=\"$DOCKERHUB_TOKEN\" bash " + ($remoteScriptPath | @sh) + " " + ($deployPath | @sh) + " " + ($ec2Host | @sh) +
                 "; status=$?; rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + " " + ($remoteScriptPath | @sh) + " " + ($remoteBundlePath | @sh) + "; exit $status"
               )
             ]')"
