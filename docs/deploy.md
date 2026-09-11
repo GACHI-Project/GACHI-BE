@@ -158,8 +158,9 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
   - `ssm:GetCommandInvocation`
 - EC2 인스턴스 역할 최소 권한:
   - `ssm:GetParameter`
+    - 리소스: `arn:aws:ssm:<region>:<account-id>:parameter/gachi/prod/dockerhub/token`
     - 리소스: `arn:aws:ssm:<region>:<account-id>:parameter/gachi/prod/kakao/*`
-  - 고객 관리형 KMS 키로 SecureString을 암호화한 경우 해당 키의 `kms:Decrypt`
+  - DockerHub 또는 카카오 SecureString을 고객 관리형 KMS 키로 암호화한 경우 해당 키의 `kms:Decrypt`
 - 운영 점검/확장 시 선택 권한:
   - `ssm:ListCommandInvocations`
   - `ec2:DescribeInstances`
