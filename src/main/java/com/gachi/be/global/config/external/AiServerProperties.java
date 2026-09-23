@@ -12,4 +12,5 @@ public class AiServerProperties {
   private String baseUrl = "http://localhost:8000";
   private int connectTimeoutSeconds = 10;
   private int readTimeoutSeconds = 120;
+  private int presignedUrlMinutes = 5;
 }
