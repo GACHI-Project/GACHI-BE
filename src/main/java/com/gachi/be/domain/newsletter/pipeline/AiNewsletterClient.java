@@ -62,16 +62,16 @@ public class AiNewsletterClient {
       List<NewsletterDateCandidate> dateCandidates,
       List<DocumentSource> documents) {
     try {
-      String requestBody =
-          objectMapper.writeValueAsString(
-              new AnalysisRequest(
-                  originalText,
-                  translatedText,
-                  language != null ? language : "KO",
-                  LocalDate.now(DEFAULT_ZONE),
-                  DEFAULT_ZONE.getId(),
-                  toDateCandidateRequests(dateCandidates),
-                  toDocumentRequests(documents)));
+      // 요청 객체를 변수로 분리 (DEBUG 로그에서 URL을 가린 사본을 만들기 위함)
+      AnalysisRequest analysisRequest =
+          new AnalysisRequest(
+              originalText,
+              translatedText,
+              language != null ? language : "KO",
+              LocalDate.now(DEFAULT_ZONE),
+              DEFAULT_ZONE.getId(),
+              toDateCandidateRequests(dateCandidates),
+              toDocumentRequests(documents));
       String requestBody = objectMapper.writeValueAsString(analysisRequest);
       log.info(
             "[AiNewsletterClient] 분석 요청. originalTextLength={}, translatedTextLength={}, "
