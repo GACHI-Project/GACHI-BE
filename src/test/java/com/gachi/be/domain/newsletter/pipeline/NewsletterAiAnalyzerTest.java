@@ -1,6 +1,7 @@
 package com.gachi.be.domain.newsletter.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,7 @@ import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.AnalysisResponse;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ConversationTopicItem;
+import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.DocumentSource;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.RefineFieldResponse;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.RefineTranslationResponse;
@@ -47,6 +49,7 @@ class NewsletterAiAnalyzerTest {
 
   @Captor private ArgumentCaptor<List<Checklist>> checklistsCaptor;
   @Captor private ArgumentCaptor<List<CalendarPreviewEvent>> previewEventsCaptor;
+  @Captor private ArgumentCaptor<List<DocumentSource>> documentsCaptor;
 
   @Captor
   private ArgumentCaptor<List<com.gachi.be.domain.newsletter.entity.ConversationTopic>>
@@ -395,5 +398,34 @@ class NewsletterAiAnalyzerTest {
     // 2차 검증 실패 시 파파고 1차 번역 결과를 그대로 사용
     assertThat(result.title()).isEqualTo("[VI] AI 제목");
     assertThat(result.summary()).isEqualTo("[VI] AI 요약");
+  }
+
+  // 파이프라인이 넘긴 문서 목록을 누락·재정렬 없이 그대로 클라이언트에 전달하는지 검증
+  @Test
+  void analyzePassesDocumentsToClientInSameOrder() {
+    Long newsletterId = 15L;
+    Newsletter newsletter =
+        Newsletter.builder()
+            .userId(25L)
+            .fileKey("newsletters/page1.jpg")
+            .fileHash("hash")
+            .status(NewsletterStatus.PROCESSING)
+            .language("KO")
+            .build();
+    List<DocumentSource> documents =
+        List.of(
+            new DocumentSource("newsletters/page1.jpg_processed_uuid-1", "image/png"),
+            new DocumentSource("newsletters/page2.pdf", "application/pdf"),
+            new DocumentSource("newsletters/page3.jpg_processed_uuid-3", "image/png"));
+
+    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
+    when(aiNewsletterClient.analyze(eq("원문"), eq("번역문"), eq("KO"), any(), anyList()))
+        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(), List.of(), Map.of()));
+
+    newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", documents);
+
+    verify(aiNewsletterClient)
+        .analyze(eq("원문"), eq("번역문"), eq("KO"), any(), documentsCaptor.capture());
+    assertThat(documentsCaptor.getValue()).containsExactlyElementsOf(documents);
   }
 }
