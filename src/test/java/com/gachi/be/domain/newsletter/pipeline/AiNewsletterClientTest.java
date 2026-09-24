@@ -181,7 +181,7 @@ class AiNewsletterClientTest {
 
     AiNewsletterClient client = newClient(3);
 
-    assertThatThrownBy(() -> client.analyze("원문", null, "KO", List.of()))
+    assertThatThrownBy(() -> client.analyze("원문", null, "KO", List.of(), List.of()))
         .isInstanceOf(ExternalApiException.class)
         .extracting("errorCode")
         .isEqualTo(ErrorCode.EXTERNAL_API_ERROR);
