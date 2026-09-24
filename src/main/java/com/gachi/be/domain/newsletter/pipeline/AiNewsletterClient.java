@@ -325,24 +325,23 @@ public class AiNewsletterClient {
       LocalDate referenceDate,
       String timezone,
       List<DateCandidateRequest> dateCandidates,
-      List<DocumentRequest> documents) {}
-
-  // DEBUG 로그 출력용. Presigned URL만 가린 사본을 반환한다.
-  AnalysisRequest withMaskedDocumentUrls() {
-      return new AnalysisRequest(
-          originalText,
-          translatedText,
-          language,
-          referenceDate,
-          timezone,
-          dateCandidates,
-          documents.stream()
-              .map(
-                  document ->
-                      new DocumentRequest(MASKED_URL, document.fileName(), document.mimeType()))
-              .toList());
+      List<DocumentRequest> documents) {// DEBUG 로그 출력용. Presigned URL만 가린 사본을 반환한다.
+        AnalysisRequest withMaskedDocumentUrls() {
+          return new AnalysisRequest(
+              originalText,
+              translatedText,
+              language,
+              referenceDate,
+              timezone,
+              dateCandidates,
+              documents.stream()
+                  .map(
+                      document ->
+                          new DocumentRequest(MASKED_URL, document.fileName(), document.mimeType()))
+                  .toList());
+      }
   }
-}
+
 
 // 파이프라인 → 클라이언트로 전달하는 원본 문서 정보.
 //   fileKey: OCR에 실제로 사용한 S3 키 (PDF는 원본 키, 이미지는 EXIF 보정한 임시 PNG 키)
