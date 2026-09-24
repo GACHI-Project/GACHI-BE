@@ -98,7 +98,8 @@ class NewsletterAiAnalyzerTest {
               return checklists;
             });
 
-    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", List.of());
+    AiAnalysisResult result =
+        newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", List.of());
 
     assertThat(result.title()).isEqualTo("AI 제목");
     assertThat(result.titleI18n()).containsEntry("US", "AI English title");
@@ -202,7 +203,8 @@ class NewsletterAiAnalyzerTest {
         .when(calendarPreviewRedisService)
         .savePreview(eq(newsletterId), anyList());
 
-    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", List.of());
+    AiAnalysisResult result =
+        newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", List.of());
 
     assertThat(result.title()).isEqualTo("AI 제목");
     assertThat(result.summary()).isEqualTo("AI 요약");
@@ -338,7 +340,8 @@ class NewsletterAiAnalyzerTest {
               return checklists;
             });
 
-    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI", List.of());
+    AiAnalysisResult result =
+        newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI", List.of());
 
     // title은 2차 검증 결과로 교체됨
     assertThat(result.title()).isEqualTo("[VI-검증] AI 제목");
@@ -386,7 +389,8 @@ class NewsletterAiAnalyzerTest {
             eq("원문"), eq("VI"), org.mockito.ArgumentMatchers.anyList()))
         .thenThrow(new RuntimeException("AI 서버 오류"));
 
-    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI", List.of());
+    AiAnalysisResult result =
+        newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI", List.of());
 
     // 2차 검증 실패 시 파파고 1차 번역 결과를 그대로 사용
     assertThat(result.title()).isEqualTo("[VI] AI 제목");

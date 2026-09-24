@@ -40,7 +40,7 @@ class AiNewsletterClientTest {
       executor.shutdownNow();
     }
     if (s3Presigner != null) {
-        s3Presigner.close();
+      s3Presigner.close();
     }
   }
 
@@ -99,40 +99,40 @@ class AiNewsletterClientTest {
   // 원본 문서가 페이지 순서대로 Presigned URL, 파일명, 형식과 함께 전송되는지 검증
   @Test
   void analyzeSendsDocumentsWithPresignedUrlsInPageOrder() throws IOException {
-      AtomicReference<String> requestBody = new AtomicReference<>();
-      startServer();
-      server.createContext(
-          "/ai/newsletters/analyze",
-          exchange -> {
-              requestBody.set(
-                  new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-              sendResponse(
-                  exchange,
-                  200,
-                  "{\"title\":\"AI 제목\",\"summary\":\"AI 요약\",\"items\":[]}"
-                      .getBytes(StandardCharsets.UTF_8));
-          });
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    startServer();
+    server.createContext(
+        "/ai/newsletters/analyze",
+        exchange -> {
+          requestBody.set(
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+          sendResponse(
+              exchange,
+              200,
+              "{\"title\":\"AI 제목\",\"summary\":\"AI 요약\",\"items\":[]}"
+                  .getBytes(StandardCharsets.UTF_8));
+        });
 
-      AiNewsletterClient client = newClient(3);
+    AiNewsletterClient client = newClient(3);
 
-      client.analyze(
-          "원문",
-          null,
-          "KO",
-          List.of(),
-          List.of(
-              new DocumentSource("newsletters/page1.pdf", "application/pdf"),
-              new DocumentSource("newsletters/page2.jpg_processed_uuid", "image/png")));
+    client.analyze(
+        "원문",
+        null,
+        "KO",
+        List.of(),
+        List.of(
+            new DocumentSource("newsletters/page1.pdf", "application/pdf"),
+            new DocumentSource("newsletters/page2.jpg_processed_uuid", "image/png")));
 
-      String body = requestBody.get();
-      assertThat(body).contains("\"fileName\":\"newsletter-page-1.pdf\"");
-      assertThat(body).contains("\"fileName\":\"newsletter-page-2.png\"");
-      assertThat(body).contains("\"mimeType\":\"application/pdf\"");
-      assertThat(body).contains("\"mimeType\":\"image/png\"");
-      assertThat(body).contains("test-bucket");
-      assertThat(body).contains("X-Amz-Signature");
-      assertThat(body.indexOf("newsletter-page-1.pdf"))
-          .isLessThan(body.indexOf("newsletter-page-2.png"));
+    String body = requestBody.get();
+    assertThat(body).contains("\"fileName\":\"newsletter-page-1.pdf\"");
+    assertThat(body).contains("\"fileName\":\"newsletter-page-2.png\"");
+    assertThat(body).contains("\"mimeType\":\"application/pdf\"");
+    assertThat(body).contains("\"mimeType\":\"image/png\"");
+    assertThat(body).contains("test-bucket");
+    assertThat(body).contains("X-Amz-Signature");
+    assertThat(body.indexOf("newsletter-page-1.pdf"))
+        .isLessThan(body.indexOf("newsletter-page-2.png"));
   }
 
   @Test

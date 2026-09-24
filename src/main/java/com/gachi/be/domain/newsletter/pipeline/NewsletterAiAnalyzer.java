@@ -41,7 +41,10 @@ public class NewsletterAiAnalyzer {
   private final PapagoTranslateClient papagoTranslateClient;
 
   public AiAnalysisResult analyze(
-      Long newsletterId, String originalText, String translatedText, String language,
+      Long newsletterId,
+      String originalText,
+      String translatedText,
+      String language,
       List<DocumentSource> documents) {
     log.info("[AiAnalyzer] AI 서버 분석 시작. newsletterId={}, language={}", newsletterId, language);
 
