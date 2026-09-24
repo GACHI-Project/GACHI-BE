@@ -1,6 +1,7 @@
 package com.gachi.be.domain.newsletter.pipeline;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,6 +18,7 @@ import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.AnalysisResponse;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ConversationTopicItem;
+import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.DocumentSource;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.RefineFieldResponse;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.RefineTranslationResponse;
@@ -47,6 +49,7 @@ class NewsletterAiAnalyzerTest {
 
   @Captor private ArgumentCaptor<List<Checklist>> checklistsCaptor;
   @Captor private ArgumentCaptor<List<CalendarPreviewEvent>> previewEventsCaptor;
+  @Captor private ArgumentCaptor<List<DocumentSource>> documentsCaptor;
 
   @Captor
   private ArgumentCaptor<List<com.gachi.be.domain.newsletter.entity.ConversationTopic>>
@@ -81,7 +84,7 @@ class NewsletterAiAnalyzerTest {
             List.of(new AiNewsletterClient.ChecklistItemDto("준비물 확인", "체육복을 준비해 주세요.")));
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
-    when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
+    when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of(), List.of()))
         .thenReturn(
             new AnalysisResponse(
                 "AI 제목",
@@ -98,7 +101,8 @@ class NewsletterAiAnalyzerTest {
               return checklists;
             });
 
-    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO");
+    AiAnalysisResult result =
+        newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", List.of());
 
     assertThat(result.title()).isEqualTo("AI 제목");
     assertThat(result.titleI18n()).containsEntry("US", "AI English title");
@@ -155,9 +159,9 @@ class NewsletterAiAnalyzerTest {
             List.of());
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
-    when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
+    when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of(), List.of()))
         .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), List.of(), Map.of()));
-    newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO");
+    newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", List.of());
 
     verify(calendarPreviewRedisService).deletePreview(newsletterId);
   }
@@ -189,7 +193,7 @@ class NewsletterAiAnalyzerTest {
             List.of(new AiNewsletterClient.ChecklistItemDto("도시락 준비하기", "현장학습 당일 도시락을 준비해 주세요.")));
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
-    when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of()))
+    when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of(), List.of()))
         .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(item), List.of(), Map.of()));
     when(checklistRepository.saveAll(anyList()))
         .thenAnswer(
@@ -202,7 +206,8 @@ class NewsletterAiAnalyzerTest {
         .when(calendarPreviewRedisService)
         .savePreview(eq(newsletterId), anyList());
 
-    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO");
+    AiAnalysisResult result =
+        newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", List.of());
 
     assertThat(result.title()).isEqualTo("AI 제목");
     assertThat(result.summary()).isEqualTo("AI 요약");
@@ -222,11 +227,11 @@ class NewsletterAiAnalyzerTest {
             .build();
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
-    when(aiNewsletterClient.analyze("가정통신문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of()))
+    when(aiNewsletterClient.analyze("가정통신문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of(), List.of()))
         .thenReturn(new AnalysisResponse("  ", "  ", List.of(), List.of(), Map.of()));
 
     AiAnalysisResult result =
-        newsletterAiAnalyzer.analyze(newsletterId, "가정통신문 제목\n본문입니다.", "번역 요약 대상", "KO");
+        newsletterAiAnalyzer.analyze(newsletterId, "가정통신문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of());
 
     assertThat(result.title()).isEqualTo("가정통신문 제목");
     assertThat(result.summary()).isEqualTo("번역 요약 대상");
@@ -246,11 +251,11 @@ class NewsletterAiAnalyzerTest {
             .build();
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
-    when(aiNewsletterClient.analyze("원문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of()))
+    when(aiNewsletterClient.analyze("원문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of(), List.of()))
         .thenReturn(new AnalysisResponse("AI 제목", " ", List.of(), List.of(), Map.of()));
 
     AiAnalysisResult result =
-        newsletterAiAnalyzer.analyze(newsletterId, "원문 제목\n본문입니다.", "번역 요약 대상", "KO");
+        newsletterAiAnalyzer.analyze(newsletterId, "원문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of());
 
     assertThat(result.title()).isEqualTo("AI 제목");
     assertThat(result.summary()).isEqualTo("번역 요약 대상");
@@ -270,11 +275,11 @@ class NewsletterAiAnalyzerTest {
             .build();
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
-    when(aiNewsletterClient.analyze("원문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of()))
+    when(aiNewsletterClient.analyze("원문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of(), List.of()))
         .thenReturn(new AnalysisResponse("", "AI 요약", List.of(), List.of(), Map.of()));
 
     AiAnalysisResult result =
-        newsletterAiAnalyzer.analyze(newsletterId, "원문 제목\n본문입니다.", "번역 요약 대상", "KO");
+        newsletterAiAnalyzer.analyze(newsletterId, "원문 제목\n본문입니다.", "번역 요약 대상", "KO", List.of());
 
     assertThat(result.title()).isEqualTo("원문 제목");
     assertThat(result.summary()).isEqualTo("AI 요약");
@@ -314,7 +319,7 @@ class NewsletterAiAnalyzerTest {
     ConversationTopicItem topic = new ConversationTopicItem("수영장에서 뭐가 제일 기대돼?"); // topic_0 (한국어)
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
-    when(aiNewsletterClient.analyze("원문", "번역문", "VI", List.of()))
+    when(aiNewsletterClient.analyze("원문", "번역문", "VI", List.of(), List.of()))
         .thenReturn(
             new AnalysisResponse(
                 "AI 제목", Map.of(), "AI 요약", List.of(item), List.of(topic), Map.of()));
@@ -338,7 +343,8 @@ class NewsletterAiAnalyzerTest {
               return checklists;
             });
 
-    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI");
+    AiAnalysisResult result =
+        newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI", List.of());
 
     // title은 2차 검증 결과로 교체됨
     assertThat(result.title()).isEqualTo("[VI-검증] AI 제목");
@@ -375,7 +381,7 @@ class NewsletterAiAnalyzerTest {
             .build();
 
     when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
-    when(aiNewsletterClient.analyze("원문", "번역문", "VI", List.of()))
+    when(aiNewsletterClient.analyze("원문", "번역문", "VI", List.of(), List.of()))
         .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(), List.of(), Map.of()));
 
     when(papagoTranslateClient.translate(org.mockito.ArgumentMatchers.anyString(), eq("VI")))
@@ -386,10 +392,40 @@ class NewsletterAiAnalyzerTest {
             eq("원문"), eq("VI"), org.mockito.ArgumentMatchers.anyList()))
         .thenThrow(new RuntimeException("AI 서버 오류"));
 
-    AiAnalysisResult result = newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI");
+    AiAnalysisResult result =
+        newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "VI", List.of());
 
     // 2차 검증 실패 시 파파고 1차 번역 결과를 그대로 사용
     assertThat(result.title()).isEqualTo("[VI] AI 제목");
     assertThat(result.summary()).isEqualTo("[VI] AI 요약");
+  }
+
+  // 파이프라인이 넘긴 문서 목록을 누락·재정렬 없이 그대로 클라이언트에 전달하는지 검증
+  @Test
+  void analyzePassesDocumentsToClientInSameOrder() {
+    Long newsletterId = 15L;
+    Newsletter newsletter =
+        Newsletter.builder()
+            .userId(25L)
+            .fileKey("newsletters/page1.jpg")
+            .fileHash("hash")
+            .status(NewsletterStatus.PROCESSING)
+            .language("KO")
+            .build();
+    List<DocumentSource> documents =
+        List.of(
+            new DocumentSource("newsletters/page1.jpg_processed_uuid-1", "image/png"),
+            new DocumentSource("newsletters/page2.pdf", "application/pdf"),
+            new DocumentSource("newsletters/page3.jpg_processed_uuid-3", "image/png"));
+
+    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
+    when(aiNewsletterClient.analyze(eq("원문"), eq("번역문"), eq("KO"), any(), anyList()))
+        .thenReturn(new AnalysisResponse("AI 제목", "AI 요약", List.of(), List.of(), Map.of()));
+
+    newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", documents);
+
+    verify(aiNewsletterClient)
+        .analyze(eq("원문"), eq("번역문"), eq("KO"), any(), documentsCaptor.capture());
+    assertThat(documentsCaptor.getValue()).containsExactlyElementsOf(documents);
   }
 }

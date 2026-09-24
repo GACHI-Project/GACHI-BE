@@ -1,6 +1,7 @@
 package com.gachi.be.domain.newsletter.pipeline;
 
 import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.DocumentSource;
 import com.gachi.be.domain.newsletter.pipeline.ClovaOcrClient.OcrField;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterAiAnalyzer.AiAnalysisResult;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
@@ -24,6 +25,9 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 @Service
 @RequiredArgsConstructor
 public class NewsletterPipelineService {
+
+  private static final String PDF_MIME_TYPE = "application/pdf";
+  private static final String PREPROCESSED_IMAGE_MIME_TYPE = "image/png";
 
   private final NewsletterRepository newsletterRepository;
   private final S3Client s3Client;
@@ -70,6 +74,10 @@ public class NewsletterPipelineService {
       // 페이지 순서를 보장해야 하므로 순차 호출한다. (병렬 호출은 외부 API rate limit·부분 실패 처리가 복잡해짐)
       List<List<OcrField>> ocrPageFields = new ArrayList<>();
 
+      // OCR에 실제로 사용한 파일을 페이지 순서대로 모아 AI 분석(STEP7)에 함께 전달한다.
+      //   이미지 임시 파일은 finally에서 삭제되지만, STEP7이 동기로 먼저 끝나므로 AI 서버 다운로드 시점에는 존재한다.
+      List<DocumentSource> aiDocuments = new ArrayList<>();
+
       for (int pageIndex = 0; pageIndex < fileKeys.size(); pageIndex++) {
         String fileKey = fileKeys.get(pageIndex);
 
@@ -99,7 +107,8 @@ public class NewsletterPipelineService {
           //   재시도 버튼 연타 등으로 두 실행이 겹치면 먼저 끝난 쪽의 finally 정리가
           //   다른 실행이 OCR 입력으로 쓰고 있는 파일을 삭제해버릴 수 있었다.
           String tempFileKey = fileKey + "_processed_" + UUID.randomUUID();
-          uploadBytesToS3(processedBytes, tempFileKey, "image/png");
+          // "image/png" 리터럴 → PREPROCESSED_IMAGE_MIME_TYPE 상수 (AI 전달 형식과 동일한 값을 쓰기 위함)
+          uploadBytesToS3(processedBytes, tempFileKey, PREPROCESSED_IMAGE_MIME_TYPE);
           // finally에서 정리할 수 있도록 임시 키를 목록에 누적한다. (누락 시 S3에 고아 파일이 남음)
           tempFileKeys.add(tempFileKey);
           ocrTargetKey = tempFileKey;
@@ -114,6 +123,9 @@ public class NewsletterPipelineService {
         List<List<OcrField>> pageResult =
             clovaOcrClient.callOcr(s3Properties.getBucket(), ocrTargetKey);
         ocrPageFields.addAll(pageResult);
+        // OCR에 사용한 파일을 AI 전달 목록에 누적 (페이지 순서 유지)
+        aiDocuments.add(
+            new DocumentSource(ocrTargetKey, isPdf ? PDF_MIME_TYPE : PREPROCESSED_IMAGE_MIME_TYPE));
         log.debug(
             "[Pipeline][STEP3] OCR 완료. page={}/{}, 인식 페이지 수={}",
             pageIndex + 1,
@@ -153,7 +165,7 @@ public class NewsletterPipelineService {
       try {
         aiResult =
             newsletterAiAnalyzer.analyze(
-                newsletterId, originalText, translatedText, newsletter.getLanguage());
+                newsletterId, originalText, translatedText, newsletter.getLanguage(), aiDocuments);
       } catch (ExternalApiException e) {
         log.error(
             "[Pipeline][STEP7] AI 서버 분석 실패. newsletterId={}, stage={}, exceptionType={}, error={}",

@@ -7,6 +7,7 @@ import com.gachi.be.domain.checklist.entity.enums.ChecklistType;
 import com.gachi.be.domain.checklist.repository.ChecklistRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.AnalysisResponse;
+import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.DocumentSource;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.ExtractedItem;
 import com.gachi.be.domain.newsletter.pipeline.AiNewsletterClient.RefineFieldRequest;
 import com.gachi.be.domain.newsletter.repository.ConversationTopicRepository;
@@ -40,7 +41,11 @@ public class NewsletterAiAnalyzer {
   private final PapagoTranslateClient papagoTranslateClient;
 
   public AiAnalysisResult analyze(
-      Long newsletterId, String originalText, String translatedText, String language) {
+      Long newsletterId,
+      String originalText,
+      String translatedText,
+      String language,
+      List<DocumentSource> documents) {
     log.info("[AiAnalyzer] AI 서버 분석 시작. newsletterId={}, language={}", newsletterId, language);
 
     Newsletter newsletter =
@@ -53,7 +58,7 @@ public class NewsletterAiAnalyzer {
 
     AnalysisResponse analysisResponse =
         aiNewsletterClient.analyze(
-            originalText, translatedText, language, newsletter.getDateCandidates());
+            originalText, translatedText, language, newsletter.getDateCandidates(), documents);
     List<ExtractedItem> items = analysisResponse.items();
 
     Map<String, String> displayTexts =

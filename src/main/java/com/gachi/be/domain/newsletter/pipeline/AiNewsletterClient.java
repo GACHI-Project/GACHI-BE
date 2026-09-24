@@ -3,6 +3,7 @@ package com.gachi.be.domain.newsletter.pipeline;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.newsletter.entity.NewsletterDateCandidate;
+import com.gachi.be.file.config.S3Properties;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.config.external.AiServerProperties;
 import com.gachi.be.global.exception.ExternalApiException;
@@ -20,6 +21,9 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 
 @Slf4j
 @Component
@@ -29,13 +33,23 @@ public class AiNewsletterClient {
   private static final String ANALYZE_PATH = "/ai/newsletters/analyze";
   private static final String REFINE_TRANSLATION_PATH = "/ai/newsletters/refine-translation";
   private static final String CULTURAL_GUIDE_PATH = "/ai/newsletters/cultural-guides";
+  private static final String MASKED_URL = "***";
+  private static final String DOCUMENT_FILE_NAME_PREFIX = "newsletter-page-";
   private final AiServerProperties aiServerProperties;
   private final ObjectMapper objectMapper;
   private final HttpClient httpClient;
+  private final S3Presigner s3Presigner;
+  private final S3Properties s3Properties;
 
-  public AiNewsletterClient(AiServerProperties aiServerProperties, ObjectMapper objectMapper) {
+  public AiNewsletterClient(
+      AiServerProperties aiServerProperties,
+      ObjectMapper objectMapper,
+      S3Presigner s3Presigner,
+      S3Properties s3Properties) {
     this.aiServerProperties = aiServerProperties;
     this.objectMapper = objectMapper;
+    this.s3Presigner = s3Presigner;
+    this.s3Properties = s3Properties;
     this.httpClient =
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(aiServerProperties.getConnectTimeoutSeconds()))
@@ -47,18 +61,33 @@ public class AiNewsletterClient {
       String originalText,
       String translatedText,
       String language,
-      List<NewsletterDateCandidate> dateCandidates) {
+      List<NewsletterDateCandidate> dateCandidates,
+      List<DocumentSource> documents) {
     try {
-      String requestBody =
-          objectMapper.writeValueAsString(
-              new AnalysisRequest(
-                  originalText,
-                  translatedText,
-                  language != null ? language : "KO",
-                  LocalDate.now(DEFAULT_ZONE),
-                  DEFAULT_ZONE.getId(),
-                  toDateCandidateRequests(dateCandidates)));
-      log.info("[AiNewsletterClient] 요청 body: {}", requestBody);
+      // 요청 객체를 변수로 분리 (DEBUG 로그에서 URL을 가린 사본을 만들기 위함)
+      AnalysisRequest analysisRequest =
+          new AnalysisRequest(
+              originalText,
+              translatedText,
+              language != null ? language : "KO",
+              LocalDate.now(DEFAULT_ZONE),
+              DEFAULT_ZONE.getId(),
+              toDateCandidateRequests(dateCandidates),
+              toDocumentRequests(documents));
+      String requestBody = objectMapper.writeValueAsString(analysisRequest);
+      log.info(
+          "[AiNewsletterClient] 분석 요청. originalTextLength={}, translatedTextLength={}, "
+              + "dateCandidateCount={}, documentCount={}, documentMimeTypes={}",
+          originalText != null ? originalText.length() : 0,
+          translatedText != null ? translatedText.length() : 0,
+          analysisRequest.dateCandidates().size(),
+          analysisRequest.documents().size(),
+          analysisRequest.documents().stream().map(DocumentRequest::mimeType).toList());
+      if (log.isDebugEnabled()) {
+        log.debug(
+            "[AiNewsletterClient] 요청 body: {}",
+            objectMapper.writeValueAsString(analysisRequest.withMaskedDocumentUrls()));
+      }
 
       HttpRequest request =
           HttpRequest.newBuilder()
@@ -232,13 +261,96 @@ public class AiNewsletterClient {
     return requests;
   }
 
+  // 원본 문서 목록 → AI 서버 요청용 문서 목록 변환.
+  //   페이지 순서는 documents 리스트 순서를 그대로 유지한다.
+  //   URL 생성에 실패하면 일부 페이지만 보내지 않고 빈 목록을 반환한다.
+  //   (페이지가 빠진 문서는 AI가 맥락을 잘못 파악할 수 있으므로, 이 경우 기존처럼 텍스트만으로 분석한다)
+  private List<DocumentRequest> toDocumentRequests(List<DocumentSource> documents) {
+    if (documents == null || documents.isEmpty()) {
+      return List.of();
+    }
+
+    try {
+      List<DocumentRequest> requests = new ArrayList<>();
+      for (int i = 0; i < documents.size(); i++) {
+        DocumentSource document = documents.get(i);
+        requests.add(
+            new DocumentRequest(
+                generatePresignedUrl(document.fileKey()),
+                DOCUMENT_FILE_NAME_PREFIX + (i + 1) + resolveExtension(document.mimeType()),
+                document.mimeType()));
+      }
+      return requests;
+    } catch (RuntimeException e) {
+      log.warn(
+          "[AiNewsletterClient] 원본 문서 Presigned URL 생성 실패. 텍스트만으로 분석합니다. "
+              + "documentCount={}, error={}",
+          documents.size(),
+          e.getMessage(),
+          e);
+      return List.of();
+    }
+  }
+
+  // ClovaOcrClient.generatePresignedUrl()과 동일한 방식. 만료 시간만 AI 서버 전용 설정을 사용한다.
+  private String generatePresignedUrl(String fileKey) {
+    GetObjectRequest getObjectRequest =
+        GetObjectRequest.builder().bucket(s3Properties.getBucket()).key(fileKey).build();
+
+    GetObjectPresignRequest presignRequest =
+        GetObjectPresignRequest.builder()
+            .signatureDuration(Duration.ofMinutes(aiServerProperties.getPresignedUrlMinutes()))
+            .getObjectRequest(getObjectRequest)
+            .build();
+
+    return s3Presigner.presignGetObject(presignRequest).url().toString();
+  }
+
+  // 파일명 확장자 결정. 임시 전처리 키(원본키_processed_UUID)는 확장자로 형식을 알 수 없으므로
+  //   파이프라인이 넘겨준 mimeType 기준으로 결정한다.
+  private String resolveExtension(String mimeType) {
+    if (mimeType == null) {
+      return "";
+    }
+    return switch (mimeType) {
+      case "application/pdf" -> ".pdf";
+      case "image/png" -> ".png";
+      case "image/jpeg" -> ".jpg";
+      default -> "";
+    };
+  }
+
   record AnalysisRequest(
       String originalText,
       String translatedText,
       String language,
       LocalDate referenceDate,
       String timezone,
-      List<DateCandidateRequest> dateCandidates) {}
+      List<DateCandidateRequest> dateCandidates,
+      List<DocumentRequest> documents) { // DEBUG 로그 출력용. Presigned URL만 가린 사본을 반환한다.
+    AnalysisRequest withMaskedDocumentUrls() {
+      return new AnalysisRequest(
+          originalText,
+          translatedText,
+          language,
+          referenceDate,
+          timezone,
+          dateCandidates,
+          documents.stream()
+              .map(
+                  document ->
+                      new DocumentRequest(MASKED_URL, document.fileName(), document.mimeType()))
+              .toList());
+    }
+  }
+
+  // 파이프라인 → 클라이언트로 전달하는 원본 문서 정보.
+  //   fileKey: OCR에 실제로 사용한 S3 키 (PDF는 원본 키, 이미지는 EXIF 보정한 임시 PNG 키)
+  //   mimeType: 임시 키는 확장자가 없으므로 파이프라인에서 명시적으로 전달한다.
+  public record DocumentSource(String fileKey, String mimeType) {}
+
+  // AI 서버로 보내는 원본 문서 1건 (페이지 순서 = 리스트 순서)
+  record DocumentRequest(String fileUrl, String fileName, String mimeType) {}
 
   record DateCandidateRequest(
       String candidateId,
