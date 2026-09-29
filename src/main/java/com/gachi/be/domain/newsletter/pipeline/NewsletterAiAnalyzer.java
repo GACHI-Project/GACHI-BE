@@ -319,10 +319,20 @@ public class NewsletterAiAnalyzer {
 
     for (SavedExtractedItem savedItem : savedItems) {
       ExtractedItem item = savedItem.item();
-      String extractedDate = normalizePreviewDate(item.datetime());
+      String startAt = normalizePreviewValue(item.datetime());
+      String extractedDate = normalizePreviewDate(startAt);
       if (!"confirmed".equalsIgnoreCase(item.dateStatus()) || extractedDate == null) {
         continue;
       }
+
+      String endAt =
+          "schedule".equalsIgnoreCase(item.type())
+              ? normalizePreviewValue(item.endDatetime())
+              : null;
+      String periodStartAt =
+          "deadline".equalsIgnoreCase(item.type())
+              ? normalizePreviewValue(item.periodStartDatetime())
+              : null;
 
       String titleSource =
           displayTexts.getOrDefault("item_" + savedItem.itemIndex() + "_title", item.title());
@@ -334,7 +344,11 @@ public class NewsletterAiAnalyzer {
               trimI18nValues(item.titleI18n(), CHECKLIST_TEXT_MAX_LENGTH),
               extractedDate,
               true,
-              checklistIdList(savedItem.checklists())));
+              checklistIdList(savedItem.checklists()),
+              startAt,
+              endAt,
+              periodStartAt,
+              false));
     }
 
     if (previewEvents.isEmpty()) {
@@ -352,6 +366,29 @@ public class NewsletterAiAnalyzer {
   private String normalizePreviewDate(String value) {
     LocalDate targetDate = parseTargetDate(value);
     return targetDate != null ? targetDate.toString() : null;
+  }
+
+  private String normalizePreviewValue(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    try {
+      if (value.length() == 10) {
+        LocalDate.parse(value);
+        return value;
+      } else if (value.endsWith("Z") || value.matches(".*[+-]\\d{2}:\\d{2}$")) {
+        return java.time.OffsetDateTime.parse(value)
+            .withOffsetSameInstant(java.time.ZoneOffset.ofHours(9))
+            .toString();
+      } else {
+        return java.time.LocalDateTime.parse(value)
+            .atOffset(java.time.ZoneOffset.ofHours(9))
+            .toString();
+      }
+    } catch (DateTimeParseException e) {
+      log.warn("[AiAnalyzer] AI 서버 시각 파싱 실패. value={}", value);
+      return null;
+    }
   }
 
   private String normalizeTitle(String aiTitle, String originalText) {

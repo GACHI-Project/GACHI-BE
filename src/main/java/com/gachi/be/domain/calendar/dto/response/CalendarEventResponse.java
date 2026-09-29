@@ -12,6 +12,9 @@ public record CalendarEventResponse(
     String title,
     String startAt,
     String endAt,
+    String periodStartAt,
+    boolean allDay,
+    boolean endAllDay,
     int dDay,
     String childName,
     String calendarColor,
@@ -42,7 +45,11 @@ public record CalendarEventResponse(
 
     // null이면 null 반환
     String endAtStr =
-        event.getEndAt() != null ? event.getEndAt().withOffsetSameInstant(kst).toString() : null;
+        event.getEndAt() == null
+            ? null
+            : event.isEndAllDay()
+                ? event.getEndAt().withOffsetSameInstant(kst).toLocalDate().toString()
+                : event.getEndAt().withOffsetSameInstant(kst).toString();
 
     // D-day 계산: startAt의 KST 날짜 기준
     LocalDate eventDate = event.getStartAt().withOffsetSameInstant(kst).toLocalDate();
@@ -61,6 +68,9 @@ public record CalendarEventResponse(
         title,
         startAtStr,
         endAtStr,
+        event.getPeriodStartAt(),
+        event.isAllDay(),
+        event.isEndAllDay(),
         dDay,
         event.getChildName(),
         event.getChildColor(),

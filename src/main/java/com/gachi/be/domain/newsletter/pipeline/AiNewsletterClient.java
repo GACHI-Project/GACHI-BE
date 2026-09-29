@@ -426,6 +426,8 @@ public class AiNewsletterClient {
       Map<String, String> titleI18n,
       SelectedDateCandidate selectedDateCandidate,
       String datetime,
+      String endDatetime,
+      String periodStartDatetime,
       String timezone,
       String evidenceText,
       String dateStatus,
@@ -433,6 +435,36 @@ public class AiNewsletterClient {
       Boolean needsUserConfirmation,
       String confirmationQuestion,
       List<ChecklistItemDto> checklistItems) {
+
+    public ExtractedItem(
+        String type,
+        String title,
+        Map<String, String> titleI18n,
+        SelectedDateCandidate selectedDateCandidate,
+        String datetime,
+        String timezone,
+        String evidenceText,
+        String dateStatus,
+        Double confidence,
+        Boolean needsUserConfirmation,
+        String confirmationQuestion,
+        List<ChecklistItemDto> checklistItems) {
+      this(
+          type,
+          title,
+          titleI18n,
+          selectedDateCandidate,
+          datetime,
+          null,
+          null,
+          timezone,
+          evidenceText,
+          dateStatus,
+          confidence,
+          needsUserConfirmation,
+          confirmationQuestion,
+          checklistItems);
+    }
 
     public ExtractedItem(
         String type,
@@ -452,6 +484,8 @@ public class AiNewsletterClient {
           Map.of(),
           selectedDateCandidate,
           datetime,
+          null,
+          null,
           timezone,
           evidenceText,
           dateStatus,
@@ -475,6 +509,8 @@ public class AiNewsletterClient {
           titleI18n != null ? titleI18n : Map.of(),
           selectedDateCandidate,
           datetime,
+          endDatetime,
+          periodStartDatetime,
           timezone,
           evidenceText,
           dateStatus,

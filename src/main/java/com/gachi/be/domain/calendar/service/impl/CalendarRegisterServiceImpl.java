@@ -99,11 +99,17 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                   // correctionMap에서 꺼낸 값이 LocalDate이므로 변수 타입 변경
                   LocalDate correctedLocalDate = correctionMap.get(event.tempEventId());
                   if (correctedLocalDate != null) {
-                    // LocalDate → "YYYY-MM-DD" String으로 변환 후 CalendarPreviewEvent에 저장
-                    // CalendarPreviewEvent.extractedDate는 String 타입이므로 변환 필요
-                    String correctedDate =
-                        correctedLocalDate.format(
-                            java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+                    String correctedDate = correctedLocalDate.toString();
+                    String previousStart = event.startAt();
+                    String correctedStart = replaceDate(previousStart, correctedLocalDate);
+                    long dayShift = dayShift(previousStart, correctedLocalDate);
+                    String correctedEnd = shiftDate(event.endAt(), dayShift);
+                    String periodStart = event.periodStartAt();
+                    if (periodStart != null
+                        && LocalDate.parse(periodStart.substring(0, 10))
+                            .isAfter(correctedLocalDate)) {
+                      periodStart = null;
+                    }
                     log.debug(
                         "[CalendarRegister] 날짜 수정. tempEventId={}, {} → {}",
                         event.tempEventId(),
@@ -115,7 +121,11 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
                         event.titleI18n(),
                         correctedDate,
                         true,
-                        event.checklistIds());
+                        event.checklistIds(),
+                        correctedStart,
+                        correctedEnd,
+                        periodStart,
+                        false);
                   }
                   return event;
                 })
@@ -155,13 +165,41 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
         continue;
       }
 
-      // startAt 파싱: KST 기준 OffsetDateTime으로 변환
-      OffsetDateTime startAt = parseToKstOffsetDateTime(eventReq.startAt());
+      CalendarPreviewEvent preview = previewByTempId.get(eventReq.tempEventId());
+      String startValue = eventReq.startAt();
+      // 기존 FE의 날짜 전용 요청에도 AI가 추출한 시각을 보존한다.
+      if (preview != null && startValue.length() == 10 && preview.startAt() != null) {
+        startValue = replaceDate(preview.startAt(), LocalDate.parse(startValue));
+      }
+      OffsetDateTime startAt = parseToKstOffsetDateTime(startValue);
 
       // endAt 파싱: null이면 단일 날짜 일정
-      OffsetDateTime endAt = null;
-      if (eventReq.endAt() != null && !eventReq.endAt().isBlank()) {
-        endAt = parseToKstOffsetDateTime(eventReq.endAt());
+      String endValue = eventReq.endAt();
+      if ((endValue == null || endValue.isBlank()) && preview != null && preview.endAt() != null) {
+        long dayShift = dayShift(preview.startAt(), LocalDate.parse(startValue.substring(0, 10)));
+        endValue = shiftDate(preview.endAt(), dayShift);
+      }
+      OffsetDateTime endAt =
+          endValue != null && !endValue.isBlank() ? parseToKstOffsetDateTime(endValue) : null;
+      boolean endAllDay = endValue != null && endValue.length() == 10;
+      String periodStartAt = preview != null ? preview.periodStartAt() : null;
+      if (endAt != null
+          && (endAllDay
+              ? endAt.toLocalDate().isBefore(startAt.toLocalDate())
+              : endAt.isBefore(startAt))) {
+        throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "종료 시각이 시작 시각보다 빠릅니다.");
+      }
+      if (periodStartAt != null) {
+        OffsetDateTime parsedPeriodStart = parseToKstOffsetDateTime(periodStartAt);
+        boolean dateOnly = periodStartAt.length() == 10 || startValue.length() == 10;
+        if (dateOnly
+            ? parsedPeriodStart.toLocalDate().isAfter(startAt.toLocalDate())
+            : parsedPeriodStart.isAfter(startAt)) {
+          throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "접수 시작 시각이 마감 시각보다 늦습니다.");
+        }
+        if (periodStartAt.length() > 10) {
+          periodStartAt = parsedPeriodStart.toString();
+        }
       }
 
       // CalendarEvent 엔티티 생성
@@ -181,6 +219,9 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
               .externalKey(externalKey)
               .startAt(startAt)
               .endAt(endAt)
+              .periodStartAt(periodStartAt)
+              .allDay(startValue.length() == 10)
+              .endAllDay(endAllDay)
               .build();
 
       CalendarEvent saved = calendarEventRepository.save(calendarEvent);
@@ -272,7 +313,7 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
   }
 
   private LocalDateTime previewSortKey(CalendarPreviewEvent event) {
-    String extractedDate = event.extractedDate();
+    String extractedDate = event.startAt();
     if (extractedDate == null || extractedDate.isBlank()) {
       return LocalDateTime.MAX;
     }
@@ -304,15 +345,49 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
         LocalDate date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
         return LocalDateTime.of(date, LocalTime.MIDNIGHT).atOffset(KST_OFFSET);
       } else {
-        // "YYYY-MM-DDTHH:mm:ss" 형식: KST 해당 시각
-        LocalDateTime dateTime =
-            LocalDateTime.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        return dateTime.atOffset(KST_OFFSET);
+        try {
+          return OffsetDateTime.parse(dateStr).withOffsetSameInstant(KST_OFFSET);
+        } catch (DateTimeParseException ignored) {
+          LocalDateTime dateTime =
+              LocalDateTime.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+          return dateTime.atOffset(KST_OFFSET);
+        }
       }
     } catch (DateTimeParseException e) {
       log.error("[CalendarRegister] 날짜 파싱 실패. value={}, error={}", dateStr, e.getMessage());
       throw new BusinessException(
           ErrorCode.INVALID_INPUT_VALUE, "날짜 형식이 올바르지 않습니다. 입력값: " + dateStr, e);
+    }
+  }
+
+  private String replaceDate(String value, LocalDate date) {
+    if (value == null || value.length() < 10) {
+      return date.toString();
+    }
+    try {
+      LocalDate.parse(value.substring(0, 10));
+      return date + value.substring(10);
+    } catch (DateTimeParseException e) {
+      return date.toString();
+    }
+  }
+
+  private String shiftDate(String value, long days) {
+    if (value == null) {
+      return null;
+    }
+    return LocalDate.parse(value.substring(0, 10)).plusDays(days) + value.substring(10);
+  }
+
+  private long dayShift(String previousValue, LocalDate correctedDate) {
+    if (previousValue == null || previousValue.length() < 10) {
+      return 0;
+    }
+    try {
+      return java.time.temporal.ChronoUnit.DAYS.between(
+          LocalDate.parse(previousValue.substring(0, 10)), correctedDate);
+    } catch (DateTimeParseException e) {
+      return 0;
     }
   }
 
