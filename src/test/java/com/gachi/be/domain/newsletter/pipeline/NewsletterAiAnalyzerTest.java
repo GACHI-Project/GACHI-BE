@@ -133,6 +133,68 @@ class NewsletterAiAnalyzerTest {
   }
 
   @Test
+  void analyzePreservesScheduleEndAndDeadlinePeriodStartInPreview() {
+    Long newsletterId = 31L;
+    Newsletter newsletter =
+        Newsletter.builder()
+            .userId(41L)
+            .fileKey("newsletter.pdf")
+            .fileHash("hash")
+            .status(NewsletterStatus.PROCESSING)
+            .language("KO")
+            .build();
+    ExtractedItem schedule =
+        new ExtractedItem(
+            "schedule",
+            "행사",
+            Map.of(),
+            null,
+            "2026-09-18T11:00:00",
+            "2026-09-18T14:00:00",
+            null,
+            "Asia/Seoul",
+            "9월 18일 11:00~14:00 행사",
+            "confirmed",
+            0.9,
+            false,
+            null,
+            List.of());
+    ExtractedItem deadline =
+        new ExtractedItem(
+            "deadline",
+            "신청 마감",
+            Map.of(),
+            null,
+            "2026-09-28T18:00:00",
+            null,
+            "2026-09-10T10:00:00",
+            "Asia/Seoul",
+            "9월 10일 접수 시작, 28일 마감",
+            "confirmed",
+            0.9,
+            false,
+            null,
+            List.of());
+    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter));
+    when(aiNewsletterClient.analyze("원문", "번역문", "KO", List.of(), List.of()))
+        .thenReturn(
+            new AnalysisResponse("제목", "요약", List.of(schedule, deadline), List.of(), Map.of()));
+
+    newsletterAiAnalyzer.analyze(newsletterId, "원문", "번역문", "KO", List.of());
+
+    verify(calendarPreviewRedisService)
+        .savePreview(eq(newsletterId), previewEventsCaptor.capture());
+    List<CalendarPreviewEvent> previews = previewEventsCaptor.getValue();
+    assertThat(previews).hasSize(2);
+    assertThat(previews.get(0).startAt()).isEqualTo("2026-09-18T11:00+09:00");
+    assertThat(previews.get(0).endAt()).isEqualTo("2026-09-18T14:00+09:00");
+    assertThat(previews.get(0).allDay()).isFalse();
+    assertThat(previews.get(1).startAt()).isEqualTo("2026-09-28T18:00+09:00");
+    assertThat(previews.get(1).periodStartAt()).isEqualTo("2026-09-10T10:00+09:00");
+    assertThat(previews.get(1).endAt()).isNull();
+  }
+
+  @Test
   void analyzeSkipsCalendarPreviewWhenDateIsNotConfirmed() {
     Long newsletterId = 14L;
     Newsletter newsletter =

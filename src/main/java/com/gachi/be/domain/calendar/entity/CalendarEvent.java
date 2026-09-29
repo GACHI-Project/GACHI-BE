@@ -60,6 +60,15 @@ public class CalendarEvent {
   @Column(name = "end_at")
   private OffsetDateTime endAt;
 
+  @Column(name = "period_start_at", length = 35)
+  private String periodStartAt;
+
+  @Column(name = "all_day", nullable = false)
+  private boolean allDay;
+
+  @Column(name = "end_all_day", nullable = false)
+  private boolean endAllDay;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
 
@@ -77,7 +86,10 @@ public class CalendarEvent {
       String description,
       String externalKey,
       OffsetDateTime startAt,
-      OffsetDateTime endAt) {
+      OffsetDateTime endAt,
+      String periodStartAt,
+      boolean allDay,
+      boolean endAllDay) {
     this.userId = userId;
     this.newsletterId = newsletterId;
     this.childName = childName;
@@ -88,6 +100,9 @@ public class CalendarEvent {
     this.externalKey = externalKey;
     this.startAt = startAt;
     this.endAt = endAt;
+    this.periodStartAt = periodStartAt;
+    this.allDay = allDay;
+    this.endAllDay = endAllDay;
   }
 
   @PrePersist
