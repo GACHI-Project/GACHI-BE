@@ -167,6 +167,8 @@ public class NewsletterController {
           """
         분석이 완료된(COMPLETED) 가정통신문만 조회 가능합니다.
         언어가 KO인 경우 translatedText 필드는 응답에 포함되지 않습니다.
+        pages에 페이지별 원문/번역이 들어갑니다. (sourceType=PDF: 텍스트, IMAGE: 이미지 URL + 오버레이 블록)
+        기능 도입 전에 분석된 문서는 pages가 빈 배열이므로 기존처럼 전체 텍스트로 보여주세요.
         """)
   @GetMapping("/{newsletterId}/translation")
   public ApiResponse<NewsletterTranslationResponse> getTranslation(
@@ -244,6 +246,7 @@ public class NewsletterController {
           """
         문서 목록 화면. 자녀 필터, 제목 검색, 페이지네이션을 지원합니다.
         각 항목의 isCalendarRegistered로 상세보기 탭 구성을 결정합니다.
+        각 항목의 status가 PAUSED이면 '이어서 진행'을 표시하세요. (POST /{newsletterId}/resume)
         """)
   @GetMapping
   public ApiResponse<NewsletterListResponse> getList(
