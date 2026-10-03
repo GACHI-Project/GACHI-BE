@@ -243,6 +243,7 @@ public class Newsletter {
     this.status = NewsletterStatus.PROCESSING;
     this.failureStage = null;
     this.failureReason = null;
+    clearPause();
   }
 
   /** AI 분석 결과를 저장하고 COMPLETED 상태로 전환합니다. */
@@ -268,6 +269,7 @@ public class Newsletter {
     this.status = NewsletterStatus.COMPLETED;
     this.failureStage = null;
     this.failureReason = null;
+    clearPause();
   }
 
   /** 분석 실패 시 원인 추적을 위해 실패 단계와 사유를 함께 저장합니다. */
@@ -275,6 +277,7 @@ public class Newsletter {
     this.status = NewsletterStatus.FAILED;
     this.failureStage = normalizeFailureStage(failureStage);
     this.failureReason = normalizeFailureReason(failureReason);
+    clearPause();
   }
 
   /** OCR/번역 이후 AI 서버 장애가 나도 사용자가 원문 결과를 확인할 수 있도록 중간 산출물을 보존합니다. */
@@ -303,6 +306,7 @@ public class Newsletter {
     this.title = null;
     this.titleI18n = new LinkedHashMap<>();
     this.summary = null;
+    clearPause();
   }
 
   /** 날짜 후보 목록을 교체합니다. 후보가 없으면 빈 목록으로 저장합니다. */

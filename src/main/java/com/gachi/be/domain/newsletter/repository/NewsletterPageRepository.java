@@ -16,4 +16,7 @@ public interface NewsletterPageRepository extends JpaRepository<NewsletterPage, 
 
   /** 문서에 페이지 레코드가 하나라도 있는지. (기능 도입 전 문서/첫 실행 여부 판단) */
   boolean existsByNewsletterId(Long newsletterId);
+
+  /** 여러 문서의 페이지를 한 번에 조회한다. (N+1 방지) */
+  List<NewsletterPage> findAllByNewsletterIdIn(List<Long> newsletterIds);
 }

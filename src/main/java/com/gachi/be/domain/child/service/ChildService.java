@@ -8,12 +8,17 @@ import com.gachi.be.domain.child.dto.response.ChildResponse;
 import com.gachi.be.domain.child.entity.Child;
 import com.gachi.be.domain.child.repository.ChildRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.entity.NewsletterPage;
+import com.gachi.be.domain.newsletter.repository.NewsletterPageRepository;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.file.service.S3FileService;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +39,7 @@ public class ChildService {
   private final NewsletterRepository newsletterRepository;
   private final CalendarEventRepository calendarEventRepository;
   private final S3FileService s3FileService;
+  private final NewsletterPageRepository newsletterPageRepository;
 
   @Transactional
   public ChildResponse createChild(String authorizationHeader, ChildCreateRequest request) {
@@ -152,8 +158,10 @@ public class ChildService {
     // 해당 자녀의 newsletter 목록 조회 → S3 fileKey 수집
     List<Newsletter> newsletters =
         newsletterRepository.findAllByUserIdAndChildName(userId, childName);
-    List<String> fileKeys = newsletters.stream().map(Newsletter::getFileKey).toList();
-
+    // 대표 키(file_key)만 지우던 것을 문서의 모든 관련 S3 파일로 확장
+    //   가정통신문에는 자녀 이름·학교 등 개인정보가 담겨 있어, DB만 지우고 S3 파일을 남기면 안 된다.
+    //   newsletter_page 레코드는 FK ON DELETE CASCADE로 지워지므로, DB 삭제 전에 키를 먼저 모아둔다.
+    List<String> fileKeys = collectS3FileKeys(newsletters);
     calendarEventRepository.deleteAllByUserIdAndChildName(userId, childName);
     log.debug("[Child] calendar_events 삭제 완료. userId={}, childName={}", userId, childName);
 
@@ -190,6 +198,28 @@ public class ChildService {
                 fileKeys.size());
           }
         });
+  }
+
+  /**
+   * 삭제할 가정통신문들의 S3 키를 모두 모은다. 원본(대표 키 + 여러 장 키)과 페이지별 표시용 이미지 키를 합치고, 중복은 제거한다. (회전이 없는 페이지는
+   * display_file_key가 원본 키와 같으므로 중복 삭제 요청이 생기지 않게 한다.)
+   */
+  private List<String> collectS3FileKeys(List<Newsletter> newsletters) {
+    Set<String> keys = new LinkedHashSet<>();
+    for (Newsletter newsletter : newsletters) {
+      keys.add(newsletter.getFileKey());
+      keys.addAll(newsletter.resolveFileKeys());
+    }
+
+    List<Long> newsletterIds = newsletters.stream().map(Newsletter::getId).toList();
+    if (!newsletterIds.isEmpty()) {
+      newsletterPageRepository.findAllByNewsletterIdIn(newsletterIds).stream()
+          .map(NewsletterPage::getDisplayFileKey)
+          .forEach(keys::add);
+    }
+
+    keys.removeIf(Objects::isNull);
+    return List.copyOf(keys);
   }
 
   private String normalizeRequiredText(String value) {

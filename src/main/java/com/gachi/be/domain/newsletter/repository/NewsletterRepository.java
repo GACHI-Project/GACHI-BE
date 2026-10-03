@@ -214,7 +214,11 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
       """
         UPDATE Newsletter n
         SET n.status = :failedStatus,
-                n.language = :newLanguage
+                n.language = :newLanguage,
+                n.pausedPageNo = null,
+                n.pausedStage = null,
+                n.pausedReason = null,
+                n.pausedAt = null
         WHERE n.userId = :userId
           AND n.status IN :targetStatuses
         """)

@@ -308,8 +308,24 @@ public class NewsletterServiceImpl implements NewsletterService {
     boolean canRetryPageOcr = newsletter.resolveSourceType() == NewsletterSourceType.IMAGE;
     List<NewsletterPage> pages =
         newsletterPageRepository.findAllByNewsletterIdOrderByPageNoAsc(newsletterId);
-    pages.forEach(page -> page.resetForReanalysis(canRetryPageOcr));
-    newsletterPageRepository.saveAll(pages);
+    // PDF에서 원문이 있는 페이지가 하나도 없으면(전 페이지 인식 실패) 페이지 레코드를 지운다.
+    //   페이지를 남겨두면 파이프라인이 "PDF OCR은 이미 끝났다"고 보고 OCR을 다시 하지 않아서,
+    //   일시적인 인식 실패였어도 '다시 분석'을 몇 번 눌러도 같은 이유(NO_RECOGNIZED_PAGE)로 계속 실패한다.
+    //   페이지를 지우면 파이프라인이 PDF OCR을 처음부터 다시 실행한다. (원문이 있는 페이지가 하나라도 있으면 기존 결정대로 OCR 재사용)
+    boolean pdfWithoutAnyText =
+        !canRetryPageOcr
+            && !pages.isEmpty()
+            && pages.stream()
+                .allMatch(
+                    page -> page.getOriginalText() == null || page.getOriginalText().isBlank());
+    if (pdfWithoutAnyText) {
+      newsletterPageRepository.deleteAll(pages);
+      log.info(
+          "[Newsletter] PDF 전 페이지 인식 실패. 페이지를 지우고 OCR부터 다시 진행합니다. newsletterId={}", newsletterId);
+    } else {
+      pages.forEach(page -> page.resetForReanalysis(canRetryPageOcr));
+      newsletterPageRepository.saveAll(pages);
+    }
     log.info(
         "[Newsletter] 다시 분석 준비. OCR 결과 재사용. newsletterId={}, pages={}", newsletterId, pages.size());
     Newsletter saved = findNewsletterById(newsletterId);
