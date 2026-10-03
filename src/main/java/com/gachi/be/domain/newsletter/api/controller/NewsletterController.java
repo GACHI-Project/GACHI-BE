@@ -44,7 +44,7 @@ public class NewsletterController {
   /**
    * 가정통신문 업로드 API.
    *
-   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -135,8 +135,8 @@ public class NewsletterController {
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
 
-      NewsletterUploadResponse response = newsletterService.resumeAnalysis(userId, newsletterId);
-      return ApiResponse.success(SuccessCode.NEWSLETTER_RESUME_ACCEPTED, response);
+    NewsletterUploadResponse response = newsletterService.resumeAnalysis(userId, newsletterId);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_RESUME_ACCEPTED, response);
   }
 
   /** 멈춘 페이지 건너뛰기 API */
@@ -154,10 +154,10 @@ public class NewsletterController {
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
       @Parameter(description = "건너뛸 페이지 번호 (1부터, 현재 멈춘 페이지)", required = true) @PathVariable
-      Integer pageNo) {
+          Integer pageNo) {
 
-      NewsletterUploadResponse response = newsletterService.skipPage(userId, newsletterId, pageNo);
-      return ApiResponse.success(SuccessCode.NEWSLETTER_PAGE_SKIP_ACCEPTED, response);
+    NewsletterUploadResponse response = newsletterService.skipPage(userId, newsletterId, pageNo);
+    return ApiResponse.success(SuccessCode.NEWSLETTER_PAGE_SKIP_ACCEPTED, response);
   }
 
   /** 번역 결과 조회 API. */

@@ -31,7 +31,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class NewsletterPipelineStatusService {
 
   private static final List<NewsletterStatus> CONTENT_DUPLICATE_TARGET_STATUSES =
-      List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING, NewsletterStatus.PAUSED, NewsletterStatus.COMPLETED);
+      List.of(
+          NewsletterStatus.PENDING,
+          NewsletterStatus.PROCESSING,
+          NewsletterStatus.PAUSED,
+          NewsletterStatus.COMPLETED);
 
   private final NewsletterRepository newsletterRepository;
   private final NotificationService notificationService;
@@ -149,10 +153,11 @@ public class NewsletterPipelineStatusService {
               newsletterRepository.save(newsletter);
             });
   }
+
   /**
    * 특정 페이지 실패로 사용자 선택을 기다리는 PAUSED 상태로 전환한다.
    *
-   * PROCESSING 상태일 때만 전환한다. 파이프라인이 도는 사이 언어 변경 등으로 이미 FAILED가 된 문서를 PAUSED로 되살리지 않기 위함이다.
+   * <p>PROCESSING 상태일 때만 전환한다. 파이프라인이 도는 사이 언어 변경 등으로 이미 FAILED가 된 문서를 PAUSED로 되살리지 않기 위함이다.
    *
    * @return PAUSED로 전환했으면 true
    */
@@ -165,21 +170,20 @@ public class NewsletterPipelineStatusService {
       OffsetDateTime pausedAt,
       String ocrText,
       String originalText) {
-      return newsletterRepository
-          .findById(newsletterId)
-          .filter(newsletter -> newsletter.getStatus() == NewsletterStatus.PROCESSING)
-          .map(
-              newsletter -> {
-                  newsletter.pause(
-                      pausedPageNo, pausedStage, pausedReason, pausedAt, ocrText, originalText);
-                  newsletterRepository.save(newsletter);
-                  return true;
-              })
-          .orElse(false);
+    return newsletterRepository
+        .findById(newsletterId)
+        .filter(newsletter -> newsletter.getStatus() == NewsletterStatus.PROCESSING)
+        .map(
+            newsletter -> {
+              newsletter.pause(
+                  pausedPageNo, pausedStage, pausedReason, pausedAt, ocrText, originalText);
+              newsletterRepository.save(newsletter);
+              return true;
+            })
+        .orElse(false);
   }
 
-
-    private void scheduleAnalysisCompletedNotification(Newsletter newsletter) {
+  private void scheduleAnalysisCompletedNotification(Newsletter newsletter) {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(
           new TransactionSynchronization() {

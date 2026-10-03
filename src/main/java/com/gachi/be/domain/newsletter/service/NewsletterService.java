@@ -25,19 +25,23 @@ public interface NewsletterService {
    */
   NewsletterStatusResponse getStatus(Long userId, Long newsletterId);
 
-  /** 실패한 가정통신문 분석을 다시 대기 상태로 되돌리고 파이프라인을 재실행합니다.
-   * 페이지 OCR 결과는 재사용하고 번역부터 다시 진행합니다. (OCR 결과가 없는 페이지는 OCR부터) */
+  /**
+   * 실패한 가정통신문 분석을 다시 대기 상태로 되돌리고 파이프라인을 재실행합니다. 페이지 OCR 결과는 재사용하고 번역부터 다시 진행합니다. (OCR 결과가 없는 페이지는
+   * OCR부터)
+   */
   NewsletterUploadResponse retryAnalysis(Long userId, Long newsletterId);
 
   /**
-   * 멈춘(PAUSED) 가정통신문을 멈춘 페이지부터 이어서 진행합니다. (멈춘 페이지 다시 시도)
-   * 멈춘 페이지가 다시 시도 불가 상태(인식 불가 + 다시 시도 1회 사용)이면 파이프라인을 실행하지 않고 현재 PAUSED 상태를 그대로 반환합니다.
+   * 멈춘(PAUSED) 가정통신문을 멈춘 페이지부터 이어서 진행합니다. (멈춘 페이지 다시 시도) 멈춘 페이지가 다시 시도 불가 상태(인식 불가 + 다시 시도 1회 사용)이면
+   * 파이프라인을 실행하지 않고 현재 PAUSED 상태를 그대로 반환합니다.
+   *
    * @return newsletterId + status (실행 시작 시 PENDING, 실행하지 않은 경우 PAUSED)
    */
   NewsletterUploadResponse resumeAnalysis(Long userId, Long newsletterId);
 
   /**
    * 멈춘 페이지를 건너뛰고 다음 페이지부터 이어서 진행합니다.
+   *
    * @param pageNo 건너뛸 페이지 번호 (1부터). 현재 멈춘 페이지여야 합니다.
    * @return newsletterId + status(PENDING)
    */

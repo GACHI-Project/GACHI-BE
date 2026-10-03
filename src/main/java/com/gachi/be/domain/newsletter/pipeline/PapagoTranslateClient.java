@@ -50,45 +50,45 @@ public class PapagoTranslateClient {
   /**
    * 여러 문장(이미지 오버레이 블록)을 한 번의 Papago 호출로 번역한다.
    *
-   * 블록마다 따로 호출하면 페이지당 수십 번 호출이 생기므로, 줄바꿈으로 이어 붙여 1회 호출한 뒤 결과를 다시 줄 단위로 나눈다. Papago는 보통 줄바꿈을
+   * <p>블록마다 따로 호출하면 페이지당 수십 번 호출이 생기므로, 줄바꿈으로 이어 붙여 1회 호출한 뒤 결과를 다시 줄 단위로 나눈다. Papago는 보통 줄바꿈을
    * 유지하지만, 결과 줄 수가 입력과 다르면(문장 병합 등) 블록 순서가 어긋나므로 그때만 블록별 개별 호출로 대체한다.
    *
    * @return 입력과 같은 순서/개수의 번역 목록. KO이면 null (번역 생략)
    */
   public List<String> translateAll(List<String> originalTexts, String targetLanguage) {
-      if ("KO".equals(targetLanguage)) {
-          log.debug("[Papago] KO 언어. 블록 번역 스킵.");
-          return null;
-      }
-      if (originalTexts == null || originalTexts.isEmpty()) {
-          return List.of();
-      }
+    if ("KO".equals(targetLanguage)) {
+      log.debug("[Papago] KO 언어. 블록 번역 스킵.");
+      return null;
+    }
+    if (originalTexts == null || originalTexts.isEmpty()) {
+      return List.of();
+    }
 
-      String papagoTargetCode = toPapagoCode(targetLanguage);
-      // 블록 안의 줄바꿈은 한 줄로 펴서, 결과를 줄 단위로 다시 나눌 때 블록 경계가 흔들리지 않게 한다.
-      List<String> singleLineTexts =
-          originalTexts.stream()
-              .map(text -> text == null ? "" : text.replaceAll("\\s*\\R\\s*", " ").strip())
-              .toList();
+    String papagoTargetCode = toPapagoCode(targetLanguage);
+    // 블록 안의 줄바꿈은 한 줄로 펴서, 결과를 줄 단위로 다시 나눌 때 블록 경계가 흔들리지 않게 한다.
+    List<String> singleLineTexts =
+        originalTexts.stream()
+            .map(text -> text == null ? "" : text.replaceAll("\\s*\\R\\s*", " ").strip())
+            .toList();
 
-      String joined = String.join("\n", singleLineTexts);
-      String translatedJoined = executeTranslation(joined, papagoTargetCode);
-      List<String> translatedLines = translatedJoined.lines().map(String::strip).toList();
+    String joined = String.join("\n", singleLineTexts);
+    String translatedJoined = executeTranslation(joined, papagoTargetCode);
+    List<String> translatedLines = translatedJoined.lines().map(String::strip).toList();
 
-      if (translatedLines.size() == singleLineTexts.size()) {
-          log.debug("[Papago] 블록 일괄 번역 완료. blocks={}", singleLineTexts.size());
-          return translatedLines;
-      }
+    if (translatedLines.size() == singleLineTexts.size()) {
+      log.debug("[Papago] 블록 일괄 번역 완료. blocks={}", singleLineTexts.size());
+      return translatedLines;
+    }
 
-      log.warn(
-          "[Papago] 블록 일괄 번역 결과 줄 수 불일치. 블록별 개별 번역으로 대체합니다. expected={}, actual={}",
-          singleLineTexts.size(),
-          translatedLines.size());
-      List<String> results = new ArrayList<>();
-      for (String text : singleLineTexts) {
-          results.add(text.isBlank() ? "" : executeTranslation(text, papagoTargetCode));
-      }
-      return results;
+    log.warn(
+        "[Papago] 블록 일괄 번역 결과 줄 수 불일치. 블록별 개별 번역으로 대체합니다. expected={}, actual={}",
+        singleLineTexts.size(),
+        translatedLines.size());
+    List<String> results = new ArrayList<>();
+    for (String text : singleLineTexts) {
+      results.add(text.isBlank() ? "" : executeTranslation(text, papagoTargetCode));
+    }
+    return results;
   }
 
   private String executeTranslation(String text, String papagoTarget) {

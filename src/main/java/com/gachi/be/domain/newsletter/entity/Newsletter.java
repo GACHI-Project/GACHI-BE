@@ -194,16 +194,16 @@ public class Newsletter {
 
   /** 원본 파일 종류를 반환한다. source_type이 없던 과거 문서는 대표 파일 키의 확장자로 판단한다. */
   public NewsletterSourceType resolveSourceType() {
-      if (sourceType != null) {
-          return sourceType;
-      }
-      return NewsletterSourceType.fromFileKey(fileKey);
+    if (sourceType != null) {
+      return sourceType;
+    }
+    return NewsletterSourceType.fromFileKey(fileKey);
   }
 
   /** 페이지 처리 시작 시 원본 종류와 전체 페이지 수를 기록한다. (PDF는 OCR 응답 후 다시 호출해 페이지 수를 확정) */
   public void initPageInfo(NewsletterSourceType sourceType, Integer totalPages) {
-      this.sourceType = sourceType;
-      this.totalPages = totalPages;
+    this.sourceType = sourceType;
+    this.totalPages = totalPages;
   }
 
   /**
@@ -217,27 +217,26 @@ public class Newsletter {
       OffsetDateTime pausedAt,
       String ocrText,
       String originalText) {
-      this.status = NewsletterStatus.PAUSED;
-      this.pausedPageNo = pausedPageNo;
-      this.pausedStage = pausedStage;
-      this.pausedReason = pausedReason;
-      this.pausedAt = pausedAt;
-      if (ocrText != null) {
-          this.ocrText = ocrText;
-      }
-      if (originalText != null) {
-          this.originalText = originalText;
-      }
+    this.status = NewsletterStatus.PAUSED;
+    this.pausedPageNo = pausedPageNo;
+    this.pausedStage = pausedStage;
+    this.pausedReason = pausedReason;
+    this.pausedAt = pausedAt;
+    if (ocrText != null) {
+      this.ocrText = ocrText;
+    }
+    if (originalText != null) {
+      this.originalText = originalText;
+    }
   }
 
   /** 멈춤 정보를 비운다. (이어서 진행/건너뛰기/완료/실패 시) */
   public void clearPause() {
-      this.pausedPageNo = null;
-      this.pausedStage = null;
-      this.pausedReason = null;
-      this.pausedAt = null;
+    this.pausedPageNo = null;
+    this.pausedStage = null;
+    this.pausedReason = null;
+    this.pausedAt = null;
   }
-
 
   /** AI 분석 시작 시 PROCESSING 상태로 전환합니다. */
   public void startProcessing() {

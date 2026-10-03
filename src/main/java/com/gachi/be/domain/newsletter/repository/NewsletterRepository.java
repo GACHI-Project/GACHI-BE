@@ -97,8 +97,8 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
   /**
    * FAILED 상태인 가정통신문만 PENDING으로 원자적으로 전환합니다.
    *
-   * 동시 재시도 요청이 들어와도 첫 요청만 update count 1을 받고, 나머지는 0을 받아 중복 파이프라인 실행을 막습니다.
-   * 다시 분석 시 멈춤 정보(paused_*: pausedPageNo/pausedStage/pausedReason/pausedAt)도 함께 비운다.
+   * <p>동시 재시도 요청이 들어와도 첫 요청만 update count 1을 받고, 나머지는 0을 받아 중복 파이프라인 실행을 막습니다. 다시 분석 시 멈춤
+   * 정보(paused_*: pausedPageNo/pausedStage/pausedReason/pausedAt)도 함께 비운다.
    */
   @Modifying(clearAutomatically = true, flushAutomatically = true)
   @Query(
@@ -121,33 +121,33 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
   int markRetryPendingIfFailed(
       @Param("newsletterId") Long newsletterId, @Param("userId") Long userId);
 
-    /**
-     * PAUSED 상태인 가정통신문만 PENDING으로 원자적으로 전환합니다. (이어서 진행 / 건너뛰기)
-     *
-     * markRetryPendingIfFailed와 같은 방식으로, 버튼 연타로 요청이 동시에 들어와도 첫 요청만 update count 1을 받고 나머지는 0을 받아
-     * 파이프라인이 중복 실행되지 않습니다. 멈춤 정보(paused_*)는 파이프라인이 PROCESSING으로 전환될 때 비웁니다. (그 전까지는 어떤 페이지를 처리 중인지
-     * status API에서 확인할 수 있도록 유지)
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query(
-        """
+  /**
+   * PAUSED 상태인 가정통신문만 PENDING으로 원자적으로 전환합니다. (이어서 진행 / 건너뛰기)
+   *
+   * <p>markRetryPendingIfFailed와 같은 방식으로, 버튼 연타로 요청이 동시에 들어와도 첫 요청만 update count 1을 받고 나머지는 0을 받아
+   * 파이프라인이 중복 실행되지 않습니다. 멈춤 정보(paused_*)는 파이프라인이 PROCESSING으로 전환될 때 비웁니다. (그 전까지는 어떤 페이지를 처리 중인지
+   * status API에서 확인할 수 있도록 유지)
+   */
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      """
         UPDATE Newsletter n
         SET n.status = com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus.PENDING
         WHERE n.id = :newsletterId
           AND n.userId = :userId
           AND n.status = com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus.PAUSED
         """)
-    int markResumePendingIfPaused(
-        @Param("newsletterId") Long newsletterId, @Param("userId") Long userId);
+  int markResumePendingIfPaused(
+      @Param("newsletterId") Long newsletterId, @Param("userId") Long userId);
 
-    /**
-     * 기준 시각 이전에 멈춘 뒤 방치된 PAUSED 가정통신문을 FAILED로 일괄 전환합니다. (24시간 자동 종료 스케줄러용)
-     *
-     * 페이지 결과와 원문 스냅샷은 그대로 남기므로, 사용자는 이후 '다시 분석'으로 OCR 결과를 재사용해 다시 진행할 수 있습니다.
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query(
-        """
+  /**
+   * 기준 시각 이전에 멈춘 뒤 방치된 PAUSED 가정통신문을 FAILED로 일괄 전환합니다. (24시간 자동 종료 스케줄러용)
+   *
+   * <p>페이지 결과와 원문 스냅샷은 그대로 남기므로, 사용자는 이후 '다시 분석'으로 OCR 결과를 재사용해 다시 진행할 수 있습니다.
+   */
+  @Modifying(clearAutomatically = true, flushAutomatically = true)
+  @Query(
+      """
         UPDATE Newsletter n
         SET n.status = com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus.FAILED,
             n.failureStage = :failureStage,
@@ -159,10 +159,10 @@ public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
         WHERE n.status = com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus.PAUSED
           AND n.pausedAt < :threshold
         """)
-    int expirePausedBefore(
-        @Param("threshold") OffsetDateTime threshold,
-        @Param("failureStage") String failureStage,
-        @Param("failureReason") String failureReason);
+  int expirePausedBefore(
+      @Param("threshold") OffsetDateTime threshold,
+      @Param("failureStage") String failureStage,
+      @Param("failureReason") String failureReason);
 
   /** 가정통신문 목록 조회 (자녀 필터 + 제목 검색 + 페이지네이션). */
   @Query(

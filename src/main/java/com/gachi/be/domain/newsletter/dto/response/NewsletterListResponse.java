@@ -2,7 +2,6 @@ package com.gachi.be.domain.newsletter.dto.response;
 
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
-
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
