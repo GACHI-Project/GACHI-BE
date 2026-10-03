@@ -44,7 +44,7 @@ public class NewsletterController {
   /**
    * 가정통신문 업로드 API.
    *
-   * <p>요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
+   * 요청 형식: multipart/form-data Swagger에서 "file" 파라미터를 통해 직접 파일을 선택해서 테스트 가능. 업로드 성공 시
    * newsletterId를 받고, 이 ID로 /status API를 폴링 O.
    */
   @Operation(
@@ -85,6 +85,10 @@ public class NewsletterController {
           """
       업로드 후 AI 분석 진행률을 확인합니다. 2초 간격으로 폴링하세요.
       status가 COMPLETED이면 결과 조회 API를 호출하면 됩니다.
+      status가 PAUSED이면 특정 페이지에서 멈춘 상태입니다. 폴링을 멈추고
+      retryable=true면 [다시 시도](POST /{newsletterId}/resume),
+      skippable=true면 [건너뛰기](POST /{newsletterId}/pages/{pausedPageNo}/skip) 버튼을 보여주세요.
+      totalPages/processedPages로 "n / 전체 페이지" 진행 표시를 할 수 있습니다.
       """)
   @GetMapping("/{newsletterId}/status")
   public ApiResponse<NewsletterStatusResponse> getStatus(
@@ -102,6 +106,7 @@ public class NewsletterController {
           """
       FAILED 상태의 가정통신문 분석을 다시 시작합니다.
       AI 서버 장애로 실패한 경우 기존 OCR/번역 결과는 보존되어 있고, 재시도 시 파이프라인이 다시 실행됩니다.
+      페이지 OCR 결과는 재사용하고 번역부터 다시 진행합니다. (OCR 결과가 없는 페이지는 OCR부터)
       """)
   @PostMapping("/{newsletterId}/analysis/retry")
   @ResponseStatus(HttpStatus.ACCEPTED)
@@ -111,6 +116,48 @@ public class NewsletterController {
 
     NewsletterUploadResponse response = newsletterService.retryAnalysis(userId, newsletterId);
     return ApiResponse.success(SuccessCode.NEWSLETTER_RETRY_ACCEPTED, response);
+  }
+
+  /** 멈춘(PAUSED) 가정통신문 이어서 진행 API */
+  @Operation(
+      summary = "가정통신문 이어서 진행 (멈춘 페이지 다시 시도)",
+      description =
+          """
+       PAUSED 상태의 가정통신문을 멈춘 페이지부터 다시 시도하고, 성공하면 다음 페이지로 이어서 진행합니다.
+       이미 처리된 페이지는 다시 처리하지 않습니다.
+       목록의 '이어서 진행'과 진행 화면의 [다시 시도] 버튼 모두 이 API를 호출한 뒤 진행 화면에서 /status를 폴링하면 됩니다.
+       멈춘 페이지가 다시 시도 불가 상태(글자 인식 불가 + 다시 시도 1회 사용)이면 실행하지 않고 status=PAUSED를 그대로 반환합니다.
+       이때 /status의 skippable=true이므로 [건너뛰기] 버튼을 보여주세요.
+       """)
+  @PostMapping("/{newsletterId}/resume")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public ApiResponse<NewsletterUploadResponse> resumeAnalysis(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId) {
+
+      NewsletterUploadResponse response = newsletterService.resumeAnalysis(userId, newsletterId);
+      return ApiResponse.success(SuccessCode.NEWSLETTER_RESUME_ACCEPTED, response);
+  }
+
+  /** 멈춘 페이지 건너뛰기 API */
+  @Operation(
+      summary = "멈춘 페이지 건너뛰기",
+      description =
+          """
+       PAUSED 상태에서 멈춘 페이지를 건너뛰고 다음 페이지부터 이어서 진행합니다.
+       /status의 skippable=true일 때만 호출할 수 있습니다. (다시 시도를 1회 이상 한 뒤)
+       글자를 읽지 못한 페이지는 원문 없이, 번역에 실패한 페이지는 원문만 있는 상태로 결과에 남습니다.
+       """)
+  @PostMapping("/{newsletterId}/pages/{pageNo}/skip")
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  public ApiResponse<NewsletterUploadResponse> skipPage(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
+      @Parameter(description = "건너뛸 페이지 번호 (1부터, 현재 멈춘 페이지)", required = true) @PathVariable
+      Integer pageNo) {
+
+      NewsletterUploadResponse response = newsletterService.skipPage(userId, newsletterId, pageNo);
+      return ApiResponse.success(SuccessCode.NEWSLETTER_PAGE_SKIP_ACCEPTED, response);
   }
 
   /** 번역 결과 조회 API. */
