@@ -2,6 +2,8 @@ package com.gachi.be.domain.newsletter.pipeline;
 
 import com.gachi.be.domain.child.repository.ChildRepository;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterPausedReason;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterPausedStage;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.notification.entity.enums.NotificationLevel;
@@ -9,6 +11,7 @@ import com.gachi.be.domain.notification.entity.enums.NotificationType;
 import com.gachi.be.domain.notification.service.NotificationCreateCommand;
 import com.gachi.be.domain.notification.service.NotificationService;
 import com.gachi.be.domain.notification.service.NotificationTemplateKey;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class NewsletterPipelineStatusService {
 
   private static final List<NewsletterStatus> CONTENT_DUPLICATE_TARGET_STATUSES =
-      List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING, NewsletterStatus.COMPLETED);
+      List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING, NewsletterStatus.PAUSED, NewsletterStatus.COMPLETED);
 
   private final NewsletterRepository newsletterRepository;
   private final NotificationService notificationService;
@@ -146,8 +149,37 @@ public class NewsletterPipelineStatusService {
               newsletterRepository.save(newsletter);
             });
   }
+  /**
+   * 특정 페이지 실패로 사용자 선택을 기다리는 PAUSED 상태로 전환한다.
+   *
+   * PROCESSING 상태일 때만 전환한다. 파이프라인이 도는 사이 언어 변경 등으로 이미 FAILED가 된 문서를 PAUSED로 되살리지 않기 위함이다.
+   *
+   * @return PAUSED로 전환했으면 true
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public boolean markPaused(
+      Long newsletterId,
+      int pausedPageNo,
+      NewsletterPausedStage pausedStage,
+      NewsletterPausedReason pausedReason,
+      OffsetDateTime pausedAt,
+      String ocrText,
+      String originalText) {
+      return newsletterRepository
+          .findById(newsletterId)
+          .filter(newsletter -> newsletter.getStatus() == NewsletterStatus.PROCESSING)
+          .map(
+              newsletter -> {
+                  newsletter.pause(
+                      pausedPageNo, pausedStage, pausedReason, pausedAt, ocrText, originalText);
+                  newsletterRepository.save(newsletter);
+                  return true;
+              })
+          .orElse(false);
+  }
 
-  private void scheduleAnalysisCompletedNotification(Newsletter newsletter) {
+
+    private void scheduleAnalysisCompletedNotification(Newsletter newsletter) {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(
           new TransactionSynchronization() {
