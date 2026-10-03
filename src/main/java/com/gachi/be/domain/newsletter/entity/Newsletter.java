@@ -1,5 +1,8 @@
 package com.gachi.be.domain.newsletter.entity;
 
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterPausedReason;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterPausedStage;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterSourceType;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -102,6 +105,33 @@ public class Newsletter {
 
   @Column(name = "language", nullable = false, length = 10)
   private String language;
+
+  /** 원본 파일 종류(PDF/IMAGE). 기능 도입 전 문서는 null이며 resolveSourceType()으로 확장자 기준 판단. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "source_type", length = 10)
+  private NewsletterSourceType sourceType;
+
+  /** 전체 페이지 수. 이미지는 업로드 장 수, PDF는 클로바 OCR 응답 후 확정된다. */
+  @Column(name = "total_pages")
+  private Integer totalPages;
+
+  /** PAUSED 상태일 때 멈춘 페이지 번호(1부터). */
+  @Column(name = "paused_page_no")
+  private Integer pausedPageNo;
+
+  /** PAUSED 상태일 때 멈춘 단계(OCR/TRANSLATION). */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "paused_stage", length = 20)
+  private NewsletterPausedStage pausedStage;
+
+  /** PAUSED 상태일 때 멈춘 사유(OCR_FAILED/UNREADABLE/TRANSLATION_FAILED). */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "paused_reason", length = 30)
+  private NewsletterPausedReason pausedReason;
+
+  /** PAUSED로 전환된 시각. 24시간이 지나면 스케줄러가 FAILED로 전환한다. */
+  @Column(name = "paused_at")
+  private OffsetDateTime pausedAt;
 
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
