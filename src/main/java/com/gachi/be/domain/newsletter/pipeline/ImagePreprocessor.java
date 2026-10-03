@@ -5,12 +5,18 @@ import com.drew.imaging.ImageProcessingException;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.MetadataException;
 import com.drew.metadata.exif.ExifIFD0Directory;
+import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Iterator;
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +31,100 @@ public class ImagePreprocessor {
     byte[] result = correctExifRotation(fileBytes);
     log.debug("[ImagePreprocessor] 전처리 완료. resultSize={}bytes", result.length);
     return result;
+  }
+
+  /** 화면 표시/OCR/AI 첨부 겸용 JPEG 품질. 텍스트 인식에 영향이 거의 없는 고화질 값으로 고정. */
+  private static final float DISPLAY_JPEG_QUALITY = 0.95f;
+
+  /**
+   * 이미지 페이지 전처리 (페이지 단위 파이프라인 전용).
+   *
+   * <p>EXIF 회전이 필요한 이미지만 실제로 회전시킨 고화질 JPEG를 만들어 반환하고, 회전이 필요 없으면 jpegBytes=null을 반환한다. (원본을 그대로 쓰면
+   * 되므로 S3에 한 벌 더 저장하지 않기 위함) 어느 경우든 최종 이미지의 가로/세로 픽셀 크기를 함께 반환해 오버레이 좌표를 0~1 비율로 바꿀 때 사용한다.
+   *
+   * <p>기존 preprocessImage()는 결과를 PNG 임시 파일로 OCR 후 삭제했지만, 이어서 진행(PAUSED → 재개) 시점에도 같은 이미지를
+   * OCR/AI/화면에서 써야 하므로 결과를 보관 가능한 JPEG 한 벌로 통일한다.
+   */
+  public PreprocessedImage preprocessForDisplay(byte[] fileBytes) throws IOException {
+    int orientation = readExifOrientation(fileBytes);
+    BufferedImage original = ImageIO.read(new ByteArrayInputStream(fileBytes));
+
+    if (original == null) {
+      throw new IOException("이미지를 읽을 수 없습니다. 지원하지 않는 형식일 수 있습니다.");
+    }
+
+    int degrees =
+        switch (orientation) {
+          case 3 -> 180;
+          case 6 -> 90;
+          case 8 -> 270;
+          default -> 0;
+        };
+
+    if (degrees == 0) {
+      log.debug(
+          "[ImagePreprocessor] 회전 보정 불필요. 원본을 그대로 사용합니다. orientation={}, size={}x{}",
+          orientation,
+          original.getWidth(),
+          original.getHeight());
+      return new PreprocessedImage(null, original.getWidth(), original.getHeight());
+    }
+
+    BufferedImage rotated = rotate(original, degrees);
+    byte[] jpegBytes = toJpegByteArray(rotated);
+    log.debug(
+        "[ImagePreprocessor] 회전 보정 JPEG 생성. orientation={}, degrees={}, size={}x{}, bytes={}",
+        orientation,
+        degrees,
+        rotated.getWidth(),
+        rotated.getHeight(),
+        jpegBytes.length);
+    return new PreprocessedImage(jpegBytes, rotated.getWidth(), rotated.getHeight());
+  }
+
+  /**
+   * BufferedImage를 고화질 JPEG 바이트 배열로 변환. JPEG는 알파 채널을 지원하지 않으므로 흰 배경의 RGB 이미지로 옮긴 뒤 저장한다. (회전 시
+   * TYPE_INT_ARGB로 만들어진 이미지도 안전하게 저장하기 위함)
+   */
+  private byte[] toJpegByteArray(BufferedImage image) throws IOException {
+    BufferedImage rgbImage =
+        new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
+    Graphics2D g2d = rgbImage.createGraphics();
+    g2d.setColor(Color.WHITE);
+    g2d.fillRect(0, 0, image.getWidth(), image.getHeight());
+    g2d.drawImage(image, 0, 0, null);
+    g2d.dispose();
+
+    Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
+    if (!writers.hasNext()) {
+      throw new IOException("JPEG ImageWriter를 찾을 수 없습니다.");
+    }
+    ImageWriter writer = writers.next();
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+      writer.setOutput(ios);
+      ImageWriteParam param = writer.getDefaultWriteParam();
+      param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+      param.setCompressionQuality(DISPLAY_JPEG_QUALITY);
+      writer.write(null, new IIOImage(rgbImage, null, null), param);
+      ios.flush();
+      return baos.toByteArray();
+    } finally {
+      writer.dispose();
+    }
+  }
+
+  /**
+   * 페이지 이미지 전처리 결과.
+   *
+   * @param jpegBytes 회전 보정한 JPEG. 회전이 필요 없으면 null (원본 파일을 그대로 사용)
+   * @param width 최종 이미지 가로 픽셀
+   * @param height 최종 이미지 세로 픽셀
+   */
+  public record PreprocessedImage(byte[] jpegBytes, int width, int height) {
+    public boolean rotated() {
+      return jpegBytes != null;
+    }
   }
 
   /**

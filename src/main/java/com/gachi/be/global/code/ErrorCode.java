@@ -279,6 +279,24 @@ public enum ErrorCode {
       "업로드한 파일의 총 크기는 50MB 이하여야 합니다.",
       "files 전체 용량 합계 50MB 초과",
       ErrorLogLevel.WARN),
+  NEWSLETTER_RESUME_NOT_ALLOWED(
+      HttpStatus.BAD_REQUEST,
+      "NL4009",
+      "멈춘 가정통신문만 이어서 진행할 수 있습니다.",
+      "PAUSED 상태가 아닌 newsletter 이어서 진행/건너뛰기 요청",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_PAGE_SKIP_NOT_ALLOWED(
+      HttpStatus.BAD_REQUEST,
+      "NL4010",
+      "지금은 이 페이지를 건너뛸 수 없습니다.",
+      "멈춘 페이지가 아니거나, 건너뛰기 조건(다시 시도 1회 이상) 미충족",
+      ErrorLogLevel.WARN),
+  NEWSLETTER_PAGE_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "NL4042",
+      "가정통신문 페이지를 찾을 수 없습니다.",
+      "newsletterId + pageNo에 해당하는 페이지 레코드 없음",
+      ErrorLogLevel.INFO),
   CHECKLIST_NOT_FOUND(
       HttpStatus.NOT_FOUND,
       "CL4041",

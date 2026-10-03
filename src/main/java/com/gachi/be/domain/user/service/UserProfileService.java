@@ -67,10 +67,13 @@ public class UserProfileService {
     }
 
     currentUser.updateLanguage(newLanguage);
+    // PAUSED(멈춘 채 이어서 진행을 기다리는 문서)도 중단 대상에 포함.
+    //   빠지면 이전 언어로 번역하다 멈춘 문서가 새 언어로 이어서 진행되어 한 문서 안에 두 언어가 섞인다.
+    //   FAILED가 된 문서는 '다시 분석' 시 OCR 결과만 재사용하고 번역은 새 언어로 처음부터 다시 한다.
     int cancelledCount =
         newsletterRepository.cancelInProgressByUserId(
             currentUser.getId(),
-            List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING),
+            List.of(NewsletterStatus.PENDING, NewsletterStatus.PROCESSING, NewsletterStatus.PAUSED),
             NewsletterStatus.FAILED,
             newLanguage);
     log.info(
