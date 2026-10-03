@@ -1,5 +1,8 @@
 package com.gachi.be.domain.newsletter.entity;
 
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterPausedReason;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterPausedStage;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterSourceType;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -103,6 +106,33 @@ public class Newsletter {
   @Column(name = "language", nullable = false, length = 10)
   private String language;
 
+  /** 원본 파일 종류(PDF/IMAGE). 기능 도입 전 문서는 null이며 resolveSourceType()으로 확장자 기준 판단. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "source_type", length = 10)
+  private NewsletterSourceType sourceType;
+
+  /** 전체 페이지 수. 이미지는 업로드 장 수, PDF는 클로바 OCR 응답 후 확정된다. */
+  @Column(name = "total_pages")
+  private Integer totalPages;
+
+  /** PAUSED 상태일 때 멈춘 페이지 번호(1부터). */
+  @Column(name = "paused_page_no")
+  private Integer pausedPageNo;
+
+  /** PAUSED 상태일 때 멈춘 단계(OCR/TRANSLATION). */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "paused_stage", length = 20)
+  private NewsletterPausedStage pausedStage;
+
+  /** PAUSED 상태일 때 멈춘 사유(OCR_FAILED/UNREADABLE/TRANSLATION_FAILED). */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "paused_reason", length = 30)
+  private NewsletterPausedReason pausedReason;
+
+  /** PAUSED로 전환된 시각. 24시간이 지나면 스케줄러가 FAILED로 전환한다. */
+  @Column(name = "paused_at")
+  private OffsetDateTime pausedAt;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private OffsetDateTime createdAt;
 
@@ -162,11 +192,58 @@ public class Newsletter {
     return List.copyOf(fileKeys);
   }
 
+  /** 원본 파일 종류를 반환한다. source_type이 없던 과거 문서는 대표 파일 키의 확장자로 판단한다. */
+  public NewsletterSourceType resolveSourceType() {
+    if (sourceType != null) {
+      return sourceType;
+    }
+    return NewsletterSourceType.fromFileKey(fileKey);
+  }
+
+  /** 페이지 처리 시작 시 원본 종류와 전체 페이지 수를 기록한다. (PDF는 OCR 응답 후 다시 호출해 페이지 수를 확정) */
+  public void initPageInfo(NewsletterSourceType sourceType, Integer totalPages) {
+    this.sourceType = sourceType;
+    this.totalPages = totalPages;
+  }
+
+  /**
+   * 특정 페이지 실패로 사용자 선택을 기다리는 PAUSED 상태로 전환한다. 24시간 방치 후 FAILED로 바뀌어도 원문을 볼 수 있도록 지금까지 만든 원문 스냅샷을 함께
+   * 저장한다. (OCR 단계에서 멈추면 아직 원문이 없으므로 null이 들어온다.)
+   */
+  public void pause(
+      int pausedPageNo,
+      NewsletterPausedStage pausedStage,
+      NewsletterPausedReason pausedReason,
+      OffsetDateTime pausedAt,
+      String ocrText,
+      String originalText) {
+    this.status = NewsletterStatus.PAUSED;
+    this.pausedPageNo = pausedPageNo;
+    this.pausedStage = pausedStage;
+    this.pausedReason = pausedReason;
+    this.pausedAt = pausedAt;
+    if (ocrText != null) {
+      this.ocrText = ocrText;
+    }
+    if (originalText != null) {
+      this.originalText = originalText;
+    }
+  }
+
+  /** 멈춤 정보를 비운다. (이어서 진행/건너뛰기/완료/실패 시) */
+  public void clearPause() {
+    this.pausedPageNo = null;
+    this.pausedStage = null;
+    this.pausedReason = null;
+    this.pausedAt = null;
+  }
+
   /** AI 분석 시작 시 PROCESSING 상태로 전환합니다. */
   public void startProcessing() {
     this.status = NewsletterStatus.PROCESSING;
     this.failureStage = null;
     this.failureReason = null;
+    clearPause();
   }
 
   /** AI 분석 결과를 저장하고 COMPLETED 상태로 전환합니다. */
@@ -192,6 +269,7 @@ public class Newsletter {
     this.status = NewsletterStatus.COMPLETED;
     this.failureStage = null;
     this.failureReason = null;
+    clearPause();
   }
 
   /** 분석 실패 시 원인 추적을 위해 실패 단계와 사유를 함께 저장합니다. */
@@ -199,6 +277,7 @@ public class Newsletter {
     this.status = NewsletterStatus.FAILED;
     this.failureStage = normalizeFailureStage(failureStage);
     this.failureReason = normalizeFailureReason(failureReason);
+    clearPause();
   }
 
   /** OCR/번역 이후 AI 서버 장애가 나도 사용자가 원문 결과를 확인할 수 있도록 중간 산출물을 보존합니다. */
@@ -227,6 +306,7 @@ public class Newsletter {
     this.title = null;
     this.titleI18n = new LinkedHashMap<>();
     this.summary = null;
+    clearPause();
   }
 
   /** 날짜 후보 목록을 교체합니다. 후보가 없으면 빈 목록으로 저장합니다. */
