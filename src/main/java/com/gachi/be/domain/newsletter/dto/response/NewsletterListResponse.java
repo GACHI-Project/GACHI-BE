@@ -1,6 +1,8 @@
 package com.gachi.be.domain.newsletter.dto.response;
 
 import com.gachi.be.domain.newsletter.entity.Newsletter;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
+
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -15,7 +17,8 @@ public record NewsletterListResponse(List<NewsletterItem> newsletters, int total
       Integer childGrade,
       String childColor,
       boolean isCalendarRegistered,
-      String createdAt) {
+      String createdAt,
+      NewsletterStatus status) {
 
     public static NewsletterItem from(Newsletter newsletter, boolean calendarRegistered) {
       String createdAtStr =
@@ -33,7 +36,8 @@ public record NewsletterListResponse(List<NewsletterItem> newsletters, int total
           newsletter.getChildGrade(),
           newsletter.getChildColor(),
           calendarRegistered,
-          createdAtStr);
+          createdAtStr,
+          newsletter.getStatus());
     }
   }
 }
