@@ -279,6 +279,8 @@ public class NewsletterServiceImpl implements NewsletterService {
   @Transactional(readOnly = true)
   public NewsletterStatusResponse getStatus(Long userId, Long newsletterId) {
     Newsletter newsletter = findNewsletterById(newsletterId);
+    //소유권 검증. 빠지면 다른 사용자의 newsletterId로도 분석 상태를 조회할 수 있음
+    validateOwnership(newsletter, userId);
     List<NewsletterPage> pages =
         newsletterPageRepository.findAllByNewsletterIdOrderByPageNoAsc(newsletterId);
     return NewsletterStatusResponse.of(newsletter, pages);
