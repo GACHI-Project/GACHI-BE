@@ -13,13 +13,17 @@ import com.gachi.be.domain.newsletter.dto.response.NewsletterChecklistResponse.C
 import com.gachi.be.domain.newsletter.dto.response.NewsletterListResponse.NewsletterItem;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterRecentResponse.DateGroup;
 import com.gachi.be.domain.newsletter.dto.response.NewsletterRecentResponse.RecentItem;
+import com.gachi.be.domain.newsletter.dto.response.NewsletterTranslationResponse.PageItem;
 import com.gachi.be.domain.newsletter.entity.ConversationTopic;
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.NewsletterCulturalGuide;
+import com.gachi.be.domain.newsletter.entity.NewsletterPage;
+import com.gachi.be.domain.newsletter.entity.enums.NewsletterSourceType;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
 import com.gachi.be.domain.newsletter.pipeline.NewsletterPipelineService;
 import com.gachi.be.domain.newsletter.repository.ConversationTopicRepository;
 import com.gachi.be.domain.newsletter.repository.NewsletterCulturalGuideRepository;
+import com.gachi.be.domain.newsletter.repository.NewsletterPageRepository;
 import com.gachi.be.domain.newsletter.repository.NewsletterRepository;
 import com.gachi.be.domain.newsletter.service.NewsletterService;
 import com.gachi.be.domain.schoolguide.entity.SchoolGuide;
@@ -73,6 +77,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   private final ConversationTopicRepository conversationTopicRepository;
   private final NewsletterCulturalGuideRepository newsletterCulturalGuideRepository;
   private final SchoolGuideRepository schoolGuideRepository;
+  private final NewsletterPageRepository newsletterPageRepository;
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private static final int PAGE_SIZE = 20;
   private static final int MAX_FILE_COUNT = 10;
@@ -85,7 +90,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
    *
-   * <p>처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
+   * 처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
    * file_key 획득 childId가 있으면 children 테이블에서 자녀 정보 조회 (스냅샷용) newsletter 레코드 DB 저장 (status=PENDING 으로
    * 변경) AI 분석 파이프라인 비동기 트리거 -> Asyncㅏ로 별도 스레드에서 실행하게 함.
    */
@@ -274,8 +279,9 @@ public class NewsletterServiceImpl implements NewsletterService {
   @Transactional(readOnly = true)
   public NewsletterStatusResponse getStatus(Long userId, Long newsletterId) {
     Newsletter newsletter = findNewsletterById(newsletterId);
-    validateOwnership(newsletter, userId);
-    return NewsletterStatusResponse.of(newsletter);
+    List<NewsletterPage> pages =
+        newsletterPageRepository.findAllByNewsletterIdOrderByPageNoAsc(newsletterId);
+    return NewsletterStatusResponse.of(newsletter, pages);
   }
 
   /** 실패한 분석을 사용자가 다시 시도할 수 있도록 파생 데이터를 비우고 파이프라인을 재실행합니다. */
@@ -294,6 +300,16 @@ public class NewsletterServiceImpl implements NewsletterService {
     calendarEventRepository.deleteByNewsletterIdAndUserId(newsletterId, userId);
     conversationTopicRepository.deleteByNewsletterId(newsletterId);
     newsletterCulturalGuideRepository.deleteByNewsletterId(newsletterId);
+    // 결정 사항: OCR 결과는 재사용하고 번역은 처음부터 다시 한다.
+    //  (24시간 방치로 FAILED 된 문서는 OCR을 다시 하지 않아도 되고, 언어 변경으로 FAILED 된 문서도 언어가 섞이지 않는다.)
+    //  원문이 없는 이미지 페이지(OCR 실패/인식 불가)는 OCR부터 다시 시도한다. (PDF는 페이지 단위 OCR이 불가하므로 건너뛴 상태 유지)
+    boolean canRetryPageOcr = newsletter.resolveSourceType() == NewsletterSourceType.IMAGE;
+    List<NewsletterPage> pages =
+        newsletterPageRepository.findAllByNewsletterIdOrderByPageNoAsc(newsletterId);
+    pages.forEach(page -> page.resetForReanalysis(canRetryPageOcr));
+    newsletterPageRepository.saveAll(pages);
+    log.info(
+        "[Newsletter] 다시 분석 준비. OCR 결과 재사용. newsletterId={}, pages={}", newsletterId, pages.size());
     Newsletter saved = findNewsletterById(newsletterId);
 
     TransactionSynchronizationManager.registerSynchronization(
@@ -307,6 +323,117 @@ public class NewsletterServiceImpl implements NewsletterService {
 
     return new NewsletterUploadResponse(saved.getId(), saved.getStatus());
   }
+  /**
+   * 멈춘(PAUSED) 가정통신문을 멈춘 페이지부터 이어서 진행한다.
+   *
+   * 결정 사항: 다시 시도 불가 상태(인식 불가 + 다시 시도 1회 사용)이면 에러 없이 파이프라인을 실행하지 않고 현재 PAUSED 상태를 그대로 반환한다. 프론트는
+   * 항상 "이어서 진행 → 진행 화면 이동 → status 폴링" 같은 동작만 하면 되고, 진행 화면에는 status의 retryable/skippable 값대로 [건너뛰기]
+   * 버튼이 뜬다.
+   */
+    @Override
+    @Transactional
+    public NewsletterUploadResponse resumeAnalysis(Long userId, Long newsletterId) {
+        Newsletter newsletter = findNewsletterById(newsletterId);
+        validateOwnership(newsletter, userId);
+        if (newsletter.getStatus() != NewsletterStatus.PAUSED) {
+            throw new BusinessException(ErrorCode.NEWSLETTER_RESUME_NOT_ALLOWED);
+        }
+
+        NewsletterPage pausedPage = findPausedPage(newsletter);
+        if (!pausedPage.isRetryable()) {
+            log.info(
+                "[Newsletter] 다시 시도 불가 페이지. 실행 없이 현재 상태를 반환합니다. newsletterId={}, pageNo={}, status={}",
+                newsletterId,
+                pausedPage.getPageNo(),
+                pausedPage.getStatus());
+            return new NewsletterUploadResponse(newsletterId, NewsletterStatus.PAUSED);
+        }
+
+        // 버튼 연타로 요청이 동시에 들어와도 첫 요청만 1을 받는다. (중복 파이프라인 실행 방지)
+        int updated = newsletterRepository.markResumePendingIfPaused(newsletterId, userId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.NEWSLETTER_RESUME_NOT_ALLOWED);
+        }
+
+        // update 쿼리가 영속성 컨텍스트를 비우므로 페이지를 다시 읽어서 다시 시도 횟수를 올린다.
+        NewsletterPage page = findPage(newsletterId, pausedPage.getPageNo());
+        page.increaseRetryCount();
+        newsletterPageRepository.save(page);
+
+        triggerPipelineAfterCommit(newsletterId, "이어서 진행");
+        return new NewsletterUploadResponse(newsletterId, NewsletterStatus.PENDING);
+    }
+
+    /** 멈춘 페이지를 건너뛰고 다음 페이지부터 이어서 진행한다. 현재 멈춘 페이지이면서 건너뛰기가 허용된 경우에만 가능하다. */
+    @Override
+    @Transactional
+    public NewsletterUploadResponse skipPage(Long userId, Long newsletterId, Integer pageNo) {
+        Newsletter newsletter = findNewsletterById(newsletterId);
+        validateOwnership(newsletter, userId);
+        if (newsletter.getStatus() != NewsletterStatus.PAUSED) {
+            throw new BusinessException(ErrorCode.NEWSLETTER_RESUME_NOT_ALLOWED);
+        }
+
+        NewsletterPage page = findPage(newsletterId, pageNo);
+        if (!Objects.equals(newsletter.getPausedPageNo(), pageNo) || !page.isSkippable()) {
+            throw new BusinessException(
+                ErrorCode.NEWSLETTER_PAGE_SKIP_NOT_ALLOWED,
+                "pausedPageNo="
+                    + newsletter.getPausedPageNo()
+                    + ", pageNo="
+                    + pageNo
+                    + ", pageStatus="
+                    + page.getStatus()
+                    + ", retryCount="
+                    + page.getRetryCount());
+        }
+
+        int updated = newsletterRepository.markResumePendingIfPaused(newsletterId, userId);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.NEWSLETTER_RESUME_NOT_ALLOWED);
+        }
+
+        NewsletterPage reloaded = findPage(newsletterId, pageNo);
+        reloaded.skip();
+        newsletterPageRepository.save(reloaded);
+        log.info("[Newsletter] 페이지 건너뛰기. newsletterId={}, pageNo={}", newsletterId, pageNo);
+
+        triggerPipelineAfterCommit(newsletterId, "페이지 건너뛰기");
+        return new NewsletterUploadResponse(newsletterId, NewsletterStatus.PENDING);
+    }
+
+    /** 트랜잭션 커밋 후 파이프라인을 비동기로 다시 실행한다. (커밋 전에 실행하면 PENDING 전환/페이지 변경을 못 볼 수 있음) */
+    private void triggerPipelineAfterCommit(Long newsletterId, String reason) {
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    log.info("[Newsletter] {} 파이프라인 트리거. newsletterId={}", reason, newsletterId);
+                    newsletterPipelineService.runPipeline(newsletterId);
+                }
+            });
+    }
+
+    /** 문서의 현재 멈춘 페이지를 조회한다. */
+    private NewsletterPage findPausedPage(Newsletter newsletter) {
+        if (newsletter.getPausedPageNo() == null) {
+            throw new BusinessException(
+                ErrorCode.NEWSLETTER_RESUME_NOT_ALLOWED,
+                "pausedPageNo 없음. newsletterId=" + newsletter.getId());
+        }
+        return findPage(newsletter.getId(), newsletter.getPausedPageNo());
+    }
+
+    private NewsletterPage findPage(Long newsletterId, Integer pageNo) {
+        return newsletterPageRepository
+            .findByNewsletterIdAndPageNo(newsletterId, pageNo)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        ErrorCode.NEWSLETTER_PAGE_NOT_FOUND,
+                        "newsletterId=" + newsletterId + ", pageNo=" + pageNo));
+    }
+
 
   /** 번역 결과 조회 */
   @Override
@@ -327,7 +454,35 @@ public class NewsletterServiceImpl implements NewsletterService {
           newsletter.getFileKey(),
           e);
     }
-    return NewsletterTranslationResponse.from(newsletter, newsletter.getDateCandidates(), fileUrl);
+    List<PageItem> pages = buildPageItems(newsletter);
+    return NewsletterTranslationResponse.from(
+        newsletter, newsletter.getDateCandidates(), fileUrl, pages);
+  }
+
+  /** 페이지 결과를 응답 형태로 만든다. 이미지 페이지는 회전 보정 이미지(없으면 원본)의 presigned URL을 붙인다. */
+  private List<PageItem> buildPageItems(Newsletter newsletter) {
+      boolean isImage = newsletter.resolveSourceType() == NewsletterSourceType.IMAGE;
+      return newsletterPageRepository
+          .findAllByNewsletterIdOrderByPageNoAsc(newsletter.getId())
+          .stream()
+          .map(page -> PageItem.from(page, isImage ? resolvePageImageUrl(page) : null))
+          .toList();
+  }
+
+  /** 페이지 이미지 presigned URL. 생성에 실패해도 텍스트 결과는 보여줄 수 있도록 null로 대체한다. */
+  private String resolvePageImageUrl(NewsletterPage page) {
+      String key = page.getDisplayFileKey() != null ? page.getDisplayFileKey() : page.getFileKey();
+      try {
+          return s3FileService.generatePresignedUrl(key);
+      } catch (ExternalApiException e) {
+          log.warn(
+              "[Newsletter] 페이지 이미지 Presigned URL 생성 실패. newsletterId={}, pageNo={}, key={}",
+              page.getNewsletterId(),
+              page.getPageNo(),
+              key,
+              e);
+          return null;
+      }
   }
 
   /** 요약 결과 조회. 스캔 결과 [AI요약] 탭 상단의 요약문을 반환합니다. */
