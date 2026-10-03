@@ -192,6 +192,53 @@ public class Newsletter {
     return List.copyOf(fileKeys);
   }
 
+  /** 원본 파일 종류를 반환한다. source_type이 없던 과거 문서는 대표 파일 키의 확장자로 판단한다. */
+  public NewsletterSourceType resolveSourceType() {
+      if (sourceType != null) {
+          return sourceType;
+      }
+      return NewsletterSourceType.fromFileKey(fileKey);
+  }
+
+  /** 페이지 처리 시작 시 원본 종류와 전체 페이지 수를 기록한다. (PDF는 OCR 응답 후 다시 호출해 페이지 수를 확정) */
+  public void initPageInfo(NewsletterSourceType sourceType, Integer totalPages) {
+      this.sourceType = sourceType;
+      this.totalPages = totalPages;
+  }
+
+  /**
+   * 특정 페이지 실패로 사용자 선택을 기다리는 PAUSED 상태로 전환한다. 24시간 방치 후 FAILED로 바뀌어도 원문을 볼 수 있도록 지금까지 만든 원문 스냅샷을 함께
+   * 저장한다. (OCR 단계에서 멈추면 아직 원문이 없으므로 null이 들어온다.)
+   */
+  public void pause(
+      int pausedPageNo,
+      NewsletterPausedStage pausedStage,
+      NewsletterPausedReason pausedReason,
+      OffsetDateTime pausedAt,
+      String ocrText,
+      String originalText) {
+      this.status = NewsletterStatus.PAUSED;
+      this.pausedPageNo = pausedPageNo;
+      this.pausedStage = pausedStage;
+      this.pausedReason = pausedReason;
+      this.pausedAt = pausedAt;
+      if (ocrText != null) {
+          this.ocrText = ocrText;
+      }
+      if (originalText != null) {
+          this.originalText = originalText;
+      }
+  }
+
+  /** 멈춤 정보를 비운다. (이어서 진행/건너뛰기/완료/실패 시) */
+  public void clearPause() {
+      this.pausedPageNo = null;
+      this.pausedStage = null;
+      this.pausedReason = null;
+      this.pausedAt = null;
+  }
+
+
   /** AI 분석 시작 시 PROCESSING 상태로 전환합니다. */
   public void startProcessing() {
     this.status = NewsletterStatus.PROCESSING;
