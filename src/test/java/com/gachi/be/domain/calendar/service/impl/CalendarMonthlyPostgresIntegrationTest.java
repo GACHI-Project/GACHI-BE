@@ -86,7 +86,7 @@ class CalendarMonthlyPostgresIntegrationTest {
   }
 
   @Test
-  void monthlyFindsDateOnlyScheduleEndpointsWithoutMiddleDate() {
+  void monthlyFindsDateOnlyScheduleEndAcrossUtcMonthBoundary() {
     CalendarEvent event =
         calendarEventRepository.saveAndFlush(
             CalendarEvent.builder()
@@ -96,7 +96,7 @@ class CalendarMonthlyPostgresIntegrationTest {
                 .childColor("#12AB34")
                 .title("운영 기간")
                 .startAt(OffsetDateTime.parse("2026-10-31T00:00:00+09:00"))
-                .endAt(OffsetDateTime.parse("2026-11-02T00:00:00+09:00"))
+                .endAt(OffsetDateTime.parse("2026-10-31T15:00:00Z"))
                 .allDay(true)
                 .endAllDay(true)
                 .build());
@@ -115,7 +115,7 @@ class CalendarMonthlyPostgresIntegrationTest {
     assertThat(october.get(0).date()).isEqualTo("2026-10-31");
     assertThat(october.get(0).markerTypes()).containsExactly(MarkerType.START);
     assertThat(november).hasSize(1);
-    assertThat(november.get(0).date()).isEqualTo("2026-11-02");
+    assertThat(november.get(0).date()).isEqualTo("2026-11-01");
     assertThat(november.get(0).markerTypes()).containsExactly(MarkerType.END);
   }
 }
