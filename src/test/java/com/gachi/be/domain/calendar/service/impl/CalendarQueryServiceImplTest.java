@@ -99,6 +99,20 @@ class CalendarQueryServiceImplTest {
         .containsExactly("2026-09-18");
   }
 
+  @Test
+  void dailyAndWeeklyUseKstDateOfScheduleEnd() {
+    CalendarEvent event = event(7L, "2026-09-10T18:00:00+09:00", "2026-09-18T16:00:00Z", null);
+    when(calendarEventRepository.findCalendarEndpointEventsInRange(
+            eq(7L), any(), any(), any(), any(), eq(null)))
+        .thenReturn(List.of(event));
+
+    assertThat(service.getDaily(7L, "2026-09-18", null).events()).isEmpty();
+    assertThat(service.getDaily(7L, "2026-09-19", null).events()).hasSize(1);
+    assertThat(service.getWeekly(7L, "2026-09-19", null).days())
+        .extracting(day -> day.date())
+        .containsExactly("2026-09-19");
+  }
+
   private CalendarEvent event(Long id, String start, String end, String periodStart) {
     CalendarEvent event = mock(CalendarEvent.class);
     when(event.getId()).thenReturn(id);
