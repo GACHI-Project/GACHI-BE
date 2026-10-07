@@ -17,23 +17,53 @@ public interface CalendarEventRepository extends JpaRepository<CalendarEvent, Lo
   /** 특정 가정통신문에 연결된 모든 일정 조회. */
   List<CalendarEvent> findByNewsletterIdAndUserId(Long newsletterId, Long userId);
 
-  /** 월별 마커 조회: 특정 월의 일정 목록 반환. */
+  /** 월별 마커 조회: 시작, 종료, 접수 시작 중 하나가 해당 월에 있는 일정 반환. */
   @Query(
       """
       SELECT e FROM CalendarEvent e
       WHERE e.userId = :userId
-        AND e.startAt >= :rangeStart
-        AND e.startAt < :rangeEnd
         AND (:childName IS NULL OR e.childName = :childName)
+        AND (
+          (e.startAt >= :rangeStart AND e.startAt < :rangeEnd)
+          OR (e.endAt >= :rangeStart AND e.endAt < :rangeEnd)
+          OR (e.periodStartAt IS NOT NULL
+              AND SUBSTRING(e.periodStartAt, 1, 10) >= :firstDate
+              AND SUBSTRING(e.periodStartAt, 1, 10) < :nextMonthDate)
+        )
       ORDER BY e.startAt ASC
       """)
-  List<CalendarEvent> findByUserIdAndStartAtBetween(
+  List<CalendarEvent> findMonthlyEndpointEvents(
       @Param("userId") Long userId,
       @Param("rangeStart") OffsetDateTime rangeStart,
       @Param("rangeEnd") OffsetDateTime rangeEnd,
+      @Param("firstDate") String firstDate,
+      @Param("nextMonthDate") String nextMonthDate,
       @Param("childName") String childName);
 
-  /** 주별/날짜별 일정 조회: 특정 날짜 범위의 일정 목록 반환. */
+  /** 주별/날짜별 일정 조회: 기간의 양 끝이 날짜 범위에 있는 일정 반환. */
+  @Query(
+      """
+      SELECT e FROM CalendarEvent e
+      WHERE e.userId = :userId
+        AND (:childName IS NULL OR e.childName = :childName)
+        AND (
+          (e.startAt >= :rangeStart AND e.startAt < :rangeEnd)
+          OR (e.endAt >= :rangeStart AND e.endAt < :rangeEnd)
+          OR (e.periodStartAt IS NOT NULL
+              AND SUBSTRING(e.periodStartAt, 1, 10) >= :firstDate
+              AND SUBSTRING(e.periodStartAt, 1, 10) < :nextDate)
+        )
+      ORDER BY e.startAt ASC
+      """)
+  List<CalendarEvent> findCalendarEndpointEventsInRange(
+      @Param("userId") Long userId,
+      @Param("rangeStart") OffsetDateTime rangeStart,
+      @Param("rangeEnd") OffsetDateTime rangeEnd,
+      @Param("firstDate") String firstDate,
+      @Param("nextDate") String nextDate,
+      @Param("childName") String childName);
+
+  /** 체크리스트 등 기준일(startAt)에만 해당하는 일정 조회. */
   @Query(
       """
       SELECT e FROM CalendarEvent e

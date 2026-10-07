@@ -3,6 +3,7 @@ package com.gachi.be.domain.calendar.service.impl;
 import com.gachi.be.domain.calendar.dto.response.CalendarDailyResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarEventResponse;
 import com.gachi.be.domain.calendar.dto.response.CalendarMonthlyResponse;
+import com.gachi.be.domain.calendar.dto.response.CalendarMonthlyResponse.MarkerType;
 import com.gachi.be.domain.calendar.dto.response.CalendarWeeklyResponse;
 import com.gachi.be.domain.calendar.entity.CalendarEvent;
 import com.gachi.be.domain.calendar.repository.CalendarEventRepository;
@@ -62,27 +63,46 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
     OffsetDateTime rangeEnd = firstDayOfNext.atStartOfDay().atOffset(KST_OFFSET);
 
     List<CalendarEvent> events =
-        calendarEventRepository.findByUserIdAndStartAtBetween(
-            userId, rangeStart, rangeEnd, normalizedChildName);
+        calendarEventRepository.findMonthlyEndpointEvents(
+            userId,
+            rangeStart,
+            rangeEnd,
+            firstDay.toString(),
+            firstDayOfNext.toString(),
+            normalizedChildName);
 
-    // 일정이 있는 날짜만 추출 (중복 제거, 정렬)
-    List<CalendarMonthlyResponse.MarkerItem> markedDates =
-        events.stream()
-            .map(
-                e -> {
-                  String date =
-                      e.getStartAt()
-                          .withOffsetSameInstant(KST_OFFSET)
-                          .toLocalDate()
-                          .format(DateTimeFormatter.ISO_LOCAL_DATE);
-                  return new CalendarMonthlyResponse.MarkerItem(
-                      date, e.getChildName(), e.getChildColor());
-                })
-            // 같은 날짜+같은 자녀 조합은 마커 1개로 중복 제거
-            .distinct()
-            // 날짜 기준 오름차순 정렬
-            .sorted(Comparator.comparing(CalendarMonthlyResponse.MarkerItem::date))
-            .toList();
+    List<CalendarMonthlyResponse.MarkerItem> markedDates = new ArrayList<>();
+    for (CalendarEvent event : events) {
+      Map<LocalDate, EnumSet<MarkerType>> markers = new LinkedHashMap<>();
+      LocalDate primaryDate = event.getStartAt().withOffsetSameInstant(KST_OFFSET).toLocalDate();
+      if (event.getPeriodStartAt() != null) {
+        addMonthlyMarker(markers, event.getPeriodStartAt().substring(0, 10), MarkerType.START);
+        addMonthlyMarker(markers, primaryDate, MarkerType.DEADLINE);
+      } else if (event.getEndAt() != null) {
+        addMonthlyMarker(markers, primaryDate, MarkerType.START);
+        addMonthlyMarker(
+            markers,
+            event.getEndAt().withOffsetSameInstant(KST_OFFSET).toLocalDate(),
+            MarkerType.END);
+      } else {
+        addMonthlyMarker(markers, primaryDate, MarkerType.SINGLE);
+      }
+      markers.forEach(
+          (date, types) -> {
+            if (!date.isBefore(firstDay) && date.isBefore(firstDayOfNext)) {
+              markedDates.add(
+                  new CalendarMonthlyResponse.MarkerItem(
+                      date.toString(),
+                      event.getChildName(),
+                      event.getChildColor(),
+                      event.getId(),
+                      List.copyOf(types)));
+            }
+          });
+    }
+    markedDates.sort(
+        Comparator.comparing(CalendarMonthlyResponse.MarkerItem::date)
+            .thenComparing(CalendarMonthlyResponse.MarkerItem::eventId));
     log.debug(
         "[CalendarQuery] 월별 마커 조회. userId={}, {}-{}, childName={}, count={}",
         userId,
@@ -92,6 +112,27 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
         markedDates.size());
 
     return new CalendarMonthlyResponse(markedDates);
+  }
+
+  private void addMonthlyMarker(
+      Map<LocalDate, EnumSet<MarkerType>> markers, String date, MarkerType type) {
+    addMonthlyMarker(markers, LocalDate.parse(date), type);
+  }
+
+  private void addMonthlyMarker(
+      Map<LocalDate, EnumSet<MarkerType>> markers, LocalDate date, MarkerType type) {
+    markers.computeIfAbsent(date, ignored -> EnumSet.noneOf(MarkerType.class)).add(type);
+  }
+
+  private Set<LocalDate> endpointDates(CalendarEvent event) {
+    Set<LocalDate> dates = new LinkedHashSet<>();
+    dates.add(event.getStartAt().withOffsetSameInstant(KST_OFFSET).toLocalDate());
+    if (event.getPeriodStartAt() != null) {
+      dates.add(LocalDate.parse(event.getPeriodStartAt().substring(0, 10)));
+    } else if (event.getEndAt() != null) {
+      dates.add(event.getEndAt().withOffsetSameInstant(KST_OFFSET).toLocalDate());
+    }
+    return dates;
   }
 
   /** 주별 일정+체크리스트 조회. */
@@ -114,15 +155,22 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
     OffsetDateTime rangeEnd = weekEnd.plusDays(1).atStartOfDay().atOffset(KST_OFFSET); // exclusive
 
     List<CalendarEvent> events =
-        calendarEventRepository.findEventsInRange(userId, rangeStart, rangeEnd, childName);
+        calendarEventRepository.findCalendarEndpointEventsInRange(
+            userId,
+            rangeStart,
+            rangeEnd,
+            weekStart.toString(),
+            weekEnd.plusDays(1).toString(),
+            normalizedChildName);
 
-    Map<LocalDate, List<CalendarEvent>> groupedByDate =
-        events.stream()
-            .collect(
-                Collectors.groupingBy(
-                    e -> e.getStartAt().withOffsetSameInstant(KST_OFFSET).toLocalDate(),
-                    LinkedHashMap::new,
-                    Collectors.toList()));
+    Map<LocalDate, List<CalendarEvent>> groupedByDate = new LinkedHashMap<>();
+    for (CalendarEvent event : events) {
+      for (LocalDate endpoint : endpointDates(event)) {
+        if (!endpoint.isBefore(weekStart) && !endpoint.isAfter(weekEnd)) {
+          groupedByDate.computeIfAbsent(endpoint, ignored -> new ArrayList<>()).add(event);
+        }
+      }
+    }
     List<LocalDate> sortedDates = buildWeeklySortedDates(today, weekStart, weekEnd);
 
     List<CalendarWeeklyResponse.DayEvents> days = new ArrayList<>();
@@ -170,11 +218,19 @@ public class CalendarQueryServiceImpl implements CalendarQueryService {
     OffsetDateTime rangeEnd = targetDate.plusDays(1).atStartOfDay().atOffset(KST_OFFSET);
 
     List<CalendarEvent> events =
-        calendarEventRepository.findEventsInRange(
-            userId, rangeStart, rangeEnd, normalizedChildName);
+        calendarEventRepository.findCalendarEndpointEventsInRange(
+            userId,
+            rangeStart,
+            rangeEnd,
+            targetDate.toString(),
+            targetDate.plusDays(1).toString(),
+            normalizedChildName);
 
     List<CalendarEventResponse> eventResponses =
-        events.stream().map(e -> toEventResponse(e, today, language)).toList();
+        events.stream()
+            .filter(event -> endpointDates(event).contains(targetDate))
+            .map(e -> toEventResponse(e, today, language))
+            .toList();
 
     log.debug(
         "[CalendarQuery] 날짜별 조회. userId={}, date={}, count={}",
