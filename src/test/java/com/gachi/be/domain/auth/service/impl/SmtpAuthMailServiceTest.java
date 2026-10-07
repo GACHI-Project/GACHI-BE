@@ -66,7 +66,9 @@ class SmtpAuthMailServiceTest {
             List.of("127.0.0.1", "::1"),
             emailSendPolicy,
             loginPolicy);
-    return new AuthProperties("2026-04-v1", jwt, email, rateLimit, new AuthProperties.Kakao());
+    AuthProperties.Kakao kakao =
+        new AuthProperties.Kakao(false, "", "", "", "", "", "gachi://kakao-auth", 300, 120, 600);
+    return new AuthProperties("2026-04-v1", jwt, email, rateLimit, kakao);
   }
 
   private static final class CapturingJavaMailSender implements JavaMailSender {

@@ -196,10 +196,6 @@ public record AuthProperties(
       @DefaultValue("120") @Min(1) long ticketTtlSeconds,
       @DefaultValue("600") @Min(1) long signupTokenTtlSeconds) {
 
-    public Kakao() {
-      this(false, "", "", "", "", "", "gachi://kakao-auth", 300, 120, 600);
-    }
-
     @AssertTrue(message = "Kakao OAuth credentials and redirect URIs are required when enabled.")
     public boolean isConfigurationValid() {
       if (!enabled) {
