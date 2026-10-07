@@ -45,7 +45,9 @@ public class CalendarController {
       summary = "월별 일정 마커 조회",
       description =
           """
-          달력에 일정이 있는 날짜 목록(마커)을 반환합니다.
+          단일 일정은 해당 날짜, 행사 기간은 시작일과 종료일, 접수 기간은 시작일과 마감일의 마커를 반환합니다.
+          각 마커의 eventId와 markerTypes로 같은 날의 시작/종료 역할을 구분할 수 있습니다.
+          기간 중간 날짜의 마커는 반환하지 않습니다.
           childName 미전송 시 전체 자녀 일정을 조회합니다.
           날짜 클릭 시에는 GET /calendars/daily를 호출하세요.
           """)
