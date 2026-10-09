@@ -358,6 +358,28 @@ public class NewsletterController {
     return ApiResponse.success(SuccessCode.CALENDAR_REGISTER_SUCCESS, response);
   }
 
+  /** 캘린더 일정 후보 삭제. */
+  @Operation(
+      summary = "캘린더 일정 후보 삭제",
+      description =
+          """
+       팝업에서 휴지통 버튼 클릭 시 즉시 호출합니다.
+       tempEventId에 해당하는 후보를 미리보기 목록에서 삭제하고, 연결된 체크리스트도 함께 삭제합니다.
+       응답으로 남은 후보 목록을 반환합니다. events가 빈 배열이면 팝업을 닫아주세요.
+       (마지막 후보를 삭제하면 미리보기 데이터가 삭제되어 이후 GET /calendar/preview는 404를 반환합니다.)
+       """)
+  @DeleteMapping("/{newsletterId}/calendar/preview/{tempEventId}")
+  public ApiResponse<CalendarPreviewResponse> deleteCalendarPreviewEvent(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "가정통신문 ID", required = true) @PathVariable Long newsletterId,
+      @Parameter(description = "삭제할 일정 후보의 tempEventId", required = true) @PathVariable
+      String tempEventId) {
+
+      CalendarPreviewResponse response =
+          calendarRegisterService.deletePreviewEvent(userId, newsletterId, tempEventId);
+      return ApiResponse.success(SuccessCode.CALENDAR_PREVIEW_EVENT_DELETED, response);
+  }
+
   /** 대화 주제 조회 추천 */
   @Operation(
       summary = "대화 주제 조회",
