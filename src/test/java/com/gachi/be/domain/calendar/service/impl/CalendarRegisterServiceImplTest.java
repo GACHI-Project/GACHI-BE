@@ -262,12 +262,13 @@ class CalendarRegisterServiceImplTest {
     assertThat(deadlineResponse.periodStartAt()).isEqualTo("2026-09-10");
   }
 
-  // 일정 후보 삭제: 남은 후보 저장 + 연결 체크리스트 삭제 + 남은 목록 반환
   @Test
   void deletePreviewEventRemovesCandidateAndItsChecklists() {
     Long userId = 3L;
     Long newsletterId = 30L;
-    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter(userId)));
+    // 비관적 락 조회로 변경
+    when(newsletterRepository.findByIdForUpdate(newsletterId))
+        .thenReturn(Optional.of(newsletter(userId)));
     when(previewRedisService.getPreview(newsletterId))
         .thenReturn(
             List.of(
@@ -283,7 +284,15 @@ class CalendarRegisterServiceImplTest {
     assertThat(response.events())
         .extracting(CalendarPreviewEvent::tempEventId)
         .containsExactly("evt-2");
-    verify(checklistRepository).deleteAll(List.of(own));
+    // DB 삭제 flush가 Redis 저장보다 먼저 실행되는지 검증
+    org.mockito.InOrder order =
+        org.mockito.Mockito.inOrder(checklistRepository, previewRedisService);
+    order.verify(checklistRepository).deleteAll(List.of(own));
+    order.verify(checklistRepository).flush();
+    order
+        .verify(previewRedisService)
+        .savePreview(
+            org.mockito.ArgumentMatchers.eq(newsletterId), org.mockito.ArgumentMatchers.anyList());
     verify(previewRedisService)
         .savePreview(
             org.mockito.ArgumentMatchers.eq(newsletterId),
@@ -291,12 +300,13 @@ class CalendarRegisterServiceImplTest {
                 saved -> saved.size() == 1 && "evt-2".equals(saved.get(0).tempEventId())));
   }
 
-  // 마지막 후보 삭제 시 Redis 키 삭제 + 빈 목록 반환
   @Test
   void deletingLastPreviewEventDeletesRedisKey() {
     Long userId = 4L;
     Long newsletterId = 40L;
-    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter(userId)));
+    // 비관적 락 조회로 변경
+    when(newsletterRepository.findByIdForUpdate(newsletterId))
+        .thenReturn(Optional.of(newsletter(userId)));
     when(previewRedisService.getPreview(newsletterId))
         .thenReturn(
             List.of(new CalendarPreviewEvent("evt-1", "현장학습", "2026-06-01", true, List.of())));
@@ -310,12 +320,13 @@ class CalendarRegisterServiceImplTest {
             org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyList());
   }
 
-  // 없는 tempEventId 삭제 시 CAL4043
   @Test
   void deletePreviewEventThrowsWhenCandidateMissing() {
     Long userId = 5L;
     Long newsletterId = 50L;
-    when(newsletterRepository.findById(newsletterId)).thenReturn(Optional.of(newsletter(userId)));
+    // 비관적 락 조회로 변경
+    when(newsletterRepository.findByIdForUpdate(newsletterId))
+        .thenReturn(Optional.of(newsletter(userId)));
     when(previewRedisService.getPreview(newsletterId))
         .thenReturn(List.of(preview("evt-1", "현장학습", "2026-06-01")));
 
@@ -325,7 +336,34 @@ class CalendarRegisterServiceImplTest {
         .isEqualTo(ErrorCode.CALENDAR_PREVIEW_EVENT_NOT_FOUND);
   }
 
-  // 테스트용 체크리스트 생성
+  // 남은 후보가 함께 참조하는 체크리스트는 삭제하지 않는다
+  @Test
+  void deletePreviewEventKeepsChecklistsReferencedByRemainingCandidates() {
+    Long userId = 6L;
+    Long newsletterId = 60L;
+    when(newsletterRepository.findByIdForUpdate(newsletterId))
+        .thenReturn(Optional.of(newsletter(userId)));
+    when(previewRedisService.getPreview(newsletterId))
+        .thenReturn(
+            List.of(
+                new CalendarPreviewEvent("evt-1", "현장학습", "2026-06-01", true, List.of(1L, 2L)),
+                new CalendarPreviewEvent("evt-2", "체육대회", "2026-06-05", true, List.of(2L))));
+    Checklist onlyTarget = checklistWithId(1L, newsletterId, userId);
+    Checklist shared = checklistWithId(2L, newsletterId, userId);
+    when(checklistRepository.findAllById(List.of(1L, 2L))).thenReturn(List.of(onlyTarget, shared));
+
+    service.deletePreviewEvent(userId, newsletterId, "evt-1");
+
+    verify(checklistRepository).deleteAll(List.of(onlyTarget));
+  }
+
+  // id가 있는 테스트용 체크리스트 (id는 DB 생성값이라 리플렉션으로 주입)
+  private Checklist checklistWithId(Long id, Long newsletterId, Long userId) {
+    Checklist checklist = checklist(newsletterId, userId);
+    org.springframework.test.util.ReflectionTestUtils.setField(checklist, "id", id);
+    return checklist;
+  }
+
   private Checklist checklist(Long newsletterId, Long userId) {
     return Checklist.builder()
         .newsletterId(newsletterId)

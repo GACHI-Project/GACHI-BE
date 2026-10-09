@@ -2,18 +2,25 @@ package com.gachi.be.domain.newsletter.repository;
 
 import com.gachi.be.domain.newsletter.entity.Newsletter;
 import com.gachi.be.domain.newsletter.entity.enums.NewsletterStatus;
+import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** 가정통신문(newsletter) 테이블 JPA 레포지토리. */
 public interface NewsletterRepository extends JpaRepository<Newsletter, Long> {
+
+  // 일정 후보 삭제 요청을 문서 단위로 직렬화하기 위한 비관적 락 조회
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select n from Newsletter n where n.id = :id")
+  Optional<Newsletter> findByIdForUpdate(@Param("id") Long id);
 
   /** 자녀가 특정된 가정통신문 중 동일 파일 해시 존재 여부 확인 (중복 방지). */
   Optional<Newsletter> findByUserIdAndChildNameAndFileHash(

@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -261,8 +262,10 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
   @Transactional
   public CalendarPreviewResponse deletePreviewEvent(
       Long userId, Long newsletterId, String tempEventId) {
-    // 소유권 검증
-    findNewsletterAndValidateOwner(userId, newsletterId);
+    // 소유권 검증 + 가정통신문 row 비관적 락
+    //   같은 문서에 대한 후보 삭제 요청이 동시에 와도 하나씩 순서대로 처리된다.
+    //   뒤 요청은 앞 요청이 커밋될 때까지 기다린 뒤 갱신된 preview를 읽으므로, 앞선 삭제를 덮어쓰지 않는다.
+    findNewsletterForUpdateAndValidateOwner(userId, newsletterId);
 
     // 기존 preview 데이터 조회
     List<CalendarPreviewEvent> events = previewRedisService.getPreview(newsletterId);
@@ -277,11 +280,12 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
             .findFirst()
             .orElseThrow(() -> new BusinessException(ErrorCode.CALENDAR_PREVIEW_EVENT_NOT_FOUND));
 
-    // 후보에 연결된 체크리스트 DB 삭제 (먼저 수행: Redis 저장 실패 시 트랜잭션 롤백되도록)
-    deletePreviewChecklists(userId, newsletterId, target);
-
     List<CalendarPreviewEvent> remaining =
         events.stream().filter(e -> !tempEventId.equals(e.tempEventId())).toList();
+
+    // 남은 후보 목록을 함께 넘겨서, 남은 후보가 참조하는 체크리스트는 삭제하지 않도록 변경
+    // DB 삭제를 먼저 수행하고 즉시 flush → 그다음 Redis 변경 (메서드 안에서 flush)
+    deletePreviewChecklists(userId, newsletterId, target, remaining);
 
     if (remaining.isEmpty()) {
       // 마지막 후보 삭제 → Redis 키 삭제 (이후 GET preview는 CAL4042)
@@ -302,18 +306,33 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
 
   /** 다른 문서·사용자의 항목이나 이미 일정에 연결된 항목은 건드리지 않도록 한 번 더 걸러서 삭제. */
   private void deletePreviewChecklists(
-      Long userId, Long newsletterId, CalendarPreviewEvent target) {
+      Long userId,
+      Long newsletterId,
+      CalendarPreviewEvent target,
+      List<CalendarPreviewEvent> remaining) {
     if (target.checklistIds() == null || target.checklistIds().isEmpty()) {
       return; // 연결된 체크리스트 없음
     }
+
+    // 남은 후보가 참조하는 체크리스트 ID 수집 → 삭제 대상에서 제외
+    Set<Long> referencedByRemaining =
+        remaining.stream()
+            .filter(e -> e.checklistIds() != null)
+            .flatMap(e -> e.checklistIds().stream())
+            .collect(Collectors.toSet());
 
     List<Checklist> checklists =
         checklistRepository.findAllById(target.checklistIds()).stream()
             .filter(c -> newsletterId.equals(c.getNewsletterId()))
             .filter(c -> userId.equals(c.getUserId()))
             .filter(c -> c.getCalendarEventId() == null)
+            // 남은 후보도 쓰는 체크리스트는 남겨둔다
+            .filter(c -> !referencedByRemaining.contains(c.getId()))
             .toList();
     checklistRepository.deleteAll(checklists);
+    // DB 기준 상태를 먼저 확정: 삭제 SQL을 지금 실행해서 DB 오류가 Redis 변경 전에 터지게 한다.
+    //   DB 오류 → 예외로 Redis는 건드리지 않음 / Redis 오류 → 예외로 DB 롤백. 어느 쪽이든 그대로 다시 시도하면 된다.
+    checklistRepository.flush();
 
     log.debug(
         "[CalendarRegister] 일정 후보 체크리스트 {}개 삭제. tempEventId={}",
@@ -457,6 +476,18 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
     } catch (DateTimeParseException e) {
       return 0;
     }
+  }
+
+  // 비관적 락을 걸고 가정통신문 조회 + 소유권 검증 (일정 후보 삭제 전용)
+  private Newsletter findNewsletterForUpdateAndValidateOwner(Long userId, Long newsletterId) {
+    Newsletter newsletter =
+        newsletterRepository
+            .findByIdForUpdate(newsletterId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND));
+    if (!newsletter.getUserId().equals(userId)) {
+      throw new BusinessException(ErrorCode.NEWSLETTER_NOT_FOUND);
+    }
+    return newsletter;
   }
 
   /** 가정통신문 조회 + 소유권 검증. */
