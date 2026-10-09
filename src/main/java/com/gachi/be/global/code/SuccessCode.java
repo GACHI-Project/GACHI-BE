@@ -63,6 +63,8 @@ public enum SuccessCode {
   CALENDAR_SCHOOL_SCHEDULE_SUCCESS(HttpStatus.OK, "CAL2006", "자녀 학교 학사일정 조회에 성공하였습니다."),
   CALENDAR_SCHOOL_MEAL_SUCCESS(HttpStatus.OK, "CAL2007", "자녀 학교 급식표 조회에 성공하였습니다."),
   CALENDAR_ELEMENTARY_TIMETABLE_SUCCESS(HttpStatus.OK, "CAL2008", "자녀 학교 시간표 조회에 성공하였습니다."),
+  CALENDAR_PREVIEW_EVENT_DELETED(HttpStatus.OK, "CAL2009", "일정 후보 삭제에 성공하였습니다."),
+  CALENDAR_EVENT_DELETED(HttpStatus.OK, "CAL2010", "캘린더 일정 삭제에 성공하였습니다."),
   CHECKLIST_TODAY_SUCCESS(HttpStatus.OK, "CL2001", "오늘 마감 체크리스트 조회에 성공하였습니다."),
   CHECKLIST_COMPLETE_SUCCESS(HttpStatus.OK, "CL2002", "체크리스트 완료 처리에 성공하였습니다."),
   CHECKLIST_DELETED(HttpStatus.OK, "CL2003", "체크리스트 삭제에 성공하였습니다."),
