@@ -90,7 +90,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 가정통신문 파일을 S3에 업로드하고 newsletter 레코드를 PENDING 상태로 생성한다.
    *
-   * 처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
+   * <p>처리 순서: 파일 유효성 검사 (형식: jpg/png/pdf, 크기: 최대 10MB) SHA-256 해시 계산 (중복 방지용) 중복 파일 확인 S3 업로드 →
    * file_key 획득 childId가 있으면 children 테이블에서 자녀 정보 조회 (스냅샷용) newsletter 레코드 DB 저장 (status=PENDING 으로
    * 변경) AI 분석 파이프라인 비동기 트리거 -> Asyncㅏ로 별도 스레드에서 실행하게 함.
    */
@@ -345,7 +345,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 멈춘(PAUSED) 가정통신문을 멈춘 페이지부터 이어서 진행한다.
    *
-   * 결정 사항: 다시 시도 불가 상태(인식 불가 + 다시 시도 1회 사용)이면 에러 없이 파이프라인을 실행하지 않고 현재 PAUSED 상태를 그대로 반환한다. 프론트는
+   * <p>결정 사항: 다시 시도 불가 상태(인식 불가 + 다시 시도 1회 사용)이면 에러 없이 파이프라인을 실행하지 않고 현재 PAUSED 상태를 그대로 반환한다. 프론트는
    * 항상 "이어서 진행 → 진행 화면 이동 → status 폴링" 같은 동작만 하면 되고, 진행 화면에는 status의 retryable/skippable 값대로 [건너뛰기]
    * 버튼이 뜬다.
    */
@@ -762,7 +762,7 @@ public class NewsletterServiceImpl implements NewsletterService {
   /**
    * 파일 목록 유효성 검사.
    *
-   * TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
+   * <p>TODO: 허용방식은 일단 이렇게만 지정해두고 테스트 해보면서 추가할 지 고려. 허용 형식: image/jpeg, image/png, application/pdf
    * 최대 크기: 10MB->합계 최대 50MB 최대 10장
    */
   private void validateFiles(List<MultipartFile> files) {

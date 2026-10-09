@@ -39,10 +39,10 @@ public class ImagePreprocessor {
   /**
    * 이미지 페이지 전처리 (페이지 단위 파이프라인 전용).
    *
-   * EXIF 회전이 필요한 이미지만 실제로 회전시킨 고화질 JPEG를 만들어 반환하고, 회전이 필요 없으면 jpegBytes=null을 반환한다. (원본을 그대로 쓰면
+   * <p>EXIF 회전이 필요한 이미지만 실제로 회전시킨 고화질 JPEG를 만들어 반환하고, 회전이 필요 없으면 jpegBytes=null을 반환한다. (원본을 그대로 쓰면
    * 되므로 S3에 한 벌 더 저장하지 않기 위함) 어느 경우든 최종 이미지의 가로/세로 픽셀 크기를 함께 반환해 오버레이 좌표를 0~1 비율로 바꿀 때 사용한다.
    *
-   * 기존 preprocessImage()는 결과를 PNG 임시 파일로 OCR 후 삭제했지만, 이어서 진행(PAUSED → 재개) 시점에도 같은 이미지를
+   * <p>기존 preprocessImage()는 결과를 PNG 임시 파일로 OCR 후 삭제했지만, 이어서 진행(PAUSED → 재개) 시점에도 같은 이미지를
    * OCR/AI/화면에서 써야 하므로 결과를 보관 가능한 JPEG 한 벌로 통일한다.
    */
   public PreprocessedImage preprocessForDisplay(byte[] fileBytes) throws IOException {

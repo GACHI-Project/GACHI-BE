@@ -19,10 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 파이프라인에서 페이지 단위 결과를 저장하는 서비스.
  *
- * NewsletterPipelineStatusService와 같은 원칙으로, 파이프라인(@Async, 비트랜잭션)의 각 단계 결과를 REQUIRES_NEW 트랜잭션으로
+ * <p>NewsletterPipelineStatusService와 같은 원칙으로, 파이프라인(@Async, 비트랜잭션)의 각 단계 결과를 REQUIRES_NEW 트랜잭션으로
  * 바로 커밋한다. 그래서 중간에 멈추거나 실패해도 이미 끝난 페이지 결과는 DB에 남아 있고, 이어서 진행할 때 그 페이지는 다시 처리하지 않는다.
  *
- * 반환하는 엔티티는 트랜잭션이 끝난 뒤의 스냅샷(detached)이므로 읽기 용도로만 사용한다.
+ * <p>반환하는 엔티티는 트랜잭션이 끝난 뒤의 스냅샷(detached)이므로 읽기 용도로만 사용한다.
  */
 @Slf4j
 @Service
@@ -35,7 +35,7 @@ public class NewsletterPageService {
   /**
    * 파이프라인 시작 시 페이지 레코드를 준비한다.
    *
-   * 이미 페이지가 있으면(이어서 진행/다시 분석) 그대로 반환한다. 처음 실행이면 이미지는 업로드 순서대로 페이지를 만들고, PDF는 페이지 수를 OCR 응답 후에 알
+   * <p>이미 페이지가 있으면(이어서 진행/다시 분석) 그대로 반환한다. 처음 실행이면 이미지는 업로드 순서대로 페이지를 만들고, PDF는 페이지 수를 OCR 응답 후에 알
    * 수 있으므로 빈 목록을 반환한다. (PDF 페이지는 createPdfPages에서 생성)
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)

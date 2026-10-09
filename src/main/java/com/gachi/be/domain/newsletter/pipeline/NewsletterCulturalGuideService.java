@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 문화 맥락 안내(학교 생활 가이드 FAQ) 선정 및 저장.
  *
- * 파이프라인 STEP 8에서 호출. NewsletterDateCandidateService와 동일하게 REQUIRES_NEW로 자체 트랜잭션을 관리. (@Async
+ * <p>파이프라인 STEP 8에서 호출. NewsletterDateCandidateService와 동일하게 REQUIRES_NEW로 자체 트랜잭션을 관리. (@Async
  * + @Transactional 충돌 방지 원칙)
  *
  * <p>AI는 faqId만 선정하고, 질문/답변 본문은 school_guide DB 원문을 그대로 사용한다.

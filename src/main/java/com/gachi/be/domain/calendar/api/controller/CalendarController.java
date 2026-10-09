@@ -193,7 +193,7 @@ public class CalendarController {
       @AuthenticationPrincipal Long userId,
       @Parameter(description = "삭제할 일정 ID", required = true) @PathVariable Long eventId) {
 
-      calendarEventService.deleteEvent(userId, eventId);
-      return ApiResponse.success(SuccessCode.CALENDAR_EVENT_DELETED, null);
+    calendarEventService.deleteEvent(userId, eventId);
+    return ApiResponse.success(SuccessCode.CALENDAR_EVENT_DELETED, null);
   }
 }

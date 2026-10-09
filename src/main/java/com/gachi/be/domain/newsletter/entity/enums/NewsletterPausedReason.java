@@ -3,12 +3,12 @@ package com.gachi.be.domain.newsletter.entity.enums;
 /**
  * 파이프라인이 PAUSED로 멈춘 사유와, 사유별 버튼 노출 규칙.
  *
- * 버튼 규칙은 BE가 계산해서 status API의 retryable/skippable로 내려주고, 프론트는 그 값대로 버튼만 띄운다.
+ * <p>버튼 규칙은 BE가 계산해서 status API의 retryable/skippable로 내려주고, 프론트는 그 값대로 버튼만 띄운다.
  *
- * UNREADABLE(글자 인식 불가) : 처음 멈추면 [다시 시도]만, 다시 시도까지 실패하면 [건너뛰기]만 OCR_FAILED /
+ * <p>UNREADABLE(글자 인식 불가) : 처음 멈추면 [다시 시도]만, 다시 시도까지 실패하면 [건너뛰기]만 OCR_FAILED /
  * TRANSLATION_FAILED(통신 실패) : 처음 멈추면 [다시 시도]만, 다시 시도까지 실패하면 [다시 시도] + [건너뛰기]
  *
- * retryCount는 "현재 사유로 사용자가 다시 시도를 누른 횟수"다.
+ * <p>retryCount는 "현재 사유로 사용자가 다시 시도를 누른 횟수"다.
  */
 public enum NewsletterPausedReason {
   OCR_FAILED,

@@ -13,7 +13,7 @@ import org.springframework.util.StringUtils;
 /**
  * 인증 실패 시 기존 API 에러 포맷(ApiResponse)과 에러코드 계약을 유지한다.
  *
- * 기존 통합테스트/클라이언트가 AUTH4015, AUTH4016 코드를 기반으로 분기하고 있어 보안 필터 도입 시에도 동일 응답을 보장한다.
+ * <p>기존 통합테스트/클라이언트가 AUTH4015, AUTH4016 코드를 기반으로 분기하고 있어 보안 필터 도입 시에도 동일 응답을 보장한다.
  */
 @Component
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {

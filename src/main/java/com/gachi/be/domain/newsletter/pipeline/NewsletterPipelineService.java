@@ -37,9 +37,9 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 /**
  * 가정통신문 분석 파이프라인.
  *
- * 페이지 단위 파이프라인으로 변경. 흐름은 아래와 같다.
+ * <p>페이지 단위 파이프라인으로 변경. 흐름은 아래와 같다.
  *
- * [1단계] 페이지 OCR (순차) - 이미지: 장마다 EXIF 보정(회전 시 JPEG 저장) → 클로바 OCR(통신 실패 시 자동 1회 재시도) → 페이지 원문 +
+ * <p>[1단계] 페이지 OCR (순차) - 이미지: 장마다 EXIF 보정(회전 시 JPEG 저장) → 클로바 OCR(통신 실패 시 자동 1회 재시도) → 페이지 원문 +
  * 오버레이 블록 저장 · 통신 실패 → 페이지 OCR_FAILED, 문서 PAUSED (다시 시도) · 인식 불가 → 페이지 UNREADABLE, 문서 PAUSED (다시 시도
  * → 이후 건너뛰기) - PDF: 클로바 OCR 1회(자동 1회 재시도) → 페이지별 원문 저장, 인식 못 한 페이지는 자동 건너뛰기 · 통신 실패 → 문서 FAILED
  * (기존처럼 '다시 분석') [2단계] 전체 원문 = 페이지 원문 이어 붙이기 → 중복 검사(content hash) + 날짜 후보 추출 [3단계] 페이지 번역 (순차,
@@ -47,7 +47,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  * TRANSLATION_FAILED, 문서 PAUSED (다시 시도 → 이후 다시 시도/건너뛰기) [4단계] 전체 번역 = 페이지 번역 이어 붙이기 → AI 분석 1회 →
  * COMPLETED
  *
- * 이어서 진행/건너뛰기/다시 분석으로 다시 실행되면, 이미 끝난 페이지는 상태를 보고 건너뛰고 멈춘 페이지부터 처리한다.
+ * <p>이어서 진행/건너뛰기/다시 분석으로 다시 실행되면, 이미 끝난 페이지는 상태를 보고 건너뛰고 멈춘 페이지부터 처리한다.
  */
 @Slf4j
 @Service
@@ -248,7 +248,7 @@ public class NewsletterPipelineService {
   /**
    * PDF 전체를 클로바 OCR 1회로 처리하고 페이지 레코드를 만든다.
    *
-   * 클로바 호출 자체가 (자동 재시도 후에도) 실패하면 예외를 그대로 던져 문서를 FAILED로 만든다. PDF는 페이지 하나만 다시 OCR할 수 없어서
+   * <p>클로바 호출 자체가 (자동 재시도 후에도) 실패하면 예외를 그대로 던져 문서를 FAILED로 만든다. PDF는 페이지 하나만 다시 OCR할 수 없어서
    * 멈춤(PAUSED) 대신 기존 '다시 분석' 흐름을 쓰기로 했다.
    */
   private List<NewsletterPage> runPdfOcr(Long newsletterId, String pdfFileKey) {

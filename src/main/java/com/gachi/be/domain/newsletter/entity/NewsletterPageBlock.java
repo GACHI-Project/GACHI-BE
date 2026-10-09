@@ -3,7 +3,7 @@ package com.gachi.be.domain.newsletter.entity;
 /**
  * 이미지 오버레이용 문단/블록 1개. newsletter_page.blocks(JSONB)에 목록으로 저장된다.
  *
- * box 좌표는 이미지 픽셀이 아니라 0~1 비율값이다. 프론트는 이미지가 화면에 그려진 크기에 곱하기만 하면 위치를 잡을 수 있다.
+ * <p>box 좌표는 이미지 픽셀이 아니라 0~1 비율값이다. 프론트는 이미지가 화면에 그려진 크기에 곱하기만 하면 위치를 잡을 수 있다.
  *
  * @param blockNo 페이지 안에서의 블록 순서 (1부터, 위→아래 읽는 순서)
  * @param originalText 블록 한국어 원문

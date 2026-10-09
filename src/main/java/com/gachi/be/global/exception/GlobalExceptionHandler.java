@@ -115,7 +115,7 @@ public class GlobalExceptionHandler {
   /**
    * 파라미터 타입 불일치 처리. (예: childId에 숫자가 아닌 값 전달)
    *
-   * MethodArgumentTypeMismatchException은 BindException 계열이 아니라서 기존에는 마지막 Exception 핸들러로 떨어져 500이
+   * <p>MethodArgumentTypeMismatchException은 BindException 계열이 아니라서 기존에는 마지막 Exception 핸들러로 떨어져 500이
    * 나갔다. 클라이언트 입력 오류이므로 400으로 내려준다.
    */
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)

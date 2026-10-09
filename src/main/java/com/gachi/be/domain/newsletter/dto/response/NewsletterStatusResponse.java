@@ -13,9 +13,9 @@ import java.util.Objects;
 /**
  * 가정통신문 분석 상태 조회(폴링) API의 응답 DTO.
  *
- * 프론트엔드가 주기적으로 이 API를 호출하여 분석 진행률을 확인, COMPLETED가 되면 결과 화면으로 이동.
+ * <p>프론트엔드가 주기적으로 이 API를 호출하여 분석 진행률을 확인, COMPLETED가 되면 결과 화면으로 이동.
  *
- * 페이지 정보(sourceType/totalPages/processedPages)와, PAUSED일 때 멈춘 페이지 정보 및 버튼 노출
+ * <p>페이지 정보(sourceType/totalPages/processedPages)와, PAUSED일 때 멈춘 페이지 정보 및 버튼 노출
  * 값(retryable/skippable)을 함께 내려준다. 프론트는 retryable/skippable 값대로 [다시 시도]/[건너뛰기] 버튼만 띄우면 된다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL) // null인 필드는 JSON 응답에서 제외
@@ -39,7 +39,7 @@ public record NewsletterStatusResponse(
   /**
    * 분석 상태에 따라 적절한 진행률과 에러메시지를 자동 계산하는 팩토리 메서드. TODO: 현재는 고정값으로 처리, 추후 AI 서버에서 단계별 진행률을 받아 세분화 예정
    *
-   * 페이지 정보 없이 호출하면 페이지 목록이 빈 것으로 보고 계산한다. (기존 호출부/테스트 호환용)
+   * <p>페이지 정보 없이 호출하면 페이지 목록이 빈 것으로 보고 계산한다. (기존 호출부/테스트 호환용)
    */
   public static NewsletterStatusResponse of(Newsletter newsletter) {
     return of(newsletter, List.of());
