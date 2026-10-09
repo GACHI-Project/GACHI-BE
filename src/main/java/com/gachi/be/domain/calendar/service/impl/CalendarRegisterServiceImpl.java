@@ -253,6 +253,74 @@ public class CalendarRegisterServiceImpl implements CalendarRegisterService {
     return new CalendarRegisterResponse(count);
   }
 
+  /**
+   * 일정 후보 삭제. Redis preview 목록에서 해당 후보를 빼고, 후보에 연결된 체크리스트를 DB에서 삭제
+   * 마지막 후보를 지우면 Redis 키 자체를 삭제. 응답으로 남은 후보 목록을 반환
+   */
+  @Override
+  @Transactional
+  public CalendarPreviewResponse deletePreviewEvent(
+      Long userId, Long newsletterId, String tempEventId) {
+      // 소유권 검증
+      findNewsletterAndValidateOwner(userId, newsletterId);
+
+      // 기존 preview 데이터 조회
+      List<CalendarPreviewEvent> events = previewRedisService.getPreview(newsletterId);
+      if (events == null) {
+          throw new BusinessException(ErrorCode.CALENDAR_PREVIEW_NOT_FOUND, "삭제할 미리보기 데이터가 없습니다.");
+      }
+
+      // 삭제 대상 후보 찾기
+      CalendarPreviewEvent target =
+          events.stream()
+              .filter(e -> tempEventId.equals(e.tempEventId()))
+              .findFirst()
+              .orElseThrow(() -> new BusinessException(ErrorCode.CALENDAR_PREVIEW_EVENT_NOT_FOUND));
+
+      // 후보에 연결된 체크리스트 DB 삭제 (먼저 수행: Redis 저장 실패 시 트랜잭션 롤백되도록)
+      deletePreviewChecklists(userId, newsletterId, target);
+
+      List<CalendarPreviewEvent> remaining =
+          events.stream().filter(e -> !tempEventId.equals(e.tempEventId())).toList();
+
+      if (remaining.isEmpty()) {
+          // 마지막 후보 삭제 → Redis 키 삭제 (이후 GET preview는 CAL4042)
+          previewRedisService.deletePreview(newsletterId);
+      } else {
+            // 남은 후보만 다시 저장 (TTL 갱신)
+          previewRedisService.savePreview(newsletterId, remaining);
+      }
+
+      log.info(
+          "[CalendarRegister] 일정 후보 삭제 완료. userId={}, newsletterId={}, tempEventId={}, remaining={}",
+          userId,
+          newsletterId,
+          tempEventId,
+          remaining.size());
+      return CalendarPreviewResponse.from(sortPreviewEvents(remaining));
+  }
+
+  /** 다른 문서·사용자의 항목이나 이미 일정에 연결된 항목은 건드리지 않도록 한 번 더 걸러서 삭제. */
+  private void deletePreviewChecklists(
+      Long userId, Long newsletterId, CalendarPreviewEvent target) {
+      if (target.checklistIds() == null || target.checklistIds().isEmpty()) {
+          return; // 연결된 체크리스트 없음
+      }
+
+      List<Checklist> checklists =
+          checklistRepository.findAllById(target.checklistIds()).stream()
+              .filter(c -> newsletterId.equals(c.getNewsletterId()))
+              .filter(c -> userId.equals(c.getUserId()))
+              .filter(c -> c.getCalendarEventId() == null)
+              .toList();
+      checklistRepository.deleteAll(checklists);
+
+      log.debug(
+          "[CalendarRegister] 일정 후보 체크리스트 {}개 삭제. tempEventId={}",
+          checklists.size(),
+          target.tempEventId());
+  }
+
   private Map<String, String> resolveCalendarTitleI18n(
       CalendarRegisterRequest.EventRegister eventReq, CalendarPreviewEvent preview) {
     if (preview == null || preview.titleI18n() == null || preview.titleI18n().isEmpty()) {

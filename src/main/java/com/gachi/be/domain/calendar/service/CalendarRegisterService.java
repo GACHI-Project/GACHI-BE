@@ -14,4 +14,7 @@ public interface CalendarRegisterService {
 
   CalendarRegisterResponse register(
       Long userId, Long newsletterId, CalendarRegisterRequest request);
+
+  //일정 후보 삭제 (연결 체크리스트 포함). 남은 후보 목록 반환
+  CalendarPreviewResponse deletePreviewEvent(Long userId, Long newsletterId, String tempEventId);
 }
