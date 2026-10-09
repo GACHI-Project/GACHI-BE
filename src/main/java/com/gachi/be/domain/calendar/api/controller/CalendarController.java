@@ -6,10 +6,7 @@ import com.gachi.be.domain.calendar.dto.response.CalendarWeeklyResponse;
 import com.gachi.be.domain.calendar.dto.response.ElementaryTimetableCalendarResponse;
 import com.gachi.be.domain.calendar.dto.response.SchoolMealCalendarResponse;
 import com.gachi.be.domain.calendar.dto.response.SchoolScheduleCalendarResponse;
-import com.gachi.be.domain.calendar.service.CalendarQueryService;
-import com.gachi.be.domain.calendar.service.ElementaryTimetableQueryService;
-import com.gachi.be.domain.calendar.service.SchoolMealQueryService;
-import com.gachi.be.domain.calendar.service.SchoolScheduleQueryService;
+import com.gachi.be.domain.calendar.service.*;
 import com.gachi.be.global.api.ApiResponse;
 import com.gachi.be.global.code.SuccessCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,10 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "Calendar", description = "캘린더 API")
 @SecurityRequirement(name = "bearerAuth")
@@ -39,6 +33,7 @@ public class CalendarController {
   private final SchoolScheduleQueryService schoolScheduleQueryService;
   private final SchoolMealQueryService schoolMealQueryService;
   private final ElementaryTimetableQueryService elementaryTimetableQueryService;
+  private final CalendarEventService calendarEventService;
 
   /** 별 일정 마커 조회 API. -> 자녀 색 표현 위함 */
   @Operation(
@@ -182,5 +177,23 @@ public class CalendarController {
     ElementaryTimetableCalendarResponse response =
         elementaryTimetableQueryService.getElementaryTimetables(userId, fromDate, toDate);
     return ApiResponse.success(SuccessCode.CALENDAR_ELEMENTARY_TIMETABLE_SUCCESS, response);
+  }
+
+  /** 캘린더 일정 삭제 API. */
+  @Operation(
+      summary = "캘린더 일정 삭제",
+      description =
+          """
+           캘린더에 등록된 일정을 삭제합니다. 해당 일정에 연결된 체크리스트도 함께 삭제됩니다.
+           eventId는 월별/주별/날짜별 조회 응답의 일정 ID입니다.
+           학사일정(NEIS)은 삭제 대상이 아니므로 학사일정 항목에는 삭제 버튼을 노출하지 마세요.
+           """)
+  @DeleteMapping("/events/{eventId}")
+  public ApiResponse<Void> deleteEvent(
+      @AuthenticationPrincipal Long userId,
+      @Parameter(description = "삭제할 일정 ID", required = true) @PathVariable Long eventId) {
+
+      calendarEventService.deleteEvent(userId, eventId);
+      return ApiResponse.success(SuccessCode.CALENDAR_EVENT_DELETED, null);
   }
 }
