@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * 번역 결과 조회 API 응답 DTO
  *
- * <p>페이지별 결과(pages)를 추가 기존 필드(originalText/translatedText/fileUrl 등)는 그대로 유지하므로 기존 화면은 영향이 없다. 기능
+ * 페이지별 결과(pages)를 추가 기존 필드(originalText/translatedText/fileUrl 등)는 그대로 유지하므로 기존 화면은 영향이 없다. 기능
  * 도입 전에 분석된 문서는 pages가 빈 배열이며, 이 경우 기존처럼 전체 텍스트로 보여주면 된다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)

@@ -27,7 +27,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 /**
  * 클로바 OCR API 호출 클라이언트.
  *
- * <p>호출 방식: Presigned URL 방식 파일을 Base64로 인코딩하는 대신 S3 Presigned URL을 클로바에 전달하고 클로바가 직접 S3에서 파일을 가져가는
+ * 호출 방식: Presigned URL 방식 파일을 Base64로 인코딩하는 대신 S3 Presigned URL을 클로바에 전달하고 클로바가 직접 S3에서 파일을 가져가는
  * 방식. PDF 지원: 클로바 OCR은 PDF를 직접 지원하므로 여러 페이지 가정통신문도 1회 호출로 처리 가능. format 필드를 "jpeg"/"png"/"pdf" 중에서
  * ObjectMapper: Spring Boot가 자동으로 빈으로 등록하므로 @RequiredArgsConstructor로 주입받아 사용.
  */
@@ -69,11 +69,11 @@ public class ClovaOcrClient {
   /**
    * 페이지별 인식 결과를 원래 페이지 번호 그대로 돌려주는 OCR 호출. (페이지 단위 파이프라인 전용)
    *
-   * <p>기존 callOcr()는 인식에 실패한 페이지를 건너뛰고(뒤 페이지 번호가 앞으로 밀림), 전부 실패하면 예외를 던진다. 이 메서드는 인식 실패 페이지도
+   * 기존 callOcr()는 인식에 실패한 페이지를 건너뛰고(뒤 페이지 번호가 앞으로 밀림), 전부 실패하면 예외를 던진다. 이 메서드는 인식 실패 페이지도
    * recognized=false로 포함해서 반환하고, 통신/HTTP/응답 파싱 실패일 때만 ExternalApiException을 던진다. 그래서 파이프라인이 "통신
    * 실패(OCR_FAILED)"와 "글자 인식 불가(UNREADABLE)"를 구분할 수 있다.
    *
-   * <p>PDF는 images 배열에 페이지 수만큼, 이미지는 1개가 들어온다.
+   * PDF는 images 배열에 페이지 수만큼, 이미지는 1개가 들어온다.
    */
   public List<OcrPageResult> callOcrPages(String bucket, String fileKey) {
     String presignedUrl = generatePresignedUrl(bucket, fileKey);

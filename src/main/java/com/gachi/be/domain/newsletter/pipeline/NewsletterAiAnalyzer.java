@@ -95,7 +95,7 @@ public class NewsletterAiAnalyzer {
    * checklistItems[].content,detail/conversationTopics[].topic)를 모아 id를 부여하고, KO가 아니면 Papago로 1차 번역
    * → AI 서버로 2차 검증을 거쳐 최종 텍스트 맵을 반환한다.
    *
-   * <p>language=KO이거나 번역 대상 텍스트가 없으면 한국어 원본을 그대로 반환한다 (id → 원본 텍스트).
+   * language=KO이거나 번역 대상 텍스트가 없으면 한국어 원본을 그대로 반환한다 (id → 원본 텍스트).
    */
   private Map<String, String> translateAndRefineDisplayTexts(
       String originalText,

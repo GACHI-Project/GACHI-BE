@@ -23,7 +23,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Authorization Bearer 토큰이 있으면 SecurityContext에 인증 정보를 세팅한다.
  *
- * <p>컨트롤러/서비스 단의 토큰 검증 이전에 "전역 permitAll 우회"를 막기 위해 필터 레벨에서 1차 인증 상태를 만든다.
+ * 컨트롤러/서비스 단의 토큰 검증 이전에 "전역 permitAll 우회"를 막기 위해 필터 레벨에서 1차 인증 상태를 만든다.
  */
 @Component
 @RequiredArgsConstructor

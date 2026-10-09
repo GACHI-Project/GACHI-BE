@@ -25,7 +25,7 @@ import org.hibernate.type.SqlTypes;
 /**
  * 가정통신문 페이지 1장의 OCR/번역 결과를 관리하는 엔티티.
  *
- * <p>문서 전체 결과(newsletter.original_text / translated_text)는 이 테이블의 페이지 결과를 순서대로 이어 붙여 만든다. AI 분석,
+ * 문서 전체 결과(newsletter.original_text / translated_text)는 이 테이블의 페이지 결과를 순서대로 이어 붙여 만든다. AI 분석,
  * 챗봇, 중복 검사는 지금처럼 문서 전체 기준으로 동작한다.
  */
 @Getter
@@ -168,7 +168,7 @@ public class NewsletterPage {
    * 문서 전체 다시 분석(/analysis/retry) 준비. 결정 사항: OCR 결과는 재사용하고 번역은 처음부터 다시 한다. (언어 변경으로 FAILED 된 문서도 언어가
    * 섞이지 않게 하기 위함)
    *
-   * <p>원문이 있는 페이지는 OCR_DONE으로 되돌려 번역만 다시 한다. 원문이 없는 페이지는 이미지라면 OCR부터 다시 시도하고(PENDING), PDF라면 해당
+   * 원문이 있는 페이지는 OCR_DONE으로 되돌려 번역만 다시 한다. 원문이 없는 페이지는 이미지라면 OCR부터 다시 시도하고(PENDING), PDF라면 해당
    * 페이지만 다시 OCR할 수 없으므로 건너뛴 상태(SKIPPED)를 유지한다.
    *
    * @param canRetryOcr 페이지 단위로 OCR을 다시 할 수 있는지 (이미지 true, PDF false)

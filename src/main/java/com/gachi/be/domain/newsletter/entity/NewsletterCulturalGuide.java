@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 /**
  * 가정통신문에서 AI가 선정한 문화 맥락 안내(학교 생활 가이드 FAQ) 매핑.
  *
- * <p>질문/답변 텍스트를 복사 저장하지 않고 school_guide_id만 보관한다. 조회 시 school_guide의 question_i18n / answer_i18n을
+ * 질문/답변 텍스트를 복사 저장하지 않고 school_guide_id만 보관한다. 조회 시 school_guide의 question_i18n / answer_i18n을
  * 사용자 언어로 해석해서 반환하므로 별도 번역이 필요 없다.
  */
 @Getter
