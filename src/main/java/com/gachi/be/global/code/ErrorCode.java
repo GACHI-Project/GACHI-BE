@@ -316,6 +316,12 @@ public enum ErrorCode {
       "캘린더 미리보기 데이터가 없습니다. AI 분석 중이거나 데이터가 만료되었을 수 있습니다.",
       "Redis에 newsletter:preview:{id} 키 없음 또는 TTL 만료",
       ErrorLogLevel.WARN),
+  CALENDAR_PREVIEW_EVENT_NOT_FOUND(
+      HttpStatus.NOT_FOUND,
+      "CAL4043",
+      "삭제할 일정 후보를 찾을 수 없습니다.",
+      "preview 목록에 tempEventId에 해당하는 일정 없음",
+      ErrorLogLevel.INFO),
 
   USER_LANGUAGE_CODE_INVALID(
       HttpStatus.BAD_REQUEST,
