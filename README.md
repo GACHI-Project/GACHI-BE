@@ -8,6 +8,7 @@ GACHI 프로젝트 백엔드 서버(Spring Boot) 레포지토리입니다.
 - `docs/flyway.md`: DB 마이그레이션 규칙
 - `docs/env.md`: 환경 변수 가이드
 - `docs/deploy.md`: 배포 가이드
+- `docs/newsletter-ocr-batch.md`: 앱 없이 라벨링용 OCR 본문과 날짜 후보 일괄 추출
 
 ## 협업 규칙
 - 기본 브랜치: `develop`

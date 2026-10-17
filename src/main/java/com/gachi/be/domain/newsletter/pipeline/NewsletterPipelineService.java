@@ -19,10 +19,8 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -446,13 +444,7 @@ public class NewsletterPipelineService {
   /** 페이지 텍스트를 순서대로 이어 붙인다. 이어 붙일 내용이 없으면 null. */
   private String joinPageTexts(
       List<NewsletterPage> pages, Function<NewsletterPage, String> getter) {
-    String joined =
-        pages.stream()
-            .map(getter)
-            .filter(Objects::nonNull)
-            .filter(text -> !text.isBlank())
-            .collect(Collectors.joining(PAGE_SEPARATOR));
-    return joined.isBlank() ? null : joined;
+    return ocrTextRefiner.joinPageTexts(pages.stream().map(getter).toList());
   }
 
   /** 외부 API 호출을 실패 시 1회 자동 재시도한다. 재시도도 실패하면 예외를 그대로 던진다. */

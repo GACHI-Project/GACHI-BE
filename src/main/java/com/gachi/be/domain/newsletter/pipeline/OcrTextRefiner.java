@@ -4,6 +4,7 @@ import com.gachi.be.domain.newsletter.pipeline.ClovaOcrClient.OcrField;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,16 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class OcrTextRefiner {
+
+  /** 서비스와 평가 도구에서 동일한 페이지 결합 규칙을 사용한다. 인식 가능한 본문이 없으면 null. */
+  public String joinPageTexts(List<String> pages) {
+    String joined =
+        pages.stream()
+            .filter(Objects::nonNull)
+            .filter(text -> !text.isBlank())
+            .collect(Collectors.joining("\n"));
+    return joined.isBlank() ? null : joined;
+  }
 
   /** OcrField 리스트를 파싱하여 하나의 텍스트 문자열로 합친다. */
   public String parseFields(List<List<OcrField>> pageFieldsList) {
