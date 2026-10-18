@@ -51,6 +51,9 @@ Thumbs.db
 *.log
 logs/
 
+# Local OCR evaluation inputs / generated results
+/local-newsletter-ocr/
+
 # Test / coverage
 /build/reports/
 coverage/

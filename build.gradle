@@ -9,6 +9,11 @@ group = 'com.gachi'
 version = '0.0.1-SNAPSHOT'
 description = 'GACHI-BE'
 
+// 개발자용 CLI 진입점이 추가되어도 운영 bootJar/bootRun의 main class는 변경하지 않는다.
+springBoot {
+    mainClass = 'com.gachi.be.GachiBeApplication'
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
@@ -78,4 +83,15 @@ spotless {
 
 tasks.named('check') {
     dependsOn 'spotlessCheck'
+}
+
+tasks.register('newsletterOcrBatch', JavaExec) {
+    group = 'application'
+    description = '앱과 DB 없이 라벨링용 OCR 입력 JSON을 추출합니다. 기본값은 dry-run입니다.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.gachi.be.tools.newsletter.NewsletterOcrBatchCli'
+    jvmArgs '-Dfile.encoding=UTF-8'
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
