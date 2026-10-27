@@ -64,6 +64,10 @@ app:
       state-ttl-seconds: ${KAKAO_STATE_TTL_SECONDS:300}
       ticket-ttl-seconds: ${KAKAO_TICKET_TTL_SECONDS:120}
       signup-token-ttl-seconds: ${KAKAO_SIGNUP_TOKEN_TTL_SECONDS:600}
+    google:
+      enabled: ${GOOGLE_AUTH_ENABLED:false}
+      client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:}
+      signup-token-ttl-seconds: ${GOOGLE_SIGNUP_TOKEN_TTL_SECONDS:1800}
   s3:
     region: ${AWS_REGION:ap-northeast-2}
     bucket: ${AWS_S3_BUCKET:}

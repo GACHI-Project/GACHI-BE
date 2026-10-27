@@ -30,6 +30,12 @@
 - `AUTH_EMAIL_RESEND_COOLDOWN_SECONDS`: 인증코드 재전송 대기시간(초) (기본값: `60`)
 - `AUTH_EMAIL_VERIFIED_TTL_SECONDS`: 인증 완료 상태 유지시간(초) (기본값: `1800`)
 
+### Google 간편 로그인
+
+- `GOOGLE_AUTH_ENABLED`: Google 간편 로그인 활성화 여부 (기본값: `false`)
+- `GOOGLE_OAUTH_CLIENT_IDS`: 허용할 Google OAuth 웹, Android, iOS 클라이언트 ID 목록 (쉼표 구분, 활성화 시 필수)
+- `GOOGLE_SIGNUP_TOKEN_TTL_SECONDS`: 가입 및 연동용 일회성 토큰 유효시간(초) (기본값: `1800`)
+
 ### SMTP / 메일 발송
 
 - `SPRING_MAIL_HOST`: SMTP 서버 주소 (SMTP 발송 사용 시 필수)

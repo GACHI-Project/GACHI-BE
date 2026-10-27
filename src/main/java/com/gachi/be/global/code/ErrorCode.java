@@ -207,6 +207,48 @@ public enum ErrorCode {
       "카카오계정 이메일이 현재 계정과 일치하지 않습니다.",
       "명시적 계정 연동 이메일 불일치",
       ErrorLogLevel.WARN),
+  AUTH_GOOGLE_NOT_CONFIGURED(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      "AUTH5032",
+      "Google 로그인을 사용할 수 없습니다.",
+      "Google OAuth 비활성화 또는 설정 누락",
+      ErrorLogLevel.ERROR),
+  AUTH_GOOGLE_ID_TOKEN_INVALID(
+      HttpStatus.UNAUTHORIZED,
+      "AUTH4021",
+      "유효하지 않거나 만료된 Google 인증 정보입니다.",
+      "Google ID Token 서명/issuer/audience/만료 검증 실패",
+      ErrorLogLevel.WARN),
+  AUTH_GOOGLE_EMAIL_REQUIRED(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4022",
+      "인증된 Google 계정 이메일이 필요합니다.",
+      "Google 이메일 누락 또는 미인증",
+      ErrorLogLevel.WARN),
+  AUTH_GOOGLE_TOKEN_INVALID(
+      HttpStatus.BAD_REQUEST,
+      "AUTH4023",
+      "유효하지 않거나 만료된 Google 로그인 요청입니다.",
+      "Google 일회용 signup/link token 누락/만료/재사용",
+      ErrorLogLevel.WARN),
+  AUTH_GOOGLE_LINK_REQUIRED(
+      HttpStatus.CONFLICT,
+      "AUTH4096",
+      "같은 이메일의 기존 계정으로 로그인한 후 Google 계정을 연동해 주세요.",
+      "동일 이메일 계정 자동 병합 차단",
+      ErrorLogLevel.WARN),
+  AUTH_GOOGLE_ALREADY_LINKED(
+      HttpStatus.CONFLICT,
+      "AUTH4097",
+      "이미 Google 계정이 연동되어 있습니다.",
+      "사용자 또는 Google 식별자 중복 연동",
+      ErrorLogLevel.WARN),
+  AUTH_GOOGLE_LINK_EMAIL_MISMATCH(
+      HttpStatus.FORBIDDEN,
+      "AUTH4034",
+      "Google 계정 이메일이 현재 계정과 일치하지 않습니다.",
+      "명시적 계정 연동 이메일 불일치",
+      ErrorLogLevel.WARN),
 
   // child
   CHILD_NOT_FOUND(
