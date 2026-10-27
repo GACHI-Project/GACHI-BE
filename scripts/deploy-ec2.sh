@@ -67,6 +67,22 @@ sync_kakao_config() {
   echo "[debug] Kakao configuration synced from deployment secrets."
 }
 
+sync_google_config() {
+  if [ "${GOOGLE_AUTH_ENABLED_INPUT}" != "true" ]; then
+    return
+  fi
+
+  if [ -z "$GOOGLE_OAUTH_CLIENT_IDS_INPUT" ]; then
+    echo "Google deployment configuration is incomplete."
+    exit 1
+  fi
+
+  upsert_env_value GOOGLE_AUTH_ENABLED true
+  upsert_env_value GOOGLE_OAUTH_CLIENT_IDS "$GOOGLE_OAUTH_CLIENT_IDS_INPUT"
+  upsert_env_value GOOGLE_SIGNUP_TOKEN_TTL_SECONDS "$GOOGLE_SIGNUP_TOKEN_TTL_SECONDS_INPUT"
+  echo "[debug] Google configuration synced from deployment secrets."
+}
+
 to_lower() {
   local value="$1"
   printf "%s" "$value" | tr '[:upper:]' '[:lower:]'
@@ -94,6 +110,9 @@ KAKAO_ADMIN_KEY_PARAMETER_NAME_INPUT="${KAKAO_ADMIN_KEY_PARAMETER_NAME:-}"
 KAKAO_APP_ID_INPUT="${KAKAO_APP_ID:-}"
 KAKAO_REDIRECT_URI_INPUT="${KAKAO_REDIRECT_URI:-}"
 KAKAO_APP_REDIRECT_URI_INPUT="${KAKAO_APP_REDIRECT_URI:-}"
+GOOGLE_AUTH_ENABLED_INPUT="${GOOGLE_AUTH_ENABLED:-false}"
+GOOGLE_OAUTH_CLIENT_IDS_INPUT="${GOOGLE_OAUTH_CLIENT_IDS:-}"
+GOOGLE_SIGNUP_TOKEN_TTL_SECONDS_INPUT="${GOOGLE_SIGNUP_TOKEN_TTL_SECONDS:-1800}"
 AWS_REGION_INPUT="${AWS_REGION:-ap-northeast-2}"
 
 DEPLOY_PATH="$(echo "$DEPLOY_PATH_INPUT" | xargs)"
@@ -122,6 +141,7 @@ if [ ! -f .env ]; then
 fi
 
 sync_kakao_config
+sync_google_config
 
 JWT_SECRET_VALUE="$(read_env_value JWT_SECRET)"
 JWT_SECRET_LENGTH=${#JWT_SECRET_VALUE}
@@ -330,6 +350,19 @@ if [ "$KAKAO_AUTH_ENABLED_INPUT" = "true" ]; then
     fi
   done
   echo "[debug] Kakao runtime environment is enabled and complete."
+fi
+if [ "$GOOGLE_AUTH_ENABLED_INPUT" = "true" ]; then
+  if ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND_CID" \
+      | grep -qx 'GOOGLE_AUTH_ENABLED=true'; then
+    echo "backend container is missing GOOGLE_AUTH_ENABLED=true."
+    exit 1
+  fi
+  if ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND_CID" \
+      | grep -q '^GOOGLE_OAUTH_CLIENT_IDS=.'; then
+    echo "backend container is missing non-empty GOOGLE_OAUTH_CLIENT_IDS."
+    exit 1
+  fi
+  echo "[debug] Google runtime environment is enabled and complete."
 fi
 docker compose --env-file .env up -d --remove-orphans --force-recreate --no-deps nginx
 

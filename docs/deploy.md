@@ -139,6 +139,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
   - `DOCKERHUB_USERNAME`(필수)
   - `KAKAO_REST_API_KEY`, `KAKAO_APP_ID`, `KAKAO_REDIRECT_URI`, `KAKAO_APP_REDIRECT_URI`(카카오 로그인 활성화 시 필수)
   - `KAKAO_CLIENT_SECRET_PARAMETER_NAME`, `KAKAO_ADMIN_KEY_PARAMETER_NAME`(선택, 기본 `/gachi/prod/kakao/client-secret`, `/gachi/prod/kakao/admin-key`)
+  - `GOOGLE_OAUTH_CLIENT_IDS`(Google 로그인 활성화 시 필수, 허용할 플랫폼별 OAuth 클라이언트 ID를 쉼표로 구분)
   - `EC2_DEPLOY_PATH`(선택, 기본 `/home/ubuntu/GACHI-BE/deploy`)
   - `EC2_HOST`(조건부 필수: `SWAGGER_ENABLED=true` + `SWAGGER_TLS_MODE=letsencrypt_ip` + `.env`에 `SWAGGER_TLS_IP` 미설정 시)
   - `AWS_REGION`(선택, 기본 `ap-northeast-2`)
