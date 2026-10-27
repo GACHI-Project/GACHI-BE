@@ -15,7 +15,7 @@ import org.springframework.util.StringUtils;
 /** 선택적 인프라 의존성이 있는 인증 빈을 등록한다. */
 @Slf4j
 @Configuration
-@EnableConfigurationProperties(AuthProperties.class)
+@EnableConfigurationProperties({AuthProperties.class, GoogleAuthProperties.class})
 public class AuthConfig {
 
   /** JavaMailSender 존재 여부에 따라 SMTP 발송기 또는 로그 대체 발송기를 선택한다. */
