@@ -10,11 +10,13 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 @Component
+@Slf4j
 public class GoogleIdTokenClient implements GoogleClient {
   private final GoogleIdTokenVerifier verifier;
 
@@ -47,6 +49,7 @@ public class GoogleIdTokenClient implements GoogleClient {
           Boolean.TRUE.equals(payload.getEmailVerified()),
           payload.get("name") instanceof String name ? name : null);
     } catch (GeneralSecurityException | IOException | IllegalArgumentException e) {
+      log.warn("Google ID token verification failed. cause={}", e.getClass().getSimpleName());
       throw invalidToken();
     }
   }

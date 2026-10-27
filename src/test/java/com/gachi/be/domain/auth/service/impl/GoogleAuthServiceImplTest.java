@@ -88,11 +88,14 @@ class GoogleAuthServiceImplTest {
   @Test
   void completeDoesNotAutomaticallyMergeSameEmailAccount() {
     GoogleClient.GoogleIdentity identity = identity("google-2", "USER@gachi.com", true, "민주");
+    User existingUser = activeUser("user@gachi.com", "기존 회원");
+    ReflectionTestUtils.setField(existingUser, "id", 42L);
     when(googleClient.verify("id-token")).thenReturn(identity);
     when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.GOOGLE, "google-2"))
         .thenReturn(Optional.empty());
-    when(userRepository.findByEmail("user@gachi.com"))
-        .thenReturn(Optional.of(activeUser("user@gachi.com", "기존 회원")));
+    when(userRepository.findByEmail("user@gachi.com")).thenReturn(Optional.of(existingUser));
+    when(socialAccountRepository.findByUserIdAndProvider(42L, SocialProvider.GOOGLE))
+        .thenReturn(Optional.empty());
     when(googleLoginStore.issue(eq("link"), eq(identity), any())).thenReturn("link-token");
 
     GoogleCompleteResponse response =
@@ -101,6 +104,31 @@ class GoogleAuthServiceImplTest {
     assertThat(response.status()).isEqualTo(GoogleCompleteResponse.Status.LINK_REQUIRED);
     assertThat(response.linkToken()).isEqualTo("link-token");
     verify(authTokenIssuer, never()).issue(any(), any(Boolean.class), any(), any());
+  }
+
+  @Test
+  void completeRejectsDifferentGoogleAccountWhenUserAlreadyLinked() {
+    GoogleClient.GoogleIdentity identity = identity("google-new", "user@gachi.com", true, "민주");
+    User existingUser = activeUser("user@gachi.com", "기존 회원");
+    ReflectionTestUtils.setField(existingUser, "id", 42L);
+    SocialAccount linkedAccount =
+        SocialAccount.builder()
+            .user(existingUser)
+            .provider(SocialProvider.GOOGLE)
+            .providerUserId("google-old")
+            .build();
+    when(googleClient.verify("id-token")).thenReturn(identity);
+    when(socialAccountRepository.findByProviderAndProviderUserId(
+            SocialProvider.GOOGLE, "google-new"))
+        .thenReturn(Optional.empty());
+    when(userRepository.findByEmail("user@gachi.com")).thenReturn(Optional.of(existingUser));
+    when(socialAccountRepository.findByUserIdAndProvider(42L, SocialProvider.GOOGLE))
+        .thenReturn(Optional.of(linkedAccount));
+
+    assertBusinessError(
+        () -> service.complete(new GoogleCompleteRequest("id-token", false), null, null),
+        ErrorCode.AUTH_GOOGLE_ALREADY_LINKED);
+    verify(googleLoginStore, never()).issue(any(), any(), any());
   }
 
   @Test

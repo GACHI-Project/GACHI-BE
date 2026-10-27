@@ -68,7 +68,9 @@ sync_kakao_config() {
 }
 
 sync_google_config() {
+  upsert_env_value GOOGLE_AUTH_ENABLED "$GOOGLE_AUTH_ENABLED_INPUT"
   if [ "${GOOGLE_AUTH_ENABLED_INPUT}" != "true" ]; then
+    echo "[debug] Google configuration disabled."
     return
   fi
 
@@ -77,7 +79,6 @@ sync_google_config() {
     exit 1
   fi
 
-  upsert_env_value GOOGLE_AUTH_ENABLED true
   upsert_env_value GOOGLE_OAUTH_CLIENT_IDS "$GOOGLE_OAUTH_CLIENT_IDS_INPUT"
   upsert_env_value GOOGLE_SIGNUP_TOKEN_TTL_SECONDS "$GOOGLE_SIGNUP_TOKEN_TTL_SECONDS_INPUT"
   echo "[debug] Google configuration synced from deployment secrets."
@@ -363,6 +364,10 @@ if [ "$GOOGLE_AUTH_ENABLED_INPUT" = "true" ]; then
     exit 1
   fi
   echo "[debug] Google runtime environment is enabled and complete."
+elif ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND_CID" \
+    | grep -qx 'GOOGLE_AUTH_ENABLED=false'; then
+  echo "backend container is missing GOOGLE_AUTH_ENABLED=false."
+  exit 1
 fi
 docker compose --env-file .env up -d --remove-orphans --force-recreate --no-deps nginx
 

@@ -70,7 +70,13 @@ public class GoogleAuthServiceImpl implements GoogleAuthService {
               Duration ttl = Duration.ofSeconds(google.signupTokenTtlSeconds());
               Optional<User> existingUser = userRepository.findByEmail(email);
               if (existingUser.isPresent()) {
-                ensureActive(existingUser.get());
+                User user = existingUser.get();
+                ensureActive(user);
+                if (socialAccountRepository
+                    .findByUserIdAndProvider(user.getId(), SocialProvider.GOOGLE)
+                    .isPresent()) {
+                  throw new BusinessException(ErrorCode.AUTH_GOOGLE_ALREADY_LINKED);
+                }
                 return GoogleCompleteResponse.link(
                     googleLoginStore.issue(LINK, identity, ttl), email);
               }
