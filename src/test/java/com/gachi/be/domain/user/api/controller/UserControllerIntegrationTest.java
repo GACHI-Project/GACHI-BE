@@ -10,6 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gachi.be.domain.auth.entity.SocialAccount;
+import com.gachi.be.domain.auth.entity.SocialProvider;
+import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.notification.entity.PushDeviceToken;
 import com.gachi.be.domain.notification.entity.enums.PushPlatform;
@@ -19,6 +22,7 @@ import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +61,7 @@ class UserControllerIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
   @Autowired private WebApplicationContext webApplicationContext;
   @Autowired private UserRepository userRepository;
+  @Autowired private SocialAccountRepository socialAccountRepository;
   @Autowired private PushDeviceTokenRepository pushDeviceTokenRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private CapturingAuthMailService capturingAuthMailService;
@@ -88,6 +93,40 @@ class UserControllerIntegrationTest {
     User updatedUser = userRepository.findByLoginId("profile_user").orElseThrow();
     assertThat(updatedUser.getName()).isEqualTo("새 이름");
     assertThat(updatedUser.getPhoneNumber()).isEqualTo("01022223333");
+  }
+
+  @Test
+  void getMyInfoIncludesLoginMethodAvailability() throws Exception {
+    createUser("login_methods", "login-methods@gachi.com", "01010001099", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken("login_methods", "Policy12!");
+    User savedUser = userRepository.findByLoginId("login_methods").orElseThrow();
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.kakaoLinked").value(false))
+        .andExpect(jsonPath("$.result.googleLinked").value(false))
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
+
+    socialAccountRepository.saveAll(
+        List.of(
+            SocialAccount.builder()
+                .user(savedUser)
+                .provider(SocialProvider.KAKAO)
+                .providerUserId("kakao-login-methods")
+                .build(),
+            SocialAccount.builder()
+                .user(savedUser)
+                .provider(SocialProvider.GOOGLE)
+                .providerUserId("google-login-methods")
+                .build()));
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.kakaoLinked").value(true))
+        .andExpect(jsonPath("$.result.googleLinked").value(true))
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
   }
 
   @Test

@@ -1,6 +1,8 @@
 package com.gachi.be.domain.user.api.controller;
 
 import com.gachi.be.domain.auth.dto.response.EmailSendResponse;
+import com.gachi.be.domain.auth.entity.SocialProvider;
+import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthRateLimitService;
 import com.gachi.be.domain.auth.service.AuthenticatedUserResolver;
 import com.gachi.be.domain.auth.service.ClientIpExtractor;
@@ -34,6 +36,7 @@ public class UserController {
   private final AuthRateLimitService authRateLimitService;
   private final ClientIpExtractor clientIpExtractor;
   private final UserProfileService userProfileService;
+  private final SocialAccountRepository socialAccountRepository;
 
   @Operation(
       summary = "사용자 내 정보 조회",
@@ -41,7 +44,7 @@ public class UserController {
           """
          마이페이지에서 사용자의 정보를 볼 수 있습니다. 이름, 닉네임, 등록일을 반환하고
          추후 이메일을 변경할 경우를 고려 이메일도 반환합니다.
-         알림설정 여부와 사용자의 언어까지 조회합니다.
+         알림설정 여부, 사용자의 언어, 소셜 계정 연동 여부와 일반 로그인 가능 여부까지 조회합니다.
          """)
   @GetMapping("/me")
   public ApiResponse<UserMeResponse> getMyInfo(
@@ -58,7 +61,17 @@ public class UserController {
             user.getPhoneNumber(),
             user.isNotificationEnabled(),
             user.getNotificationPreference(),
-            user.getCreatedAt()));
+            user.getCreatedAt(),
+            isSocialAccountLinked(user.getId(), SocialProvider.KAKAO),
+            isSocialAccountLinked(user.getId(), SocialProvider.GOOGLE),
+            user.getLoginId() != null && user.getPasswordHash() != null));
+  }
+
+  private boolean isSocialAccountLinked(Long userId, SocialProvider provider) {
+    return socialAccountRepository
+        .findByUserIdAndProvider(userId, provider)
+        .map(account -> !account.isDisconnectPending())
+        .orElse(false);
   }
 
   /** 언어 설정 변경 API */
