@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
+import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.notification.entity.PushDeviceToken;
 import com.gachi.be.domain.notification.entity.enums.PushPlatform;
@@ -22,7 +23,6 @@ import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +62,7 @@ class UserControllerIntegrationTest {
   @Autowired private WebApplicationContext webApplicationContext;
   @Autowired private UserRepository userRepository;
   @Autowired private SocialAccountRepository socialAccountRepository;
+  @Autowired private AuthTokenIssuer authTokenIssuer;
   @Autowired private PushDeviceTokenRepository pushDeviceTokenRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private CapturingAuthMailService capturingAuthMailService;
@@ -108,25 +109,57 @@ class UserControllerIntegrationTest {
         .andExpect(jsonPath("$.result.googleLinked").value(false))
         .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
 
-    socialAccountRepository.saveAll(
-        List.of(
-            SocialAccount.builder()
-                .user(savedUser)
-                .provider(SocialProvider.KAKAO)
-                .providerUserId("kakao-login-methods")
-                .build(),
-            SocialAccount.builder()
-                .user(savedUser)
-                .provider(SocialProvider.GOOGLE)
-                .providerUserId("google-login-methods")
-                .build()));
+    socialAccountRepository.save(
+        SocialAccount.builder()
+            .user(savedUser)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-login-methods")
+            .build());
 
     mockMvc
         .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.result.kakaoLinked").value(true))
+        .andExpect(jsonPath("$.result.googleLinked").value(false))
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
+
+    socialAccountRepository.deleteByUserIdAndProvider(savedUser.getId(), SocialProvider.KAKAO);
+    socialAccountRepository.save(
+        SocialAccount.builder()
+            .user(savedUser)
+            .provider(SocialProvider.GOOGLE)
+            .providerUserId("google-login-methods")
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.kakaoLinked").value(false))
         .andExpect(jsonPath("$.result.googleLinked").value(true))
         .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
+
+    OffsetDateTime now = OffsetDateTime.now();
+    User socialOnlyUser =
+        userRepository.saveAndFlush(
+            User.builder()
+                .email("social-only@gachi.com")
+                .name("social-only")
+                .status(UserStatus.ACTIVE)
+                .languageCode("KO")
+                .notificationPreference(NotificationPreference.IMPORTANT)
+                .emailVerifiedAt(now)
+                .consentAgreedAt(now)
+                .consentVersion("2026-04-v1")
+                .passwordUpdatedAt(now)
+                .passwordChangeRequired(false)
+                .build());
+    String socialOnlyToken =
+        authTokenIssuer.issue(socialOnlyUser, false, null, null).accessToken();
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(socialOnlyToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(false));
   }
 
   @Test

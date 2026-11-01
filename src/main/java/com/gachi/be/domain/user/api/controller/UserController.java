@@ -64,14 +64,15 @@ public class UserController {
             user.getCreatedAt(),
             isSocialAccountLinked(user.getId(), SocialProvider.KAKAO),
             isSocialAccountLinked(user.getId(), SocialProvider.GOOGLE),
-            user.getLoginId() != null && user.getPasswordHash() != null));
+            user.getLoginId() != null
+                && user.getPasswordHash() != null
+                && !user.isPasswordChangeRequired()));
   }
 
   private boolean isSocialAccountLinked(Long userId, SocialProvider provider) {
     return socialAccountRepository
         .findByUserIdAndProvider(userId, provider)
-        .map(account -> !account.isDisconnectPending())
-        .orElse(false);
+        .isPresent();
   }
 
   /** 언어 설정 변경 API */
