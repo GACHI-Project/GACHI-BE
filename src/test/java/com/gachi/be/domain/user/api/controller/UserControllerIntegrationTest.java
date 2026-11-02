@@ -10,7 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gachi.be.domain.auth.entity.SocialAccount;
+import com.gachi.be.domain.auth.entity.SocialProvider;
+import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthMailService;
+import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.notification.entity.PushDeviceToken;
 import com.gachi.be.domain.notification.entity.enums.PushPlatform;
 import com.gachi.be.domain.notification.repository.PushDeviceTokenRepository;
@@ -57,6 +61,8 @@ class UserControllerIntegrationTest {
   @Autowired private ObjectMapper objectMapper;
   @Autowired private WebApplicationContext webApplicationContext;
   @Autowired private UserRepository userRepository;
+  @Autowired private SocialAccountRepository socialAccountRepository;
+  @Autowired private AuthTokenIssuer authTokenIssuer;
   @Autowired private PushDeviceTokenRepository pushDeviceTokenRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private CapturingAuthMailService capturingAuthMailService;
@@ -88,6 +94,85 @@ class UserControllerIntegrationTest {
     User updatedUser = userRepository.findByLoginId("profile_user").orElseThrow();
     assertThat(updatedUser.getName()).isEqualTo("새 이름");
     assertThat(updatedUser.getPhoneNumber()).isEqualTo("01022223333");
+  }
+
+  @Test
+  void getMyInfoIncludesLoginMethodAvailability() throws Exception {
+    createUser("login_methods", "login-methods@gachi.com", "01010001099", UserStatus.ACTIVE);
+    String accessToken = loginAccessToken("login_methods", "Policy12!");
+    User savedUser = userRepository.findByLoginId("login_methods").orElseThrow();
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.kakaoLinked").value(false))
+        .andExpect(jsonPath("$.result.googleLinked").value(false))
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
+
+    socialAccountRepository.save(
+        SocialAccount.builder()
+            .user(savedUser)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-login-methods")
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.kakaoLinked").value(true))
+        .andExpect(jsonPath("$.result.googleLinked").value(false))
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
+
+    socialAccountRepository.deleteByUserIdAndProvider(savedUser.getId(), SocialProvider.KAKAO);
+    socialAccountRepository.save(
+        SocialAccount.builder()
+            .user(savedUser)
+            .provider(SocialProvider.GOOGLE)
+            .providerUserId("google-login-methods")
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.kakaoLinked").value(false))
+        .andExpect(jsonPath("$.result.googleLinked").value(true))
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
+
+    socialAccountRepository.save(
+        SocialAccount.builder()
+            .user(savedUser)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-login-methods")
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.kakaoLinked").value(true))
+        .andExpect(jsonPath("$.result.googleLinked").value(true))
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
+
+    OffsetDateTime now = OffsetDateTime.now();
+    User socialOnlyUser =
+        userRepository.saveAndFlush(
+            User.builder()
+                .email("social-only@gachi.com")
+                .name("social-only")
+                .status(UserStatus.ACTIVE)
+                .languageCode("KO")
+                .notificationPreference(NotificationPreference.IMPORTANT)
+                .emailVerifiedAt(now)
+                .consentAgreedAt(now)
+                .consentVersion("2026-04-v1")
+                .passwordUpdatedAt(now)
+                .passwordChangeRequired(false)
+                .build());
+    String socialOnlyToken = authTokenIssuer.issue(socialOnlyUser, false, null, null).accessToken();
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(socialOnlyToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(false));
   }
 
   @Test

@@ -13,4 +13,7 @@ public record UserMeResponse(
     String phoneNumber,
     Boolean notificationEnabled,
     NotificationPreference notificationPreference,
-    LocalDateTime createdAt) {}
+    LocalDateTime createdAt,
+    boolean kakaoLinked,
+    boolean googleLinked,
+    boolean passwordLoginAvailable) {}
