@@ -70,9 +70,7 @@ public class UserController {
   }
 
   private boolean isSocialAccountLinked(Long userId, SocialProvider provider) {
-    return socialAccountRepository
-        .findByUserIdAndProvider(userId, provider)
-        .isPresent();
+    return socialAccountRepository.findByUserIdAndProvider(userId, provider).isPresent();
   }
 
   /** 언어 설정 변경 API */

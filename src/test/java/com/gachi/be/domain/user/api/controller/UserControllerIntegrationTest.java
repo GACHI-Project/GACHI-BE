@@ -13,8 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
-import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.auth.service.AuthMailService;
+import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.notification.entity.PushDeviceToken;
 import com.gachi.be.domain.notification.entity.enums.PushPlatform;
 import com.gachi.be.domain.notification.repository.PushDeviceTokenRepository;
@@ -138,6 +138,20 @@ class UserControllerIntegrationTest {
         .andExpect(jsonPath("$.result.googleLinked").value(true))
         .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
 
+    socialAccountRepository.save(
+        SocialAccount.builder()
+            .user(savedUser)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-login-methods")
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/users/me").header("Authorization", bearer(accessToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.kakaoLinked").value(true))
+        .andExpect(jsonPath("$.result.googleLinked").value(true))
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(true));
+
     OffsetDateTime now = OffsetDateTime.now();
     User socialOnlyUser =
         userRepository.saveAndFlush(
@@ -153,8 +167,7 @@ class UserControllerIntegrationTest {
                 .passwordUpdatedAt(now)
                 .passwordChangeRequired(false)
                 .build());
-    String socialOnlyToken =
-        authTokenIssuer.issue(socialOnlyUser, false, null, null).accessToken();
+    String socialOnlyToken = authTokenIssuer.issue(socialOnlyUser, false, null, null).accessToken();
 
     mockMvc
         .perform(get("/api/v1/users/me").header("Authorization", bearer(socialOnlyToken)))
