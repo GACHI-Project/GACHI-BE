@@ -173,6 +173,32 @@ class UserControllerIntegrationTest {
         .perform(get("/api/v1/users/me").header("Authorization", bearer(socialOnlyToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.result.passwordLoginAvailable").value(false));
+
+    User passwordChangeRequiredUser =
+        userRepository.saveAndFlush(
+            User.builder()
+                .email("password-change-required@gachi.com")
+                .loginId("password-change-required")
+                .passwordHash(passwordEncoder.encode("Policy12!"))
+                .name("password-change-required")
+                .phoneNumber("01010001199")
+                .status(UserStatus.ACTIVE)
+                .languageCode("KO")
+                .notificationPreference(NotificationPreference.IMPORTANT)
+                .emailVerifiedAt(now)
+                .consentAgreedAt(now)
+                .consentVersion("2026-04-v1")
+                .passwordUpdatedAt(now)
+                .passwordChangeRequired(true)
+                .build());
+    String passwordChangeRequiredToken =
+        authTokenIssuer.issue(passwordChangeRequiredUser, false, null, null).accessToken();
+
+    mockMvc
+        .perform(
+            get("/api/v1/users/me").header("Authorization", bearer(passwordChangeRequiredToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.result.passwordLoginAvailable").value(false));
   }
 
   @Test
