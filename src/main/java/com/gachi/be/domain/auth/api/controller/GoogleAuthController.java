@@ -20,6 +20,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -105,6 +106,14 @@ public class GoogleAuthController {
             request,
             deviceInfo(servletRequest),
             clientIpExtractor.extractClientIp(servletRequest)));
+  }
+
+  @Operation(summary = "Google 계정 연동 해제", description = "현재 로그인한 GACHI 계정에서 Google 계정 연동을 해제합니다.")
+  @DeleteMapping("/link")
+  public ApiResponse<Void> unlink(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
+    User user = authenticatedUserResolver.resolveActiveUser(authorization);
+    googleAuthService.unlink(user.getId());
+    return ApiResponse.success(SuccessCode.AUTH_GOOGLE_UNLINK_SUCCESS, null);
   }
 
   private String deviceInfo(HttpServletRequest request) {

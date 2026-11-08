@@ -44,6 +44,7 @@ class GoogleAuthServiceImplTest {
   @Mock private GoogleClient googleClient;
   @Mock private GoogleLoginStore googleLoginStore;
   @Mock private SocialAccountRepository socialAccountRepository;
+  @Mock private SocialAccountDisconnectService disconnectService;
   @Mock private UserRepository userRepository;
   @Mock private AuthTokenIssuer authTokenIssuer;
 
@@ -58,6 +59,7 @@ class GoogleAuthServiceImplTest {
             googleClient,
             googleLoginStore,
             socialAccountRepository,
+            disconnectService,
             userRepository,
             authTokenIssuer);
   }
@@ -220,6 +222,23 @@ class GoogleAuthServiceImplTest {
     assertThat(accountCaptor.getValue().getUser()).isSameAs(user);
     assertThat(accountCaptor.getValue().getProvider()).isEqualTo(SocialProvider.GOOGLE);
     assertThat(response).isSameAs(tokens);
+  }
+
+  @Test
+  void unlinkDisconnectsGoogleAccount() {
+    User user = activeUser("user@gachi.com", "민주");
+    SocialAccount account =
+        SocialAccount.builder()
+            .user(user)
+            .provider(SocialProvider.GOOGLE)
+            .providerUserId("google-7")
+            .build();
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.GOOGLE))
+        .thenReturn(Optional.of(account));
+
+    service.unlink(42L);
+
+    verify(disconnectService).disconnect(account);
   }
 
   private void assertBusinessError(Runnable action, ErrorCode errorCode) {

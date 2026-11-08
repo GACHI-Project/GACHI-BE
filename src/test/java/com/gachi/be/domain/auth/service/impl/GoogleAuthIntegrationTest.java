@@ -31,6 +31,7 @@ class GoogleAuthIntegrationTest {
   @Autowired private AuthProperties authProperties;
   @Autowired private UserRepository userRepository;
   @Autowired private SocialAccountRepository socialAccountRepository;
+  @Autowired private SocialAccountDisconnectService disconnectService;
   @Autowired private JwtTokenProvider jwtTokenProvider;
   @Autowired private AuthTokenIssuer authTokenIssuer;
 
@@ -48,6 +49,7 @@ class GoogleAuthIntegrationTest {
             mock(GoogleClient.class),
             googleLoginStore,
             socialAccountRepository,
+            disconnectService,
             userRepository,
             authTokenIssuer);
 

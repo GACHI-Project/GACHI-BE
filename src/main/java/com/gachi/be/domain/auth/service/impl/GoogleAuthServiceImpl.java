@@ -41,6 +41,7 @@ public class GoogleAuthServiceImpl implements GoogleAuthService {
   private final GoogleClient googleClient;
   private final GoogleLoginStore googleLoginStore;
   private final SocialAccountRepository socialAccountRepository;
+  private final SocialAccountDisconnectService disconnectService;
   private final UserRepository userRepository;
   private final AuthTokenIssuer authTokenIssuer;
 
@@ -175,6 +176,15 @@ public class GoogleAuthServiceImpl implements GoogleAuthService {
         Boolean.TRUE.equals(request.rememberMe()),
         normalizeNullable(deviceInfo),
         normalizeNullable(ipAddress));
+  }
+
+  @Override
+  @Transactional
+  public void unlink(Long userId) {
+    enabledProperties();
+    socialAccountRepository
+        .findByUserIdAndProviderForUpdate(userId, SocialProvider.GOOGLE)
+        .ifPresent(disconnectService::disconnect);
   }
 
   private GoogleAuthProperties enabledProperties() {
