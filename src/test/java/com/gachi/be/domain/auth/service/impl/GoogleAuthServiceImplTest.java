@@ -241,6 +241,33 @@ class GoogleAuthServiceImplTest {
     verify(disconnectService).disconnect(account);
   }
 
+  @Test
+  void unlinkDisconnectsGoogleAccountWhenGoogleAuthIsDisabled() {
+    User user = activeUser("user@gachi.com", "민주");
+    SocialAccount account =
+        SocialAccount.builder()
+            .user(user)
+            .provider(SocialProvider.GOOGLE)
+            .providerUserId("google-disabled")
+            .build();
+    GoogleAuthServiceImpl disabledService =
+        new GoogleAuthServiceImpl(
+            authProperties,
+            new GoogleAuthProperties(false, List.of("client-id"), 1800),
+            googleClient,
+            googleLoginStore,
+            socialAccountRepository,
+            disconnectService,
+            userRepository,
+            authTokenIssuer);
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.GOOGLE))
+        .thenReturn(Optional.of(account));
+
+    disabledService.unlink(42L);
+
+    verify(disconnectService).disconnect(account);
+  }
+
   private void assertBusinessError(Runnable action, ErrorCode errorCode) {
     assertThatThrownBy(action::run)
         .isInstanceOfSatisfying(

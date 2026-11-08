@@ -181,7 +181,6 @@ public class GoogleAuthServiceImpl implements GoogleAuthService {
   @Override
   @Transactional
   public void unlink(Long userId) {
-    enabledProperties();
     socialAccountRepository
         .findByUserIdAndProviderForUpdate(userId, SocialProvider.GOOGLE)
         .ifPresent(disconnectService::disconnect);
