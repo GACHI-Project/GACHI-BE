@@ -30,6 +30,7 @@ public enum SuccessCode {
   AUTH_GOOGLE_COMPLETE_SUCCESS(HttpStatus.OK, "AUTH2019", "Google 인증이 완료되었습니다."),
   AUTH_GOOGLE_SIGNUP_SUCCESS(HttpStatus.CREATED, "AUTH2020", "Google 회원가입이 완료되었습니다."),
   AUTH_GOOGLE_LINK_SUCCESS(HttpStatus.OK, "AUTH2021", "Google 계정 연동이 완료되었습니다."),
+  AUTH_GOOGLE_UNLINK_SUCCESS(HttpStatus.OK, "AUTH2022", "Google 계정 연동이 해제되었습니다."),
   CHILD_CREATE_SUCCESS(HttpStatus.CREATED, "CHILD2011", "자녀 정보 등록에 성공하였습니다."),
   CHILD_GET_LIST_SUCCESS(HttpStatus.OK, "CHILD2001", "내 자녀 목록 조회에 성공하였습니다."),
   CHILD_UPDATE_SUCCESS(HttpStatus.OK, "CHILD2002", "자녀 정보 수정에 성공하였습니다."),

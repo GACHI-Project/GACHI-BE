@@ -9,6 +9,7 @@ import com.gachi.be.domain.auth.config.GoogleAuthProperties;
 import com.gachi.be.domain.auth.dto.request.GoogleSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.entity.SocialProvider;
+import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.auth.service.GoogleClient;
@@ -16,6 +17,7 @@ import com.gachi.be.domain.auth.service.GoogleLoginStore;
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
+import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,8 @@ class GoogleAuthIntegrationTest {
   @Autowired private AuthProperties authProperties;
   @Autowired private UserRepository userRepository;
   @Autowired private SocialAccountRepository socialAccountRepository;
+  @Autowired private SocialAccountDisconnectService disconnectService;
+  @Autowired private AuthRefreshTokenRepository authRefreshTokenRepository;
   @Autowired private JwtTokenProvider jwtTokenProvider;
   @Autowired private AuthTokenIssuer authTokenIssuer;
 
@@ -48,6 +52,7 @@ class GoogleAuthIntegrationTest {
             mock(GoogleClient.class),
             googleLoginStore,
             socialAccountRepository,
+            disconnectService,
             userRepository,
             authTokenIssuer);
 
@@ -67,5 +72,40 @@ class GoogleAuthIntegrationTest {
     assertThat(jwtTokenProvider.parseAccessToken(tokens.accessToken()).getUserId())
         .isEqualTo(user.getId());
     assertThat(tokens.refreshToken()).isNotBlank();
+  }
+
+  @Test
+  void unlinkWithdrawsGoogleOnlyUserAndRevokesRefreshTokens() {
+    GoogleLoginStore googleLoginStore = mock(GoogleLoginStore.class);
+    GoogleClient.GoogleIdentity identity =
+        new GoogleClient.GoogleIdentity(
+            "google-integration-unlink", "google-integration-unlink@gachi.com", true, "통합 회원");
+    when(googleLoginStore.consume("signup", "unlink-signup-token")).thenReturn(identity);
+    GoogleAuthServiceImpl googleAuthService =
+        new GoogleAuthServiceImpl(
+            authProperties,
+            new GoogleAuthProperties(true, List.of("test-client-id"), 1800),
+            mock(GoogleClient.class),
+            googleLoginStore,
+            socialAccountRepository,
+            disconnectService,
+            userRepository,
+            authTokenIssuer);
+
+    googleAuthService.signup(
+        new GoogleSignupRequest(
+            "unlink-signup-token", true, "KO", NotificationPreference.IMPORTANT, false),
+        "integration-test",
+        "127.0.0.1");
+    User user = userRepository.findByEmail("google-integration-unlink@gachi.com").orElseThrow();
+
+    googleAuthService.unlink(user.getId());
+
+    assertThat(socialAccountRepository.findByUserIdAndProvider(user.getId(), SocialProvider.GOOGLE))
+        .isEmpty();
+    assertThat(userRepository.findById(user.getId()).orElseThrow().getStatus())
+        .isEqualTo(UserStatus.WITHDRAWN);
+    assertThat(authRefreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(user.getId()))
+        .isEmpty();
   }
 }

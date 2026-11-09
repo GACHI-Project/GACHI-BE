@@ -14,4 +14,6 @@ public interface GoogleAuthService {
 
   AuthTokenResponse link(
       Long userId, GoogleLinkRequest request, String deviceInfo, String ipAddress);
+
+  void unlink(Long userId);
 }
