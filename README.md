@@ -12,10 +12,10 @@ GACHI 프로젝트 백엔드 서버(Spring Boot) 레포지토리입니다.
 
 ## 협업 규칙
 - 기본 브랜치: `develop`
-- 브랜치 전략: `feat/xx`, `refac/xx`, `hotfix/xx`, `chore/xx`, `design/xx`, `bugfix/xx`
+- 브랜치 전략: `feat/#이슈번호-작업명` 형식으로 생성하며, 작업에 따라 `refac`, `hotfix`, `chore`, `design`, `bugfix`를 사용
 - 커밋 타입: `feat`, `fix`, `refactor`, `docs`, `style`, `chore`
 - `main`, `develop` 직접 push 금지, PR 승인 후 머지
-- CI 체크(`test-and-push`) 통과 후 머지
+- GitHub Actions `BE Docker CI`의 테스트 체크 통과 후 머지
 
 ## 배포 태그 규칙
 - `develop` push: `<dockerhub-id>/gachi-be:develop`

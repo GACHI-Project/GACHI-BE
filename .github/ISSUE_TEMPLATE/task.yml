@@ -1,8 +1,11 @@
 name: Task
-description: 기능/리팩토링/디자인/설정 작업
-title: "[TASK] "
-labels: ["task"]
+description: 기능 개발, 리팩토링 및 설정 작업
 body:
+  - type: markdown
+    attributes:
+      value: |
+        제목은 작업 성격에 맞는 접두사로 시작해 주세요. 예: `[Feature]`, `[Chore]`
+
   - type: dropdown
     id: branch_type
     attributes:

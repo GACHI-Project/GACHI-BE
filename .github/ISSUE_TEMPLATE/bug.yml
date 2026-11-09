@@ -1,7 +1,6 @@
 name: Bug
 description: 버그 제보/수정
-title: "[BUG] "
-labels: ["bug"]
+title: "[Bugfix] "
 body:
   - type: textarea
     id: current

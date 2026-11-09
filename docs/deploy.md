@@ -88,10 +88,11 @@ ls -l ./secrets/spring_mail_password.txt
 test -r ./secrets/spring_mail_password.txt && echo "readable"
 ```
 
-## 6. GitHub Actions 자동 배포(main 브랜치)
+## 6. GitHub Actions 자동 및 수동 배포
 
 - 워크플로우 파일: `.github/workflows/deploy-ec2.yml`
-- 트리거: `main` 브랜치 push 또는 수동 실행(`workflow_dispatch`)
+- 자동 트리거: `main` 브랜치에서 `BE Docker CI`가 성공적으로 완료되면 `workflow_run`으로 실행
+- 수동 트리거: 필요할 때 `main` 브랜치를 선택해 `workflow_dispatch`로 실행
 - 목적: 서버에서 `git pull` 없이 `deploy/` 설정 파일을 EC2에 동기화하고 컨테이너를 재기동
 
 ### 6-1. 배포 번들 동기화 대상(화이트리스트)
