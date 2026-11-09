@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
@@ -52,16 +53,7 @@ class GoogleAuthServiceImplTest {
 
   @BeforeEach
   void setUp() {
-    service =
-        new GoogleAuthServiceImpl(
-            authProperties,
-            new GoogleAuthProperties(true, List.of("client-id"), 1800),
-            googleClient,
-            googleLoginStore,
-            socialAccountRepository,
-            disconnectService,
-            userRepository,
-            authTokenIssuer);
+    service = createService(new GoogleAuthProperties(true, List.of("client-id"), 1800));
   }
 
   @Test
@@ -251,21 +243,35 @@ class GoogleAuthServiceImplTest {
             .providerUserId("google-disabled")
             .build();
     GoogleAuthServiceImpl disabledService =
-        new GoogleAuthServiceImpl(
-            authProperties,
-            new GoogleAuthProperties(false, List.of("client-id"), 1800),
-            googleClient,
-            googleLoginStore,
-            socialAccountRepository,
-            disconnectService,
-            userRepository,
-            authTokenIssuer);
+        createService(new GoogleAuthProperties(false, List.of("client-id"), 1800));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.GOOGLE))
         .thenReturn(Optional.of(account));
 
     disabledService.unlink(42L);
 
     verify(disconnectService).disconnect(account);
+  }
+
+  @Test
+  void unlinkDoesNothingWhenGoogleAccountIsAbsent() {
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.GOOGLE))
+        .thenReturn(Optional.empty());
+
+    service.unlink(42L);
+
+    verifyNoInteractions(disconnectService);
+  }
+
+  private GoogleAuthServiceImpl createService(GoogleAuthProperties googleProperties) {
+    return new GoogleAuthServiceImpl(
+        authProperties,
+        googleProperties,
+        googleClient,
+        googleLoginStore,
+        socialAccountRepository,
+        disconnectService,
+        userRepository,
+        authTokenIssuer);
   }
 
   private void assertBusinessError(Runnable action, ErrorCode errorCode) {
