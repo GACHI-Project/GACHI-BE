@@ -88,11 +88,13 @@ ls -l ./secrets/spring_mail_password.txt
 test -r ./secrets/spring_mail_password.txt && echo "readable"
 ```
 
-## 6. GitHub Actions 자동 배포(main 브랜치)
+## 6. GitHub Actions 자동 및 수동 배포
 
 - 워크플로우 파일: `.github/workflows/deploy-ec2.yml`
-- 트리거: `main` 브랜치 push 또는 수동 실행(`workflow_dispatch`)
+- 자동 트리거: `main` 브랜치의 push로 실행된 `BE Docker CI`가 성공적으로 완료되면 `workflow_run`으로 실행
+- 수동 트리거: 필요할 때 `main` 브랜치를 선택해 `workflow_dispatch`로 실행
 - 목적: 서버에서 `git pull` 없이 `deploy/` 설정 파일을 EC2에 동기화하고 컨테이너를 재기동
+- `main` 이외의 브랜치에서 실행한 수동 워크플로는 운영 배포 작업을 건너뜀
 
 ### 6-1. 배포 번들 동기화 대상(화이트리스트)
 
@@ -115,13 +117,13 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 
 1. GitHub Actions에서 AWS 자격증명 설정(OIDC 우선, Access Key fallback)
 2. `deploy/` 화이트리스트 파일 + `scripts/deploy-ec2.sh`를 번들로 묶어 SSM `AWS-RunShellScript`로 EC2에 전달
-3. EC2에서 번들을 배포 경로에 해제(기존 `.env`/실시크릿 파일은 유지)
+3. EC2에서 배포 잠금을 획득하고 실행 번호를 확인한 뒤 번들을 배포 경로에 해제(기존 `.env`/실시크릿 파일은 유지)
 4. (`[1/7]`) EC2 배포 경로로 이동
 5. (`[2/7]`) EC2에서 `.env` 존재 여부 확인(없으면 즉시 실패)
-6. (`[3/7]`) `.env` 내 `BACKEND_IMAGE`를 최신 태그로 갱신
+6. (`[3/7]`) 배포 커밋의 `sha-<7자리 SHA>` 이미지 태그를 계산
 7. (`[4/7]`) SMTP 시크릿 파일 검증 + `SWAGGER_ENABLED=true`인 경우 Swagger Basic Auth 파일/HTTPS 인증서 파일 검증(없으면 self-signed 생성)
    - `SWAGGER_TLS_MODE=letsencrypt_ip`이면 Let’s Encrypt IP 인증서 발급/갱신 및 `./secrets/swagger_tls.*` 동기화 수행
-8. (`[5/7]`) `docker compose pull backend`
+8. (`[5/7]`) 해당 이미지 태그를 `docker pull`로 가져온 뒤 `.env`의 `BACKEND_IMAGE`를 갱신. 이미지 pull이 실패하면 기존 설정을 유지
 9. (`[6/7]`) `docker compose up -d --remove-orphans backend` 실행 후 backend health 확인, 통과 시 `nginx`를 `--no-deps --force-recreate`로 재기동
 10. (`[7/7]`) 미사용 이미지 정리(`docker image prune -f`) → `docker compose ps`로 최종 상태 출력 → `docker compose logs --tail=80 backend nginx`로 로그 요약 출력
 
@@ -132,7 +134,20 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - Actions 로그에서 SSM stdout/stderr를 함께 출력해 실패 지점 추적이 가능함
 - 단, SSM `get-command-invocation`의 stdout/stderr는 최대 24,000자까지만 반환되므로, 전체 로그가 필요하면 EC2에서 직접 `docker compose logs`를 확인하거나 Run Command의 S3/CloudWatch 출력 연동을 사용해야 함
 
-### 6-5. 필수 시크릿/권한
+### 6-5. GitHub Deployments 이력 확인
+
+- 저장소 메인 화면의 **Deployments**에서 `production` 환경을 선택하면 운영 배포 이력을 확인할 수 있음
+- 자동 배포는 성공한 CI 실행의 `head_sha`, 수동 배포는 선택한 `main` 커밋으로 배포 기록을 생성함
+- 자동 배포 대상 커밋이 현재 `main` 커밋과 다르면 오래된 CI 실행으로 간주하고 배포 기록 및 EC2 배포를 건너뜀
+- EC2는 배포 잠금으로 원격 명령을 직렬화하고, 이미 시작한 최신 배포보다 실행 번호가 낮은 명령은 거부함. 같은 실행 번호에서는 시도 번호가 더 높은 재실행을 허용함. Actions가 취소된 뒤에도 이전 SSM 명령이 뒤늦게 최신 배포를 덮어쓰지 않도록 하기 위한 검사임
+- 대상 커밋의 배포 스크립트가 커밋별 이미지 태그를 지원하지 않으면 배포를 시작하지 않음
+- EC2에는 해당 커밋으로 CI가 게시한 `sha-<7자리 SHA>` 이미지 태그를 전달함. 이미지 pull이 실패하면 배포도 실패하며 성공 이력으로 표시되지 않음
+- SSM 명령과 백엔드 헬스 체크가 모두 성공한 경우에만 배포 상태를 `success`로 기록함. 실패하면 `failure`로 기록함
+- Actions 실행이 취소되면 SSM 명령 상태를 재확인해 성공 또는 실패를 기록함. 제한 시간 안에 원격 결과를 확인할 수 없으면 `error`로 기록하고 Actions 및 EC2에서 결과를 확인해야 함
+- 각 배포의 로그 링크에서 해당 Actions 실행을 열 수 있음. 운영 서비스 URL은 배포 기록에 설정하지 않음
+- `workflow_run`의 `GITHUB_SHA`는 기본 브랜치 `develop`의 커밋이므로, 정확한 배포 커밋을 기록하기 위해 GitHub Deployments API로 기록과 상태를 생성함
+
+### 6-6. 필수 시크릿/권한
 
 - GitHub Secrets 권장 구성:
   - `EC2_INSTANCE_ID`(필수)
@@ -153,6 +168,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - `DOCKERHUB_USERNAME`은 SSM 명령 본문으로 전달되므로 SSM/CloudTrail 이력에 평문으로 남음(토큰이 아닌 계정 식별자)
 - `KAKAO_CLIENT_SECRET`, `KAKAO_ADMIN_KEY` 실제 값은 Parameter Store SecureString에 저장하고, SSM 명령에는 파라미터 이름만 전달함
 - 워크플로우 권한 `id-token: write`는 OIDC 우선 경로를 위한 설정이며, Access Key fallback 사용 시에는 토큰이 발급되더라도 사용되지 않음
+- 워크플로우 권한 `deployments: write`는 `production` 배포 기록과 상태를 생성하기 위해 필요함
 - OIDC Role(IAM) 최소 권한:
   - `ssm:SendCommand`
     - 리소스: `arn:aws:ec2:<region>:<account-id>:instance/<instance-id>`
