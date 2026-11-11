@@ -32,7 +32,7 @@ develop 브랜치에 누적된 변경사항을 main으로 릴리즈 배포합니
 - [ ] release PR 생성 (develop → main)
 - [ ] 리뷰/체크 통과
 - [ ] main 머지
-- [ ] main 머지 후 배포 워크플로가 실행되어 성공했는지 확인
+- [ ] main 머지 후 `production` Deployment가 `success`로 기록되고, 기록된 커밋이 이번 릴리즈의 `main` 머지 커밋과 일치하는지 확인
 - [ ] 배포 Actions 링크와 결과 기록
 
 추가 운영 점검을 실시했다면 확인 방법과 결과를 기록합니다.

@@ -255,8 +255,8 @@ jobs:
             echo "::error::GOOGLE_OAUTH_CLIENT_IDS must be configured when Google OAuth is enabled."
             exit 1
           fi
-          if [[ ! "$GITHUB_RUN_NUMBER" =~ ^[0-9]+$ ]]; then
-            echo "::error::Invalid deployment run number: $GITHUB_RUN_NUMBER"
+          if [[ ! "$GITHUB_RUN_NUMBER" =~ ^[0-9]+$ ]] || [[ ! "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid deployment run number or attempt."
             exit 1
           fi
           SCRIPT_PATH="scripts/deploy-ec2.sh"
@@ -311,7 +311,7 @@ jobs:
           done
 
           # Lock the shared EC2 deploy path before extraction or compose changes.
-          # GITHUB_RUN_NUMBER increases for new runs of this workflow, including manual runs.
+          # GITHUB_RUN_NUMBER increases for new runs; GITHUB_RUN_ATTEMPT increases on re-runs.
           COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
             --arg awsRegion "$AWS_REGION" \
             --arg deployPath "$EC2_DEPLOY_PATH" \
@@ -328,6 +328,7 @@ jobs:
             --arg googleAuthEnabled "$GOOGLE_AUTH_ENABLED" \
             --arg googleOauthClientIds "$GOOGLE_OAUTH_CLIENT_IDS" \
             --arg runNumber "$GITHUB_RUN_NUMBER" \
+            --arg runAttempt "$GITHUB_RUN_ATTEMPT" \
             --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
             --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
             --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
@@ -339,9 +340,11 @@ jobs:
                 "; mkdir -p " + ($deployPath | @sh) + " || exit 1" +
                 "; marker=" + (($deployPath + "/.backend-deploy-run-number") | @sh) +
                 "; previous=$(cat \"$marker\" 2>/dev/null || printf 0)" +
-                "; case \"$previous\" in \"\"|*[!0-9]*) previous=0;; esac" +
-                "; if [ \"$previous\" -ge " + ($runNumber | @sh) + " ]; then rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + "; echo \"Superseded by deployment run $previous; skipping run " + $runNumber + "\"; exit 75; fi" +
-                "; printf \"%s\\n\" " + ($runNumber | @sh) + " > \"$marker\" || exit 1"
+                "; printf \"%s\" \"$previous\" | grep -Eq \"^[0-9]+(:[0-9]+)?$\" || { echo \"Invalid deployment order marker\"; exit 1; }" +
+                "; previous_number=${previous%%:*}; previous_attempt=0" +
+                "; case \"$previous\" in *:*) previous_attempt=${previous#*:};; esac" +
+                "; if [ \"$previous_number\" -gt " + ($runNumber | @sh) + " ] || { [ \"$previous_number\" -eq " + ($runNumber | @sh) + " ] && [ \"$previous_attempt\" -ge " + ($runAttempt | @sh) + " ]; }; then rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + "; echo \"Superseded by deployment run $previous; skipping run " + $runNumber + ":" + $runAttempt + "\"; exit 75; fi" +
+                "; printf \"%s\\n\" " + (($runNumber + ":" + $runAttempt) | @sh) + " > \"$marker\" || exit 1"
               ),
               (
                 "base64 -d " + ($remoteScriptB64Path | @sh) + " > " + ($remoteScriptPath | @sh) +
