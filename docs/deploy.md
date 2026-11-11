@@ -117,7 +117,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 
 1. GitHub Actions에서 AWS 자격증명 설정(OIDC 우선, Access Key fallback)
 2. `deploy/` 화이트리스트 파일 + `scripts/deploy-ec2.sh`를 번들로 묶어 SSM `AWS-RunShellScript`로 EC2에 전달
-3. EC2에서 번들을 배포 경로에 해제(기존 `.env`/실시크릿 파일은 유지)
+3. EC2에서 배포 잠금을 획득하고 실행 번호를 확인한 뒤 번들을 배포 경로에 해제(기존 `.env`/실시크릿 파일은 유지)
 4. (`[1/7]`) EC2 배포 경로로 이동
 5. (`[2/7]`) EC2에서 `.env` 존재 여부 확인(없으면 즉시 실패)
 6. (`[3/7]`) 배포 커밋의 `sha-<7자리 SHA>` 이미지 태그를 계산
@@ -139,6 +139,7 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 - 저장소 메인 화면의 **Deployments**에서 `production` 환경을 선택하면 운영 배포 이력을 확인할 수 있음
 - 자동 배포는 성공한 CI 실행의 `head_sha`, 수동 배포는 선택한 `main` 커밋으로 배포 기록을 생성함
 - 자동 배포 대상 커밋이 현재 `main` 커밋과 다르면 오래된 CI 실행으로 간주하고 배포 기록 및 EC2 배포를 건너뜀
+- EC2는 배포 잠금으로 원격 명령을 직렬화하고, 이미 시작한 최신 배포보다 실행 번호가 낮은 명령은 거부함. Actions가 취소된 뒤에도 이전 SSM 명령이 뒤늦게 최신 배포를 덮어쓰지 않도록 하기 위한 검사임
 - 대상 커밋의 배포 스크립트가 커밋별 이미지 태그를 지원하지 않으면 배포를 시작하지 않음
 - EC2에는 해당 커밋으로 CI가 게시한 `sha-<7자리 SHA>` 이미지 태그를 전달함. 이미지 pull이 실패하면 배포도 실패하며 성공 이력으로 표시되지 않음
 - SSM 명령과 백엔드 헬스 체크가 모두 성공한 경우에만 배포 상태를 `success`로 기록함. 실패하면 `failure`로 기록함

@@ -255,6 +255,10 @@ jobs:
             echo "::error::GOOGLE_OAUTH_CLIENT_IDS must be configured when Google OAuth is enabled."
             exit 1
           fi
+          if [[ ! "$GITHUB_RUN_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid deployment run number: $GITHUB_RUN_NUMBER"
+            exit 1
+          fi
           SCRIPT_PATH="scripts/deploy-ec2.sh"
           if [ ! -f "$SCRIPT_PATH" ]; then
             echo "::error::$SCRIPT_PATH not found."
@@ -306,6 +310,8 @@ jobs:
               '. + [("printf %s " + ($chunk | @sh) + " >> " + ($remoteBundleB64Path | @sh))]')"
           done
 
+          # Lock the shared EC2 deploy path before extraction or compose changes.
+          # GITHUB_RUN_NUMBER increases for new runs of this workflow, including manual runs.
           COMMANDS_JSON="$(printf '%s' "$COMMANDS_JSON" | jq -c \
             --arg awsRegion "$AWS_REGION" \
             --arg deployPath "$EC2_DEPLOY_PATH" \
@@ -321,11 +327,22 @@ jobs:
             --arg kakaoAppRedirectUri "$KAKAO_APP_REDIRECT_URI" \
             --arg googleAuthEnabled "$GOOGLE_AUTH_ENABLED" \
             --arg googleOauthClientIds "$GOOGLE_OAUTH_CLIENT_IDS" \
+            --arg runNumber "$GITHUB_RUN_NUMBER" \
             --arg remoteScriptB64Path "$REMOTE_SCRIPT_B64_PATH" \
             --arg remoteBundleB64Path "$REMOTE_BUNDLE_B64_PATH" \
             --arg remoteScriptPath "$REMOTE_SCRIPT_PATH" \
             --arg remoteBundlePath "$REMOTE_BUNDLE_PATH" \
             '. + [
+              (
+                "command -v flock >/dev/null 2>&1 || { echo \"flock is required for deployment ordering\"; exit 1; }" +
+                "; exec 9>/tmp/gachi-be-deploy.lock; flock -x 9 || exit 1" +
+                "; mkdir -p " + ($deployPath | @sh) + " || exit 1" +
+                "; marker=" + (($deployPath + "/.backend-deploy-run-number") | @sh) +
+                "; previous=$(cat \"$marker\" 2>/dev/null || printf 0)" +
+                "; case \"$previous\" in \"\"|*[!0-9]*) previous=0;; esac" +
+                "; if [ \"$previous\" -ge " + ($runNumber | @sh) + " ]; then rm -f " + ($remoteScriptB64Path | @sh) + " " + ($remoteBundleB64Path | @sh) + "; echo \"Superseded by deployment run $previous; skipping run " + $runNumber + "\"; exit 75; fi" +
+                "; printf \"%s\\n\" " + ($runNumber | @sh) + " > \"$marker\" || exit 1"
+              ),
               (
                 "base64 -d " + ($remoteScriptB64Path | @sh) + " > " + ($remoteScriptPath | @sh) +
                 " && chmod 700 " + ($remoteScriptPath | @sh) +
