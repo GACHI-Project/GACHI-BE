@@ -120,10 +120,10 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 3. EC2에서 번들을 배포 경로에 해제(기존 `.env`/실시크릿 파일은 유지)
 4. (`[1/7]`) EC2 배포 경로로 이동
 5. (`[2/7]`) EC2에서 `.env` 존재 여부 확인(없으면 즉시 실패)
-6. (`[3/7]`) `.env` 내 `BACKEND_IMAGE`를 배포 커밋의 `sha-<7자리 SHA>` 이미지 태그로 갱신
+6. (`[3/7]`) 배포 커밋의 `sha-<7자리 SHA>` 이미지 태그를 계산
 7. (`[4/7]`) SMTP 시크릿 파일 검증 + `SWAGGER_ENABLED=true`인 경우 Swagger Basic Auth 파일/HTTPS 인증서 파일 검증(없으면 self-signed 생성)
    - `SWAGGER_TLS_MODE=letsencrypt_ip`이면 Let’s Encrypt IP 인증서 발급/갱신 및 `./secrets/swagger_tls.*` 동기화 수행
-8. (`[5/7]`) `docker compose pull backend`
+8. (`[5/7]`) 해당 이미지 태그를 `docker pull`로 가져온 뒤 `.env`의 `BACKEND_IMAGE`를 갱신. 이미지 pull이 실패하면 기존 설정을 유지
 9. (`[6/7]`) `docker compose up -d --remove-orphans backend` 실행 후 backend health 확인, 통과 시 `nginx`를 `--no-deps --force-recreate`로 재기동
 10. (`[7/7]`) 미사용 이미지 정리(`docker image prune -f`) → `docker compose ps`로 최종 상태 출력 → `docker compose logs --tail=80 backend nginx`로 로그 요약 출력
 
@@ -138,8 +138,11 @@ test -r ./secrets/spring_mail_password.txt && echo "readable"
 
 - 저장소 메인 화면의 **Deployments**에서 `production` 환경을 선택하면 운영 배포 이력을 확인할 수 있음
 - 자동 배포는 성공한 CI 실행의 `head_sha`, 수동 배포는 선택한 `main` 커밋으로 배포 기록을 생성함
+- 자동 배포 대상 커밋이 현재 `main` 커밋과 다르면 오래된 CI 실행으로 간주하고 배포 기록 및 EC2 배포를 건너뜀
+- 대상 커밋의 배포 스크립트가 커밋별 이미지 태그를 지원하지 않으면 배포를 시작하지 않음
 - EC2에는 해당 커밋으로 CI가 게시한 `sha-<7자리 SHA>` 이미지 태그를 전달함. 이미지 pull이 실패하면 배포도 실패하며 성공 이력으로 표시되지 않음
 - SSM 명령과 백엔드 헬스 체크가 모두 성공한 경우에만 배포 상태를 `success`로 기록함. 실패하면 `failure`로 기록함
+- Actions 실행이 취소되면 SSM 명령 상태를 재확인해 성공 또는 실패를 기록함. 제한 시간 안에 원격 결과를 확인할 수 없으면 `error`로 기록하고 Actions 및 EC2에서 결과를 확인해야 함
 - 각 배포의 로그 링크에서 해당 Actions 실행을 열 수 있음. 운영 서비스 URL은 배포 기록에 설정하지 않음
 - `workflow_run`의 `GITHUB_SHA`는 기본 브랜치 `develop`의 커밋이므로, 정확한 배포 커밋을 기록하기 위해 GitHub Deployments API로 기록과 상태를 생성함
 

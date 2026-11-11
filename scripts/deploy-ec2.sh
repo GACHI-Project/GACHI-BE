@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+if [ "${1:-}" = "--capability" ]; then
+  echo "backend-image-tag-v1"
+  exit 0
+fi
+
 read_env_value() {
   local key="$1"
   local raw
@@ -157,8 +162,8 @@ if [ "$JWT_SECRET_LENGTH" -lt 32 ]; then
   exit 1
 fi
 
-echo "[3/7] Pin backend image to the deployment commit"
-upsert_env_value BACKEND_IMAGE "${DOCKERHUB_USERNAME_INPUT}/gachi-be:${BACKEND_IMAGE_TAG_INPUT}"
+BACKEND_IMAGE_TARGET="${DOCKERHUB_USERNAME_INPUT}/gachi-be:${BACKEND_IMAGE_TAG_INPUT}"
+echo "[3/7] Resolve backend image for deployment commit: $BACKEND_IMAGE_TARGET"
 
 echo "[4/7] Validate SMTP/Swagger secrets and TLS files"
 SECRET_FILE_REL="$(read_env_value SPRING_MAIL_PASSWORD_SECRET_FILE)"
@@ -315,7 +320,8 @@ if [ -n "${DOCKERHUB_TOKEN_INPUT:-}" ]; then
 else
   echo "::warning::DOCKERHUB_TOKEN is empty on instance. Skip docker login and try pull with current daemon credentials."
 fi
-docker compose --env-file .env pull backend
+docker pull "$BACKEND_IMAGE_TARGET"
+upsert_env_value BACKEND_IMAGE "$BACKEND_IMAGE_TARGET"
 
 echo "[6/7] Recreate services with synced compose/nginx settings"
 docker compose --env-file .env up -d --remove-orphans backend
