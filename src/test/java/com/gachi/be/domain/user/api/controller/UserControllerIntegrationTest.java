@@ -446,6 +446,63 @@ class UserControllerIntegrationTest {
     assertThat(user.getDeletedAt()).isNull();
   }
 
+  @Test
+  void socialOnlyUserCanWithdrawWithoutPassword() throws Exception {
+    OffsetDateTime now = OffsetDateTime.now();
+    User user =
+        userRepository.saveAndFlush(
+            User.builder()
+                .email("social-withdrawal@gachi.com")
+                .name("소셜 회원")
+                .status(UserStatus.ACTIVE)
+                .consentAgreedAt(now)
+                .consentVersion("2026-04-v1")
+                .passwordUpdatedAt(now)
+                .build());
+    socialAccountRepository.saveAndFlush(
+        SocialAccount.builder()
+            .user(user)
+            .provider(SocialProvider.GOOGLE)
+            .providerUserId("google-social-withdrawal")
+            .build());
+    var tokens = authTokenIssuer.issue(user, false, "test", "127.0.0.1");
+    PushDeviceToken pushToken =
+        pushDeviceTokenRepository.saveAndFlush(
+            PushDeviceToken.builder()
+                .userId(user.getId())
+                .platform(PushPlatform.ANDROID)
+                .token("social-withdrawal-push")
+                .tokenHash("b".repeat(64))
+                .deviceId("social-withdrawal-device")
+                .build());
+
+    mockMvc
+        .perform(delete("/api/v1/users/me").header("Authorization", bearer(tokens.accessToken())))
+        .andExpect(status().isOk());
+
+    assertThat(userRepository.findById(user.getId()).orElseThrow().getStatus())
+        .isEqualTo(UserStatus.WITHDRAWN);
+    assertThat(pushDeviceTokenRepository.findById(pushToken.getId()).orElseThrow().isEnabled())
+        .isFalse();
+    reissue(tokens.refreshToken()).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void passwordUserCannotWithdrawWithoutPassword() throws Exception {
+    createUser(
+        "withdrawal_no_password", "withdrawal-no-password@gachi.com", null, UserStatus.ACTIVE);
+    String accessToken = loginAccessToken("withdrawal_no_password", "Policy12!");
+
+    mockMvc
+        .perform(
+            delete("/api/v1/users/me")
+                .header("Authorization", bearer(accessToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.code").value("AUTH4011"));
+  }
+
   private org.springframework.test.web.servlet.ResultActions sendEmailChangeCode(
       String accessToken, String email, String currentPassword) throws Exception {
     return mockMvc.perform(
