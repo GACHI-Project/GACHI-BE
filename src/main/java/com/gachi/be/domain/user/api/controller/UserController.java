@@ -153,11 +153,13 @@ public class UserController {
     return ApiResponse.success(SuccessCode.USER_PASSWORD_UPDATED, null);
   }
 
-  @Operation(summary = "회원 탈퇴", description = "현재 비밀번호를 확인한 후 계정을 탈퇴 처리합니다.")
+  @Operation(
+      summary = "회원 탈퇴",
+      description = "일반 계정은 currentPassword가 필수입니다. 비밀번호가 없는 소셜 전용 계정은 빈 요청 본문으로 탈퇴할 수 있습니다.")
   @DeleteMapping("/me")
   public ApiResponse<Void> withdraw(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-      @RequestBody @Valid UserWithdrawalRequest request) {
+      @RequestBody(required = false) @Valid UserWithdrawalRequest request) {
     User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
     userProfileService.withdraw(user, request);
     return ApiResponse.success(SuccessCode.USER_WITHDRAWAL_SUCCESS, null);

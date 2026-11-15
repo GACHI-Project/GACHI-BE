@@ -4,6 +4,7 @@ import com.gachi.be.domain.auth.config.AuthProperties;
 import com.gachi.be.domain.auth.dto.response.EmailSendResponse;
 import com.gachi.be.domain.auth.entity.AuthRefreshToken;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
+import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
 import com.gachi.be.domain.auth.service.EmailVerificationStore;
@@ -42,6 +43,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
 
 @Slf4j
 @Service
@@ -49,6 +51,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class UserProfileService {
   private final UserRepository userRepository;
   private final AuthRefreshTokenRepository authRefreshTokenRepository;
+  private final SocialAccountRepository socialAccountRepository;
   private final NewsletterRepository newsletterRepository;
   private final PushDeviceTokenRepository pushDeviceTokenRepository;
   private final PasswordEncoder passwordEncoder;
@@ -134,10 +137,15 @@ public class UserProfileService {
   @Transactional
   public void withdraw(User user, UserWithdrawalRequest request) {
     User currentUser = findActiveUserWithLock(user.getId());
-    if (!passwordEncoder.matches(request.currentPassword(), currentUser.getPasswordHash())) {
+    if (StringUtils.hasText(currentUser.getPasswordHash())) {
+      if (request == null
+          || !StringUtils.hasText(request.currentPassword())
+          || !passwordEncoder.matches(request.currentPassword(), currentUser.getPasswordHash())) {
+        throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
+      }
+    } else if (!socialAccountRepository.existsByUserId(currentUser.getId())) {
       throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
     }
-
     currentUser.withdraw(OffsetDateTime.now());
     revokeActiveRefreshTokens(currentUser.getId());
     pushDeviceTokenRepository
