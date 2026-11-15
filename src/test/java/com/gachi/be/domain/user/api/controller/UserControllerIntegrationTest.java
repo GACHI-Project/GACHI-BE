@@ -477,11 +477,7 @@ class UserControllerIntegrationTest {
                 .build());
 
     mockMvc
-        .perform(
-            delete("/api/v1/users/me")
-                .header("Authorization", bearer(tokens.accessToken()))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
+        .perform(delete("/api/v1/users/me").header("Authorization", bearer(tokens.accessToken())))
         .andExpect(status().isOk());
 
     assertThat(userRepository.findById(user.getId()).orElseThrow().getStatus())

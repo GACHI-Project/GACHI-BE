@@ -159,7 +159,7 @@ public class UserController {
   @DeleteMapping("/me")
   public ApiResponse<Void> withdraw(
       @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
-      @RequestBody @Valid UserWithdrawalRequest request) {
+      @RequestBody(required = false) @Valid UserWithdrawalRequest request) {
     User user = authenticatedUserResolver.resolveActiveUser(authorizationHeader);
     userProfileService.withdraw(user, request);
     return ApiResponse.success(SuccessCode.USER_WITHDRAWAL_SUCCESS, null);
