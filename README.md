@@ -18,5 +18,6 @@ GACHI 프로젝트 백엔드 서버(Spring Boot) 레포지토리입니다.
 - GitHub Actions `BE Docker CI`의 테스트 체크 통과 후 머지
 
 ## 배포 태그 규칙
-- `develop` push: `<dockerhub-id>/gachi-be:develop`
-- `main` push: `<dockerhub-id>/gachi-be:latest`
+- `develop` push: `ghcr.io/gachi-project/gachi-be:develop`
+- `main` push: `ghcr.io/gachi-project/gachi-be:latest`
+- 두 브랜치 모두 `ghcr.io/gachi-project/gachi-be:sha-<40자리 SHA>` 태그를 발행함
