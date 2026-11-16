@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 if [ "${1:-}" = "--capability" ]; then
-  echo "backend-image-tag-v1"
+  echo "backend-ghcr-image-v2"
   exit 0
 fi
 
@@ -30,7 +30,7 @@ upsert_env_value() {
 read_secure_parameter() {
   local parameter_name="$1"
   if ! command -v aws >/dev/null 2>&1; then
-    echo "AWS CLI is required to load Kakao SecureString parameters." >&2
+    echo "AWS CLI is required to load SecureString parameters." >&2
     return 1
   fi
   aws ssm get-parameter \
@@ -107,9 +107,9 @@ to_abs_path() {
 
 DEPLOY_PATH_INPUT="${1:-${EC2_DEPLOY_PATH:-/home/ubuntu/GACHI-BE/deploy}}"
 EC2_HOST_INPUT="${2:-${EC2_HOST:-}}"
-DOCKERHUB_USERNAME_INPUT="${DOCKERHUB_USERNAME:-${3:-}}"
+GHCR_USERNAME_INPUT="${GHCR_USERNAME:-}"
+GHCR_TOKEN_PARAMETER_NAME_INPUT="${GHCR_TOKEN_PARAMETER_NAME:-/gachi/prod/ghcr/token}"
 BACKEND_IMAGE_TAG_INPUT="${BACKEND_IMAGE_TAG:-}"
-DOCKERHUB_TOKEN_INPUT="${DOCKERHUB_TOKEN:-}"
 KAKAO_AUTH_ENABLED_INPUT="${KAKAO_AUTH_ENABLED:-false}"
 KAKAO_REST_API_KEY_INPUT="${KAKAO_REST_API_KEY:-}"
 KAKAO_CLIENT_SECRET_PARAMETER_NAME_INPUT="${KAKAO_CLIENT_SECRET_PARAMETER_NAME:-}"
@@ -124,16 +124,16 @@ AWS_REGION_INPUT="${AWS_REGION:-ap-northeast-2}"
 
 DEPLOY_PATH="$(echo "$DEPLOY_PATH_INPUT" | xargs)"
 EC2_HOST_INPUT="$(echo "$EC2_HOST_INPUT" | xargs)"
-DOCKERHUB_USERNAME_INPUT="${DOCKERHUB_USERNAME_INPUT%$'\r'}"
+GHCR_USERNAME_INPUT="${GHCR_USERNAME_INPUT%$'\r'}"
+GHCR_TOKEN_PARAMETER_NAME_INPUT="${GHCR_TOKEN_PARAMETER_NAME_INPUT%$'\r'}"
 BACKEND_IMAGE_TAG_INPUT="${BACKEND_IMAGE_TAG_INPUT%$'\r'}"
-DOCKERHUB_TOKEN_INPUT="${DOCKERHUB_TOKEN_INPUT%$'\r'}"
 
-if [ -z "$DOCKERHUB_USERNAME_INPUT" ]; then
-  echo "DOCKERHUB_USERNAME is required."
+if [ -z "$GHCR_USERNAME_INPUT" ] || [ -z "$GHCR_TOKEN_PARAMETER_NAME_INPUT" ]; then
+  echo "GHCR_USERNAME and GHCR_TOKEN_PARAMETER_NAME are required."
   exit 1
 fi
-if [[ ! "$BACKEND_IMAGE_TAG_INPUT" =~ ^sha-[0-9a-f]{7}$ ]]; then
-  echo "BACKEND_IMAGE_TAG must be a sha-<7 hex digits> tag."
+if [[ ! "$BACKEND_IMAGE_TAG_INPUT" =~ ^sha-[0-9a-f]{40}$ ]]; then
+  echo "BACKEND_IMAGE_TAG must be a sha-<40 hex digits> tag."
   exit 1
 fi
 
@@ -162,7 +162,7 @@ if [ "$JWT_SECRET_LENGTH" -lt 32 ]; then
   exit 1
 fi
 
-BACKEND_IMAGE_TARGET="${DOCKERHUB_USERNAME_INPUT}/gachi-be:${BACKEND_IMAGE_TAG_INPUT}"
+BACKEND_IMAGE_TARGET="ghcr.io/gachi-project/gachi-be:${BACKEND_IMAGE_TAG_INPUT}"
 echo "[3/7] Resolve backend image for deployment commit: $BACKEND_IMAGE_TARGET"
 
 echo "[4/7] Validate SMTP/Swagger secrets and TLS files"
@@ -315,12 +315,16 @@ else
 fi
 
 echo "[5/7] Pull backend image for deployment commit"
-if [ -n "${DOCKERHUB_TOKEN_INPUT:-}" ]; then
-  echo "${DOCKERHUB_TOKEN_INPUT}" | docker login -u "${DOCKERHUB_USERNAME_INPUT}" --password-stdin
-else
-  echo "::warning::DOCKERHUB_TOKEN is empty on instance. Skip docker login and try pull with current daemon credentials."
+GHCR_TOKEN="$(read_secure_parameter "$GHCR_TOKEN_PARAMETER_NAME_INPUT")"
+if [ -z "$GHCR_TOKEN" ]; then
+  echo "GHCR token parameter is empty."
+  exit 1
 fi
-docker pull "$BACKEND_IMAGE_TARGET"
+GHCR_DOCKER_CONFIG="$(mktemp -d)"
+trap 'rm -rf -- "$GHCR_DOCKER_CONFIG"' EXIT
+printf '%s' "$GHCR_TOKEN" | DOCKER_CONFIG="$GHCR_DOCKER_CONFIG" docker login ghcr.io -u "$GHCR_USERNAME_INPUT" --password-stdin
+unset GHCR_TOKEN
+DOCKER_CONFIG="$GHCR_DOCKER_CONFIG" docker pull "$BACKEND_IMAGE_TARGET"
 upsert_env_value BACKEND_IMAGE "$BACKEND_IMAGE_TARGET"
 
 echo "[6/7] Recreate services with synced compose/nginx settings"
@@ -345,6 +349,12 @@ if [ "$BACKEND_HEALTH" != "healthy" ]; then
   docker compose --env-file .env logs --tail=120 backend || true
   exit 1
 fi
+RUNNING_BACKEND_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$BACKEND_CID")"
+if [ "$RUNNING_BACKEND_IMAGE" != "$BACKEND_IMAGE_TARGET" ]; then
+  echo "Backend container image differs from deployment commit: $RUNNING_BACKEND_IMAGE" >&2
+  exit 1
+fi
+echo "[debug] running backend image: $RUNNING_BACKEND_IMAGE"
 if [ "$KAKAO_AUTH_ENABLED_INPUT" = "true" ]; then
   if ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$BACKEND_CID" \
       | grep -qx 'KAKAO_AUTH_ENABLED=true'; then
