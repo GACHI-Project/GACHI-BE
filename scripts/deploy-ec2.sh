@@ -320,12 +320,11 @@ if [ -z "$GHCR_TOKEN" ]; then
   echo "GHCR token parameter is empty."
   exit 1
 fi
-DOCKER_CONFIG="$(mktemp -d)"
-export DOCKER_CONFIG
-trap 'rm -rf -- "$DOCKER_CONFIG"' EXIT
-printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME_INPUT" --password-stdin
+GHCR_DOCKER_CONFIG="$(mktemp -d)"
+trap 'rm -rf -- "$GHCR_DOCKER_CONFIG"' EXIT
+printf '%s' "$GHCR_TOKEN" | DOCKER_CONFIG="$GHCR_DOCKER_CONFIG" docker login ghcr.io -u "$GHCR_USERNAME_INPUT" --password-stdin
 unset GHCR_TOKEN
-docker pull "$BACKEND_IMAGE_TARGET"
+DOCKER_CONFIG="$GHCR_DOCKER_CONFIG" docker pull "$BACKEND_IMAGE_TARGET"
 upsert_env_value BACKEND_IMAGE "$BACKEND_IMAGE_TARGET"
 
 echo "[6/7] Recreate services with synced compose/nginx settings"
