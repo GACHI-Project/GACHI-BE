@@ -9,6 +9,7 @@ name: BE Docker CI
 
 permissions:
   contents: read
+  packages: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -66,21 +67,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Login Docker Hub
+      - name: Login GHCR
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set image tags
         id: tags
         run: |
-          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/gachi-be"
-          SHORT_SHA="${GITHUB_SHA::7}"
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            echo "tags=${IMAGE}:latest,${IMAGE}:sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tags=${IMAGE}:latest,${IMAGE}:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           else
-            echo "tags=${IMAGE}:develop,${IMAGE}:sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tags=${IMAGE}:develop,${IMAGE}:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and Push

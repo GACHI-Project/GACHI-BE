@@ -9,6 +9,7 @@ COPY src src
 RUN ./gradlew --no-daemon bootJar
 
 FROM eclipse-temurin:17-jre
+LABEL org.opencontainers.image.source="https://github.com/GACHI-Project/GACHI-BE"
 WORKDIR /app
 RUN set -eux; \
     apt-get update -o Acquire::Retries=5; \
