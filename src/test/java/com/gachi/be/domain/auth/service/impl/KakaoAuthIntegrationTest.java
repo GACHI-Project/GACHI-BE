@@ -8,8 +8,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
+import com.gachi.be.domain.auth.dto.request.KakaoCompleteRequest;
 import com.gachi.be.domain.auth.dto.request.KakaoSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
+import com.gachi.be.domain.auth.dto.response.KakaoCompleteResponse;
 import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
@@ -21,10 +23,12 @@ import com.gachi.be.domain.auth.service.JwtTokenProvider;
 import com.gachi.be.domain.auth.service.KakaoAuthService;
 import com.gachi.be.domain.auth.service.KakaoClient;
 import com.gachi.be.domain.auth.service.KakaoLoginStore;
+import com.gachi.be.domain.user.dto.request.UserWithdrawalRequest;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
+import com.gachi.be.domain.user.service.UserProfileService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -43,6 +47,7 @@ class KakaoAuthIntegrationTest {
   @Autowired private AuthTokenIssuer authTokenIssuer;
   @Autowired private AuthRefreshTokenRepository authRefreshTokenRepository;
   @Autowired private KakaoUnlinkOutboxRepository kakaoUnlinkOutboxRepository;
+  @Autowired private UserProfileService userProfileService;
 
   @Test
   void socialSignupPersistsAccountAndIssuesUsableGachiTokens() {
@@ -124,6 +129,53 @@ class KakaoAuthIntegrationTest {
         .isPresent();
     assertThat(kakaoUnlinkOutboxRepository.findById(event.getId()).orElseThrow().isProcessed())
         .isTrue();
+  }
+
+  @Test
+  void withdrawnGoogleUserCanSignUpWithKakaoUsingSameEmail() {
+    User oldUser = userRepository.saveAndFlush(socialUser("cross-provider@gachi.com", "기존 회원"));
+    socialAccountRepository.saveAndFlush(
+        SocialAccount.builder()
+            .user(oldUser)
+            .provider(SocialProvider.GOOGLE)
+            .providerUserId("google-cross-provider")
+            .build());
+    userProfileService.withdraw(oldUser, new UserWithdrawalRequest(null));
+
+    KakaoLoginStore store = mock(KakaoLoginStore.class);
+    KakaoClient.KakaoIdentity identity =
+        new KakaoClient.KakaoIdentity(
+            "kakao-cross-provider", "cross-provider@gachi.com", "새 회원", null);
+    when(store.consume("ticket", "ticket-token")).thenReturn(identity);
+    when(store.consume("signup", "signup-token")).thenReturn(identity);
+    KakaoAuthServiceImpl service =
+        new KakaoAuthServiceImpl(
+            kakaoEnabledAuthProperties(),
+            mock(KakaoClient.class),
+            store,
+            socialAccountRepository,
+            userRepository,
+            authTokenIssuer,
+            kakaoUnlinkOutboxRepository,
+            new SocialAccountDisconnectService(
+                socialAccountRepository, authRefreshTokenRepository));
+
+    assertThat(
+            service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
+        .isEqualTo(KakaoCompleteResponse.Status.SIGNUP_REQUIRED);
+    service.signup(
+        new KakaoSignupRequest("signup-token", true, "KO", NotificationPreference.IMPORTANT, false),
+        null,
+        null);
+
+    User newUser = userRepository.findByEmail(identity.email()).orElseThrow();
+    assertThat(newUser.getId()).isNotEqualTo(oldUser.getId());
+    assertThat(
+            socialAccountRepository.findByUserIdAndProvider(oldUser.getId(), SocialProvider.GOOGLE))
+        .isEmpty();
+    assertThat(
+            socialAccountRepository.findByUserIdAndProvider(newUser.getId(), SocialProvider.KAKAO))
+        .isPresent();
   }
 
   private User socialUser(String email, String name) {
