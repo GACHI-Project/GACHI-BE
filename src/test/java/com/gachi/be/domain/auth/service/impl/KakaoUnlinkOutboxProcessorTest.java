@@ -1,6 +1,7 @@
 package com.gachi.be.domain.auth.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,8 @@ import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.KakaoClient;
+import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.util.Optional;
@@ -25,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class KakaoUnlinkOutboxProcessorTest {
   @Mock private KakaoUnlinkOutboxRepository outboxRepository;
   @Mock private SocialAccountRepository socialAccountRepository;
+  @Mock private UserRepository userRepository;
   @Mock private SocialAccountDisconnectService disconnectService;
   @Mock private KakaoClient kakaoClient;
 
@@ -34,7 +38,11 @@ class KakaoUnlinkOutboxProcessorTest {
   void setUp() {
     processor =
         new KakaoUnlinkOutboxProcessor(
-            outboxRepository, socialAccountRepository, disconnectService, kakaoClient);
+            outboxRepository,
+            socialAccountRepository,
+            userRepository,
+            disconnectService,
+            kakaoClient);
   }
 
   @Test
@@ -43,6 +51,7 @@ class KakaoUnlinkOutboxProcessorTest {
     SocialAccount account =
         SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
     when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
 
@@ -59,6 +68,7 @@ class KakaoUnlinkOutboxProcessorTest {
     SocialAccount account =
         SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
     when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
     org.mockito.Mockito.doThrow(new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR))
@@ -77,6 +87,7 @@ class KakaoUnlinkOutboxProcessorTest {
   void staleEventDoesNotUnlinkAccountOwnedByAnotherUser() {
     KakaoUnlinkOutbox event = event();
     when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.empty());
 

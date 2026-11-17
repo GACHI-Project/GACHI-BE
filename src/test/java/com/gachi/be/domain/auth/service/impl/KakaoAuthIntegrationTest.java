@@ -118,6 +118,7 @@ class KakaoAuthIntegrationTest {
         new KakaoUnlinkOutboxProcessor(
             kakaoUnlinkOutboxRepository,
             socialAccountRepository,
+            userRepository,
             new SocialAccountDisconnectService(socialAccountRepository, authRefreshTokenRepository),
             kakaoClient);
 
@@ -252,6 +253,7 @@ class KakaoAuthIntegrationTest {
     new KakaoUnlinkOutboxProcessor(
             kakaoUnlinkOutboxRepository,
             socialAccountRepository,
+            userRepository,
             new SocialAccountDisconnectService(socialAccountRepository, authRefreshTokenRepository),
             client)
         .process(event.getId());
@@ -316,6 +318,7 @@ class KakaoAuthIntegrationTest {
     new KakaoUnlinkOutboxProcessor(
             kakaoUnlinkOutboxRepository,
             socialAccountRepository,
+            userRepository,
             new SocialAccountDisconnectService(socialAccountRepository, authRefreshTokenRepository),
             client)
         .process(event.getId());

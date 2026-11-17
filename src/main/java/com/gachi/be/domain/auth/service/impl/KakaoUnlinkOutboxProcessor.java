@@ -4,6 +4,7 @@ import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.KakaoClient;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ public class KakaoUnlinkOutboxProcessor {
 
   private final KakaoUnlinkOutboxRepository outboxRepository;
   private final SocialAccountRepository socialAccountRepository;
+  private final UserRepository userRepository;
   private final SocialAccountDisconnectService disconnectService;
   private final KakaoClient kakaoClient;
 
@@ -25,6 +27,11 @@ public class KakaoUnlinkOutboxProcessor {
     var event = outboxRepository.findByIdForUpdate(eventId).orElse(null);
     OffsetDateTime now = OffsetDateTime.now();
     if (event == null || event.isProcessed() || event.getNextAttemptAt().isAfter(now)) {
+      return;
+    }
+
+    if (userRepository.findByIdWithLock(event.getUserId()).isEmpty()) {
+      event.complete(now);
       return;
     }
 

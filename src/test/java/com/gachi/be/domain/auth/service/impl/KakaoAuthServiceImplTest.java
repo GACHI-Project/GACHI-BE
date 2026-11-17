@@ -80,10 +80,7 @@ class KakaoAuthServiceImplTest {
             .build();
     AuthTokenResponse tokens = tokens();
     when(kakaoLoginStore.consume("ticket", "ticket-1")).thenReturn(identity);
-    when(kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate("kakao-1"))
-        .thenReturn(Optional.empty());
-    when(socialAccountRepository.findByProviderAndProviderUserIdForUpdate(
-            SocialProvider.KAKAO, "kakao-1"))
+    when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "kakao-1"))
         .thenReturn(Optional.of(socialAccount));
     when(authTokenIssuer.issue(user, true, "device", "127.0.0.1")).thenReturn(tokens);
 
@@ -98,10 +95,7 @@ class KakaoAuthServiceImplTest {
   void completeDoesNotAutomaticallyMergeSameEmailAccount() {
     KakaoClient.KakaoIdentity identity = identity("kakao-2", "USER@gachi.com", "민주", null);
     when(kakaoLoginStore.consume("ticket", "ticket-2")).thenReturn(identity);
-    when(kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate("kakao-2"))
-        .thenReturn(Optional.empty());
-    when(socialAccountRepository.findByProviderAndProviderUserIdForUpdate(
-            SocialProvider.KAKAO, "kakao-2"))
+    when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "kakao-2"))
         .thenReturn(Optional.empty());
     when(userRepository.existsByEmail("user@gachi.com")).thenReturn(true);
     when(kakaoProperties.signupTokenTtlSeconds()).thenReturn(600L);

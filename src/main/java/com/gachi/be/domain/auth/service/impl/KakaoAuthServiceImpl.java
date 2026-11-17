@@ -92,19 +92,27 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
     KakaoClient.KakaoIdentity identity = kakaoLoginStore.consume(TICKET, request.ticket());
     requireVerifiedEmail(identity);
 
-    var pendingUnlink =
-        kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate(identity.providerUserId());
     Optional<SocialAccount> linkedAccount =
-        socialAccountRepository.findByProviderAndProviderUserIdForUpdate(
+        socialAccountRepository.findByProviderAndProviderUserId(
             SocialProvider.KAKAO, identity.providerUserId());
     if (linkedAccount.isPresent()
         && !linkedAccount.get().getUser().isActive()
-        && linkedAccount.get().isDisconnectPending()
-        && pendingUnlink.isPresent()
-        && pendingUnlink.get().getUserId().equals(linkedAccount.get().getUser().getId())) {
-      pendingUnlink.get().complete(OffsetDateTime.now());
-      socialAccountRepository.delete(linkedAccount.get());
-      linkedAccount = Optional.empty();
+        && linkedAccount.get().isDisconnectPending()) {
+      var pendingUnlink =
+          kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate(
+              identity.providerUserId());
+      linkedAccount =
+          socialAccountRepository.findByProviderAndProviderUserIdForUpdate(
+              SocialProvider.KAKAO, identity.providerUserId());
+      if (linkedAccount.isPresent()
+          && !linkedAccount.get().getUser().isActive()
+          && linkedAccount.get().isDisconnectPending()
+          && pendingUnlink.isPresent()
+          && pendingUnlink.get().getUserId().equals(linkedAccount.get().getUser().getId())) {
+        pendingUnlink.get().complete(OffsetDateTime.now());
+        socialAccountRepository.delete(linkedAccount.get());
+        linkedAccount = Optional.empty();
+      }
     }
 
     return linkedAccount
