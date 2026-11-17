@@ -15,6 +15,12 @@ public interface KakaoUnlinkOutboxRepository extends JpaRepository<KakaoUnlinkOu
 
   Optional<KakaoUnlinkOutbox> findByProviderUserIdAndProcessedAtIsNull(String providerUserId);
 
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select event from KakaoUnlinkOutbox event where event.providerUserId = :providerUserId and event.processedAt is null")
+  Optional<KakaoUnlinkOutbox> findPendingByProviderUserIdForUpdate(
+      @Param("providerUserId") String providerUserId);
+
   List<KakaoUnlinkOutbox> findTop20ByProcessedAtIsNullAndNextAttemptAtLessThanEqualOrderByIdAsc(
       OffsetDateTime now);
 

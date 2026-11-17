@@ -27,6 +27,7 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Locale;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -91,8 +92,22 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
     KakaoClient.KakaoIdentity identity = kakaoLoginStore.consume(TICKET, request.ticket());
     requireVerifiedEmail(identity);
 
-    return socialAccountRepository
-        .findByProviderAndProviderUserId(SocialProvider.KAKAO, identity.providerUserId())
+    var pendingUnlink =
+        kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate(identity.providerUserId());
+    Optional<SocialAccount> linkedAccount =
+        socialAccountRepository.findByProviderAndProviderUserIdForUpdate(
+            SocialProvider.KAKAO, identity.providerUserId());
+    if (linkedAccount.isPresent()
+        && !linkedAccount.get().getUser().isActive()
+        && linkedAccount.get().isDisconnectPending()
+        && pendingUnlink.isPresent()
+        && pendingUnlink.get().getUserId().equals(linkedAccount.get().getUser().getId())) {
+      pendingUnlink.get().complete(OffsetDateTime.now());
+      socialAccountRepository.delete(linkedAccount.get());
+      linkedAccount = Optional.empty();
+    }
+
+    return linkedAccount
         .map(
             account -> {
               ensureActive(account.getUser());

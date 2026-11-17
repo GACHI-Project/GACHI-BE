@@ -18,15 +18,23 @@ public interface SocialAccountRepository extends JpaRepository<SocialAccount, Lo
 
   boolean existsByUserId(Long userId);
 
-  List<SocialAccount> findAllByUserId(Long userId);
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select account from SocialAccount account where account.user.id = :userId")
+  List<SocialAccount> findAllByUserIdForUpdate(@Param("userId") Long userId);
 
   default void deleteWithdrawnUserLinks(Long userId) {
-    findAllByUserId(userId).stream()
+    findAllByUserIdForUpdate(userId).stream()
         .filter(
             account ->
                 account.getProvider() != SocialProvider.KAKAO || !account.isDisconnectPending())
         .forEach(this::delete);
   }
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select account from SocialAccount account where account.provider = :provider and account.providerUserId = :providerUserId")
+  Optional<SocialAccount> findByProviderAndProviderUserIdForUpdate(
+      @Param("provider") SocialProvider provider, @Param("providerUserId") String providerUserId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
