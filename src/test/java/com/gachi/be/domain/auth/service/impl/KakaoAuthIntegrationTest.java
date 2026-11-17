@@ -163,19 +163,103 @@ class KakaoAuthIntegrationTest {
     assertThat(
             service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
         .isEqualTo(KakaoCompleteResponse.Status.SIGNUP_REQUIRED);
-    service.signup(
-        new KakaoSignupRequest("signup-token", true, "KO", NotificationPreference.IMPORTANT, false),
-        null,
-        null);
+    AuthTokenResponse tokens =
+        service.signup(
+            new KakaoSignupRequest(
+                "signup-token", true, "KO", NotificationPreference.IMPORTANT, false),
+            null,
+            null);
 
     User newUser = userRepository.findByEmail(identity.email()).orElseThrow();
     assertThat(newUser.getId()).isNotEqualTo(oldUser.getId());
+    assertThat(jwtTokenProvider.parseAccessToken(tokens.accessToken()).getUserId())
+        .isEqualTo(newUser.getId());
     assertThat(
             socialAccountRepository.findByUserIdAndProvider(oldUser.getId(), SocialProvider.GOOGLE))
         .isEmpty();
     assertThat(
             socialAccountRepository.findByUserIdAndProvider(newUser.getId(), SocialProvider.KAKAO))
         .isPresent();
+  }
+
+  @Test
+  void withdrawnKakaoUserCanSignUpAgainWithSameProviderUserId() {
+    User oldUser = userRepository.saveAndFlush(socialUser("kakao-resignup@gachi.com", "기존 회원"));
+    socialAccountRepository.saveAndFlush(
+        SocialAccount.builder()
+            .user(oldUser)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-resignup")
+            .build());
+    userProfileService.withdraw(oldUser, new UserWithdrawalRequest(null));
+
+    KakaoLoginStore store = mock(KakaoLoginStore.class);
+    KakaoClient.KakaoIdentity identity =
+        new KakaoClient.KakaoIdentity("kakao-resignup", "kakao-resignup@gachi.com", "새 회원", null);
+    when(store.consume("ticket", "ticket-token")).thenReturn(identity);
+    when(store.consume("signup", "signup-token")).thenReturn(identity);
+    KakaoAuthServiceImpl service =
+        new KakaoAuthServiceImpl(
+            kakaoEnabledAuthProperties(),
+            mock(KakaoClient.class),
+            store,
+            socialAccountRepository,
+            userRepository,
+            authTokenIssuer,
+            kakaoUnlinkOutboxRepository,
+            new SocialAccountDisconnectService(
+                socialAccountRepository, authRefreshTokenRepository));
+
+    assertThat(
+            service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
+        .isEqualTo(KakaoCompleteResponse.Status.SIGNUP_REQUIRED);
+    AuthTokenResponse tokens =
+        service.signup(
+            new KakaoSignupRequest(
+                "signup-token", true, "KO", NotificationPreference.IMPORTANT, false),
+            null,
+            null);
+
+    User newUser = userRepository.findByEmail(identity.email()).orElseThrow();
+    assertThat(newUser.getId()).isNotEqualTo(oldUser.getId());
+    assertThat(jwtTokenProvider.parseAccessToken(tokens.accessToken()).getUserId())
+        .isEqualTo(newUser.getId());
+  }
+
+  @Test
+  void withdrawalPreservesPendingKakaoUnlinkUntilRemoteUnlinkSucceeds() {
+    User user = userRepository.saveAndFlush(socialUser("pending-unlink@gachi.com", "기존 회원"));
+    SocialAccount account =
+        socialAccountRepository.saveAndFlush(
+            SocialAccount.builder()
+                .user(user)
+                .provider(SocialProvider.KAKAO)
+                .providerUserId("kakao-pending-unlink")
+                .build());
+    account.requestDisconnect();
+    KakaoUnlinkOutbox event =
+        kakaoUnlinkOutboxRepository.saveAndFlush(
+            KakaoUnlinkOutbox.builder()
+                .userId(user.getId())
+                .providerUserId("kakao-pending-unlink")
+                .build());
+
+    userProfileService.withdraw(user, new UserWithdrawalRequest(null));
+    assertThat(socialAccountRepository.findById(account.getId())).isPresent();
+    assertThat(user.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
+
+    KakaoClient client = mock(KakaoClient.class);
+    new KakaoUnlinkOutboxProcessor(
+            kakaoUnlinkOutboxRepository,
+            socialAccountRepository,
+            new SocialAccountDisconnectService(socialAccountRepository, authRefreshTokenRepository),
+            client)
+        .process(event.getId());
+
+    verify(client).unlink("kakao-pending-unlink");
+    assertThat(socialAccountRepository.findById(account.getId())).isEmpty();
+    assertThat(kakaoUnlinkOutboxRepository.findById(event.getId()).orElseThrow().isProcessed())
+        .isTrue();
   }
 
   private User socialUser(String email, String name) {

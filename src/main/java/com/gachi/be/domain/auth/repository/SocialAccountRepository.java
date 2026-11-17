@@ -3,6 +3,7 @@ package com.gachi.be.domain.auth.repository;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -17,7 +18,15 @@ public interface SocialAccountRepository extends JpaRepository<SocialAccount, Lo
 
   boolean existsByUserId(Long userId);
 
-  void deleteAllByUserId(Long userId);
+  List<SocialAccount> findAllByUserId(Long userId);
+
+  default void deleteWithdrawnUserLinks(Long userId) {
+    findAllByUserId(userId).stream()
+        .filter(
+            account ->
+                account.getProvider() != SocialProvider.KAKAO || !account.isDisconnectPending())
+        .forEach(this::delete);
+  }
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(

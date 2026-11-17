@@ -147,7 +147,7 @@ public class UserProfileService {
       throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
     }
     currentUser.withdraw(OffsetDateTime.now());
-    socialAccountRepository.deleteAllByUserId(currentUser.getId());
+    socialAccountRepository.deleteWithdrawnUserLinks(currentUser.getId());
     revokeActiveRefreshTokens(currentUser.getId());
     pushDeviceTokenRepository
         .findAllByUserIdAndEnabledTrueAndDeletedAtIsNull(currentUser.getId())
