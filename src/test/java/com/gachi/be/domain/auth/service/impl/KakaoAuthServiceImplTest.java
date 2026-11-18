@@ -96,6 +96,45 @@ class KakaoAuthServiceImplTest {
   }
 
   @Test
+  void completeRetriesWhenKakaoAccountOwnerChanges() {
+    KakaoClient.KakaoIdentity identity = identity("kakao-moved", "user@gachi.com", "민주", null);
+    User oldUser = activeUser("old@gachi.com", "기존 회원", null);
+    User newUser = activeUser("user@gachi.com", "새 회원", null);
+    ReflectionTestUtils.setField(oldUser, "id", 41L);
+    ReflectionTestUtils.setField(newUser, "id", 42L);
+    SocialAccount oldAccount =
+        SocialAccount.builder()
+            .user(oldUser)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-moved")
+            .build();
+    SocialAccount newAccount =
+        SocialAccount.builder()
+            .user(newUser)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-moved")
+            .build();
+    AuthTokenResponse tokens = tokens();
+    when(kakaoLoginStore.consume("ticket", "ticket-moved")).thenReturn(identity);
+    when(socialAccountRepository.findByProviderAndProviderUserId(
+            SocialProvider.KAKAO, "kakao-moved"))
+        .thenReturn(Optional.of(oldAccount), Optional.of(newAccount));
+    when(userRepository.findByIdWithLock(41L)).thenReturn(Optional.of(oldUser));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(newUser));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(41L, SocialProvider.KAKAO))
+        .thenReturn(Optional.empty());
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(newAccount));
+    when(authTokenIssuer.issue(newUser, false, null, null)).thenReturn(tokens);
+
+    KakaoCompleteResponse response =
+        service.complete(new KakaoCompleteRequest("ticket-moved", false), null, null);
+
+    assertThat(response.status()).isEqualTo(KakaoCompleteResponse.Status.LOGIN_SUCCESS);
+    assertThat(response.tokens()).isSameAs(tokens);
+  }
+
+  @Test
   void completeDoesNotAutomaticallyMergeSameEmailAccount() {
     KakaoClient.KakaoIdentity identity = identity("kakao-2", "USER@gachi.com", "민주", null);
     when(kakaoLoginStore.consume("ticket", "ticket-2")).thenReturn(identity);

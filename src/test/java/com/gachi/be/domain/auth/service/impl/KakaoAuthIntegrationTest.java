@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
 import com.gachi.be.domain.auth.dto.request.KakaoCompleteRequest;
+import com.gachi.be.domain.auth.dto.request.KakaoLinkRequest;
 import com.gachi.be.domain.auth.dto.request.KakaoSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.dto.response.KakaoCompleteResponse;
@@ -328,6 +329,76 @@ class KakaoAuthIntegrationTest {
     verify(client, never()).unlink(anyString());
     assertThat(
             socialAccountRepository.findByUserIdAndProvider(newUser.getId(), SocialProvider.KAKAO))
+        .isPresent();
+  }
+
+  @Test
+  void linkingToExistingLocalAccountCancelsWithdrawnUsersPendingKakaoUnlink() {
+    String email = "pending-link@gachi.com";
+    User oldUser = userRepository.saveAndFlush(socialUser(email, "탈퇴 회원"));
+    SocialAccount oldAccount =
+        socialAccountRepository.saveAndFlush(
+            SocialAccount.builder()
+                .user(oldUser)
+                .provider(SocialProvider.KAKAO)
+                .providerUserId("kakao-pending-link")
+                .build());
+    oldAccount.requestDisconnect();
+    KakaoUnlinkOutbox event =
+        kakaoUnlinkOutboxRepository.saveAndFlush(
+            KakaoUnlinkOutbox.builder()
+                .userId(oldUser.getId())
+                .providerUserId("kakao-pending-link")
+                .build());
+    userProfileService.withdraw(oldUser, new UserWithdrawalRequest(null));
+    userRepository.flush();
+    OffsetDateTime now = OffsetDateTime.now();
+    User localUser =
+        userRepository.saveAndFlush(
+            User.builder()
+                .email(email)
+                .loginId("pending_link_user")
+                .passwordHash("encoded-password")
+                .name("일반 회원")
+                .status(UserStatus.ACTIVE)
+                .consentAgreedAt(now)
+                .consentVersion("2026-04-v1")
+                .passwordUpdatedAt(now)
+                .build());
+
+    KakaoLoginStore store = mock(KakaoLoginStore.class);
+    KakaoClient.KakaoIdentity identity =
+        new KakaoClient.KakaoIdentity("kakao-pending-link", email, "일반 회원", null);
+    when(store.consume("ticket", "ticket-token")).thenReturn(identity);
+    when(store.consume("link", "link-token")).thenReturn(identity);
+    KakaoAuthServiceImpl service =
+        new KakaoAuthServiceImpl(
+            kakaoEnabledAuthProperties(),
+            mock(KakaoClient.class),
+            store,
+            socialAccountRepository,
+            userRepository,
+            authTokenIssuer,
+            kakaoUnlinkOutboxRepository,
+            new SocialAccountDisconnectService(
+                socialAccountRepository, authRefreshTokenRepository));
+
+    assertThat(
+            service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
+        .isEqualTo(KakaoCompleteResponse.Status.LINK_REQUIRED);
+    assertThat(kakaoUnlinkOutboxRepository.findById(event.getId()).orElseThrow().isProcessed())
+        .isFalse();
+    AuthTokenResponse tokens =
+        service.link(localUser.getId(), new KakaoLinkRequest("link-token", false), null, null);
+
+    assertThat(jwtTokenProvider.parseAccessToken(tokens.accessToken()).getUserId())
+        .isEqualTo(localUser.getId());
+    assertThat(kakaoUnlinkOutboxRepository.findById(event.getId()).orElseThrow().isProcessed())
+        .isTrue();
+    assertThat(socialAccountRepository.findById(oldAccount.getId())).isEmpty();
+    assertThat(
+            socialAccountRepository.findByUserIdAndProvider(
+                localUser.getId(), SocialProvider.KAKAO))
         .isPresent();
   }
 

@@ -92,25 +92,7 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
     KakaoClient.KakaoIdentity identity = kakaoLoginStore.consume(TICKET, request.ticket());
     requireVerifiedEmail(identity);
 
-    Optional<SocialAccount> linkedAccount =
-        socialAccountRepository.findByProviderAndProviderUserId(
-            SocialProvider.KAKAO, identity.providerUserId());
-    if (linkedAccount.isPresent()) {
-      User user =
-          userRepository
-              .findByIdWithLock(linkedAccount.get().getUser().getId())
-              .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN));
-      linkedAccount =
-          socialAccountRepository.findByUserIdAndProviderForUpdate(
-              user.getId(), SocialProvider.KAKAO);
-      if (linkedAccount.isPresent()
-          && !identity.providerUserId().equals(linkedAccount.get().getProviderUserId())) {
-        linkedAccount = Optional.empty();
-      }
-      if (!user.isActive()) {
-        linkedAccount = Optional.empty();
-      }
-    }
+    Optional<SocialAccount> linkedAccount = findActiveKakaoAccount(identity.providerUserId());
 
     return linkedAccount
         .map(
@@ -139,6 +121,26 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
                   normalizeEmail(identity.email()),
                   normalizedName(identity.nickname()));
             });
+  }
+
+  private Optional<SocialAccount> findActiveKakaoAccount(String providerUserId) {
+    for (int attempt = 0; attempt < 3; attempt++) {
+      Optional<SocialAccount> candidate =
+          socialAccountRepository.findByProviderAndProviderUserId(
+              SocialProvider.KAKAO, providerUserId);
+      if (candidate.isEmpty()) {
+        return Optional.empty();
+      }
+      User user = userRepository.findByIdWithLock(candidate.get().getUser().getId()).orElse(null);
+      Optional<SocialAccount> current =
+          socialAccountRepository.findByUserIdAndProviderForUpdate(
+              candidate.get().getUser().getId(), SocialProvider.KAKAO);
+      if (current.isEmpty() || !providerUserId.equals(current.get().getProviderUserId())) {
+        continue;
+      }
+      return user != null && user.isActive() ? current : Optional.empty();
+    }
+    throw new BusinessException(ErrorCode.AUTH_KAKAO_ALREADY_LINKED);
   }
 
   @Override
@@ -235,10 +237,13 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
     if (!normalizeEmail(identity.email()).equals(normalizeEmail(user.getEmail()))) {
       throw new BusinessException(ErrorCode.AUTH_KAKAO_LINK_EMAIL_MISMATCH);
     }
-    if (socialAccountRepository.findByUserIdAndProvider(userId, SocialProvider.KAKAO).isPresent()
-        || socialAccountRepository
-            .findByProviderAndProviderUserId(SocialProvider.KAKAO, identity.providerUserId())
-            .isPresent()) {
+    if (socialAccountRepository.findByUserIdAndProvider(userId, SocialProvider.KAKAO).isPresent()) {
+      throw new BusinessException(ErrorCode.AUTH_KAKAO_ALREADY_LINKED);
+    }
+    cancelPendingUnlinkForResignup(identity.providerUserId());
+    if (socialAccountRepository
+        .findByProviderAndProviderUserId(SocialProvider.KAKAO, identity.providerUserId())
+        .isPresent()) {
       throw new BusinessException(ErrorCode.AUTH_KAKAO_ALREADY_LINKED);
     }
     try {
