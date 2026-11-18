@@ -306,12 +306,15 @@ class KakaoAuthIntegrationTest {
             service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
         .isEqualTo(KakaoCompleteResponse.Status.SIGNUP_REQUIRED);
     assertThat(kakaoUnlinkOutboxRepository.findById(event.getId()).orElseThrow().isProcessed())
-        .isTrue();
+        .isFalse();
+    assertThat(socialAccountRepository.findById(oldAccount.getId())).isPresent();
     service.signup(
         new KakaoSignupRequest("signup-token", true, "KO", NotificationPreference.IMPORTANT, false),
         null,
         null);
     User newUser = userRepository.findByEmail(identity.email()).orElseThrow();
+    assertThat(kakaoUnlinkOutboxRepository.findById(event.getId()).orElseThrow().isProcessed())
+        .isTrue();
     assertThat(newUser.getId()).isNotEqualTo(oldUser.getId());
     assertThat(socialAccountRepository.findById(oldAccount.getId())).isEmpty();
 

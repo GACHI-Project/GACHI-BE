@@ -72,6 +72,7 @@ class KakaoAuthServiceImplTest {
   void completeReturnsGachiTokensForLinkedUser() {
     KakaoClient.KakaoIdentity identity = identity("kakao-1", "user@gachi.com", "민주", null);
     User user = activeUser("user@gachi.com", "민주", null);
+    ReflectionTestUtils.setField(user, "id", 42L);
     SocialAccount socialAccount =
         SocialAccount.builder()
             .user(user)
@@ -81,6 +82,9 @@ class KakaoAuthServiceImplTest {
     AuthTokenResponse tokens = tokens();
     when(kakaoLoginStore.consume("ticket", "ticket-1")).thenReturn(identity);
     when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "kakao-1"))
+        .thenReturn(Optional.of(socialAccount));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(user));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(socialAccount));
     when(authTokenIssuer.issue(user, true, "device", "127.0.0.1")).thenReturn(tokens);
 

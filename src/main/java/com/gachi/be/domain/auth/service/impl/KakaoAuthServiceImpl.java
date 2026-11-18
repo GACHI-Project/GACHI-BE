@@ -95,22 +95,19 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
     Optional<SocialAccount> linkedAccount =
         socialAccountRepository.findByProviderAndProviderUserId(
             SocialProvider.KAKAO, identity.providerUserId());
-    if (linkedAccount.isPresent()
-        && !linkedAccount.get().getUser().isActive()
-        && linkedAccount.get().isDisconnectPending()) {
-      var pendingUnlink =
-          kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate(
-              identity.providerUserId());
+    if (linkedAccount.isPresent()) {
+      User user =
+          userRepository
+              .findByIdWithLock(linkedAccount.get().getUser().getId())
+              .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_ACCOUNT_WITHDRAWN));
       linkedAccount =
-          socialAccountRepository.findByProviderAndProviderUserIdForUpdate(
-              SocialProvider.KAKAO, identity.providerUserId());
+          socialAccountRepository.findByUserIdAndProviderForUpdate(
+              user.getId(), SocialProvider.KAKAO);
       if (linkedAccount.isPresent()
-          && !linkedAccount.get().getUser().isActive()
-          && linkedAccount.get().isDisconnectPending()
-          && pendingUnlink.isPresent()
-          && pendingUnlink.get().getUserId().equals(linkedAccount.get().getUser().getId())) {
-        pendingUnlink.get().complete(OffsetDateTime.now());
-        socialAccountRepository.delete(linkedAccount.get());
+          && !identity.providerUserId().equals(linkedAccount.get().getProviderUserId())) {
+        linkedAccount = Optional.empty();
+      }
+      if (!user.isActive()) {
         linkedAccount = Optional.empty();
       }
     }
@@ -157,6 +154,7 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
     if (userRepository.existsByEmail(email)) {
       throw new BusinessException(ErrorCode.AUTH_KAKAO_LINK_REQUIRED);
     }
+    cancelPendingUnlinkForResignup(identity.providerUserId());
 
     OffsetDateTime now = OffsetDateTime.now();
     String phoneNumber = normalizePhone(identity.phoneNumber());
@@ -196,6 +194,30 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
         Boolean.TRUE.equals(request.rememberMe()),
         normalizeNullable(deviceInfo),
         normalizeNullable(ipAddress));
+  }
+
+  private void cancelPendingUnlinkForResignup(String providerUserId) {
+    kakaoUnlinkOutboxRepository
+        .findPendingByProviderUserIdForUpdate(providerUserId)
+        .ifPresent(
+            event -> {
+              User previousUser = userRepository.findByIdWithLock(event.getUserId()).orElse(null);
+              SocialAccount previousAccount =
+                  socialAccountRepository
+                      .findByUserIdAndProviderForUpdate(event.getUserId(), SocialProvider.KAKAO)
+                      .orElse(null);
+              if (previousAccount != null
+                  && providerUserId.equals(previousAccount.getProviderUserId())) {
+                if (previousUser == null
+                    || previousUser.isActive()
+                    || !previousAccount.isDisconnectPending()) {
+                  throw new BusinessException(ErrorCode.AUTH_KAKAO_ALREADY_LINKED);
+                }
+                socialAccountRepository.delete(previousAccount);
+                socialAccountRepository.flush();
+              }
+              event.complete(OffsetDateTime.now());
+            });
   }
 
   @Override
