@@ -203,6 +203,9 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
         .findPendingByProviderUserIdForUpdate(providerUserId)
         .ifPresent(
             event -> {
+              if (!kakaoClient.isLinked(providerUserId)) {
+                throw new BusinessException(ErrorCode.AUTH_KAKAO_TICKET_INVALID);
+              }
               User previousUser = userRepository.findByIdWithLock(event.getUserId()).orElse(null);
               SocialAccount previousAccount =
                   socialAccountRepository

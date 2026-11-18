@@ -291,6 +291,7 @@ class KakaoAuthIntegrationTest {
     when(store.consume("ticket", "ticket-token")).thenReturn(identity);
     when(store.consume("signup", "signup-token")).thenReturn(identity);
     KakaoClient client = mock(KakaoClient.class);
+    when(client.isLinked("kakao-pending-resignup")).thenReturn(true);
     KakaoAuthServiceImpl service =
         new KakaoAuthServiceImpl(
             kakaoEnabledAuthProperties(),
@@ -371,10 +372,12 @@ class KakaoAuthIntegrationTest {
         new KakaoClient.KakaoIdentity("kakao-pending-link", email, "일반 회원", null);
     when(store.consume("ticket", "ticket-token")).thenReturn(identity);
     when(store.consume("link", "link-token")).thenReturn(identity);
+    KakaoClient client = mock(KakaoClient.class);
+    when(client.isLinked("kakao-pending-link")).thenReturn(true);
     KakaoAuthServiceImpl service =
         new KakaoAuthServiceImpl(
             kakaoEnabledAuthProperties(),
-            mock(KakaoClient.class),
+            client,
             store,
             socialAccountRepository,
             userRepository,

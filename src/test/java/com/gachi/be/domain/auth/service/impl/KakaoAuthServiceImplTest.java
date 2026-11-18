@@ -1,6 +1,7 @@
 package com.gachi.be.domain.auth.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -176,6 +177,27 @@ class KakaoAuthServiceImplTest {
     assertThat(saved.getPhoneNumber()).isEqualTo("01012345678");
     assertThat(response).isSameAs(tokens);
     verify(socialAccountRepository).saveAndFlush(any(SocialAccount.class));
+  }
+
+  @Test
+  void signupRejectsPendingUnlinkWhenKakaoConnectionIsGone() {
+    KakaoClient.KakaoIdentity identity =
+        identity("kakao-disconnected", "new@gachi.com", "새 사용자", null);
+    KakaoUnlinkOutbox event =
+        KakaoUnlinkOutbox.builder().userId(42L).providerUserId("kakao-disconnected").build();
+    when(kakaoLoginStore.consume("signup", "signup-token")).thenReturn(identity);
+    when(kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate("kakao-disconnected"))
+        .thenReturn(Optional.of(event));
+    when(kakaoClient.isLinked("kakao-disconnected")).thenReturn(false);
+
+    assertThatThrownBy(
+            () ->
+                service.signup(
+                    new KakaoSignupRequest("signup-token", true, "KO", null, false), null, null))
+        .isInstanceOf(com.gachi.be.global.exception.BusinessException.class);
+
+    verify(userRepository, never()).saveAndFlush(any(User.class));
+    assertThat(event.isProcessed()).isFalse();
   }
 
   @Test

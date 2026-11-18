@@ -23,6 +23,8 @@ import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.domain.user.service.UserProfileService;
 import java.time.OffsetDateTime;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -48,12 +50,29 @@ class KakaoResignupRollbackIntegrationTest {
   @Autowired private SocialAccountRepository socialAccountRepository;
   @Autowired private KakaoUnlinkOutboxRepository outboxRepository;
   @MockitoBean private KakaoLoginStore kakaoLoginStore;
+  @MockitoBean private KakaoClient kakaoClient;
   @MockitoBean private AuthTokenIssuer authTokenIssuer;
+  private Long oldUserId;
+  private Long eventId;
+  private String fixtureEmail;
+
+  @AfterEach
+  void cleanUpCommittedFixture() {
+    if (eventId != null) {
+      outboxRepository.deleteById(eventId);
+    }
+    if (oldUserId != null) {
+      userRepository.findByEmail(fixtureEmail).ifPresent(userRepository::delete);
+      userRepository.deleteById(oldUserId);
+    }
+  }
 
   @Test
   void failedSignupKeepsPendingUnlinkAndOldConnection() {
-    String email = "rollback-resignup@gachi.com";
-    String providerUserId = "kakao-rollback-resignup";
+    String suffix = UUID.randomUUID().toString();
+    String email = "rollback-resignup-" + suffix + "@gachi.com";
+    fixtureEmail = email;
+    String providerUserId = "kakao-rollback-resignup-" + suffix;
     OffsetDateTime now = OffsetDateTime.now();
     User oldUser =
         userRepository.saveAndFlush(
@@ -65,6 +84,7 @@ class KakaoResignupRollbackIntegrationTest {
                 .consentVersion("2026-04-v1")
                 .passwordUpdatedAt(now)
                 .build());
+    oldUserId = oldUser.getId();
     SocialAccount oldAccount =
         socialAccountRepository.saveAndFlush(
             SocialAccount.builder()
@@ -80,18 +100,22 @@ class KakaoResignupRollbackIntegrationTest {
                 .userId(oldUser.getId())
                 .providerUserId(providerUserId)
                 .build());
+    eventId = event.getId();
     userProfileService.withdraw(oldUser, new UserWithdrawalRequest(null));
 
     when(kakaoLoginStore.consume("signup", "signup-token"))
         .thenReturn(new KakaoClient.KakaoIdentity(providerUserId, email, "재가입", null));
+    when(kakaoClient.isLinked(providerUserId)).thenReturn(true);
+    IllegalStateException tokenFailure =
+        new IllegalStateException("token issuance failed after save");
     when(authTokenIssuer.issue(any(User.class), eq(false), isNull(), isNull()))
-        .thenThrow(new IllegalStateException("token issuance failed after save"));
+        .thenThrow(tokenFailure);
 
     assertThatThrownBy(
             () ->
                 kakaoAuthService.signup(
                     new KakaoSignupRequest("signup-token", true, "KO", null, false), null, null))
-        .isInstanceOf(IllegalStateException.class);
+        .isSameAs(tokenFailure);
 
     assertThat(userRepository.findByEmail(email)).isEmpty();
     assertThat(socialAccountRepository.findById(oldAccount.getId())).isPresent();

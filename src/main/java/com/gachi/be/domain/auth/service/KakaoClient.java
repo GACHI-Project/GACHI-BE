@@ -5,5 +5,7 @@ public interface KakaoClient {
 
   void unlink(String providerUserId);
 
+  boolean isLinked(String providerUserId);
+
   record KakaoIdentity(String providerUserId, String email, String nickname, String phoneNumber) {}
 }
