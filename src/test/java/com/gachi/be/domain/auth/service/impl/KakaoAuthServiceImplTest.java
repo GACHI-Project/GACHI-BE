@@ -257,8 +257,11 @@ class KakaoAuthServiceImplTest {
     when(kakaoProperties.appId()).thenReturn("1546693");
     when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "kakao-5"))
         .thenReturn(Optional.of(account));
-    when(kakaoUnlinkOutboxRepository.findByProviderUserIdAndProcessedAtIsNull("kakao-5"))
+    when(kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate("kakao-5"))
         .thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(user));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
     when(authRefreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(42L))
         .thenReturn(List.of(refreshToken));
 
@@ -270,6 +273,14 @@ class KakaoAuthServiceImplTest {
     assertThat(refreshToken.getRevokedAt()).isNotNull();
     assertThat(event.isProcessed()).isTrue();
     verify(authRefreshTokenRepository).findAllByUserIdAndRevokedAtIsNull(42L);
+    var inOrder =
+        org.mockito.Mockito.inOrder(
+            kakaoUnlinkOutboxRepository, userRepository, socialAccountRepository);
+    inOrder.verify(kakaoUnlinkOutboxRepository).findPendingByProviderUserIdForUpdate("kakao-5");
+    inOrder.verify(userRepository).findByIdWithLock(42L);
+    inOrder
+        .verify(socialAccountRepository)
+        .findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO);
   }
 
   private KakaoClient.KakaoIdentity identity(

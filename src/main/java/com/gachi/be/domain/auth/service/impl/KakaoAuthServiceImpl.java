@@ -298,12 +298,22 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
       log.warn("Rejected invalid Kakao unlink webhook.");
       return;
     }
+    Optional<KakaoUnlinkOutbox> pendingEvent =
+        kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate(providerUserId);
     socialAccountRepository
         .findByProviderAndProviderUserId(SocialProvider.KAKAO, providerUserId)
-        .ifPresent(disconnectService::disconnect);
-    kakaoUnlinkOutboxRepository
-        .findByProviderUserIdAndProcessedAtIsNull(providerUserId)
-        .ifPresent(event -> event.complete(OffsetDateTime.now()));
+        .ifPresent(
+            candidate -> {
+              Long userId = candidate.getUser().getId();
+              if (userRepository.findByIdWithLock(userId).isEmpty()) {
+                return;
+              }
+              socialAccountRepository
+                  .findByUserIdAndProviderForUpdate(userId, SocialProvider.KAKAO)
+                  .filter(account -> providerUserId.equals(account.getProviderUserId()))
+                  .ifPresent(disconnectService::disconnect);
+            });
+    pendingEvent.ifPresent(event -> event.complete(OffsetDateTime.now()));
   }
 
   private AuthProperties.Kakao enabledProperties() {
