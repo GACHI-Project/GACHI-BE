@@ -34,10 +34,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@TestPropertySource(
+    properties = {
+      "app.auth.kakao.enabled=true",
+      "app.auth.kakao.rest-api-key=test-rest-key",
+      "app.auth.kakao.client-secret=test-client-secret",
+      "app.auth.kakao.admin-key=test-admin-key",
+      "app.auth.kakao.app-id=test-app-id",
+      "app.auth.kakao.redirect-uri=http://localhost/kakao/callback"
+    })
 @Transactional
 class GoogleAuthIntegrationTest {
   @Autowired private AuthProperties authProperties;
