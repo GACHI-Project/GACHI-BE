@@ -283,6 +283,32 @@ class KakaoAuthServiceImplTest {
         .findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO);
   }
 
+  @Test
+  void staleUnlinkWebhookDoesNotWithdrawReconnectedUser() {
+    User user = activeUser("reconnected@gachi.com", "재가입 회원", null);
+    ReflectionTestUtils.setField(user, "id", 43L);
+    SocialAccount account =
+        SocialAccount.builder()
+            .user(user)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-reconnected")
+            .build();
+    when(kakaoProperties.adminKey()).thenReturn("admin-key");
+    when(kakaoProperties.appId()).thenReturn("1546693");
+    when(socialAccountRepository.findByProviderAndProviderUserId(
+            SocialProvider.KAKAO, "kakao-reconnected"))
+        .thenReturn(Optional.of(account));
+    when(userRepository.findByIdWithLock(43L)).thenReturn(Optional.of(user));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(43L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+    when(kakaoClient.isLinked("kakao-reconnected")).thenReturn(true);
+
+    service.handleUnlinkWebhook("KakaoAK admin-key", "1546693", "kakao-reconnected");
+
+    assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+    verify(socialAccountRepository, never()).delete(any(SocialAccount.class));
+  }
+
   private KakaoClient.KakaoIdentity identity(
       String id, String email, String nickname, String phoneNumber) {
     return new KakaoClient.KakaoIdentity(id, email, nickname, phoneNumber);

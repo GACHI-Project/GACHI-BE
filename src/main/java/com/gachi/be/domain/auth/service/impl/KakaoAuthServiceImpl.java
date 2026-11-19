@@ -21,6 +21,7 @@ import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
+import com.gachi.be.global.exception.ExternalApiException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -300,19 +301,30 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
     }
     Optional<KakaoUnlinkOutbox> pendingEvent =
         kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate(providerUserId);
-    socialAccountRepository
-        .findByProviderAndProviderUserId(SocialProvider.KAKAO, providerUserId)
-        .ifPresent(
-            candidate -> {
-              Long userId = candidate.getUser().getId();
-              if (userRepository.findByIdWithLock(userId).isEmpty()) {
-                return;
-              }
-              socialAccountRepository
-                  .findByUserIdAndProviderForUpdate(userId, SocialProvider.KAKAO)
-                  .filter(account -> providerUserId.equals(account.getProviderUserId()))
-                  .ifPresent(disconnectService::disconnect);
-            });
+    Optional<SocialAccount> candidate =
+        socialAccountRepository.findByProviderAndProviderUserId(
+            SocialProvider.KAKAO, providerUserId);
+    if (candidate.isPresent()) {
+      Long userId = candidate.get().getUser().getId();
+      if (userRepository.findByIdWithLock(userId).isPresent()) {
+        Optional<SocialAccount> current =
+            socialAccountRepository
+                .findByUserIdAndProviderForUpdate(userId, SocialProvider.KAKAO)
+                .filter(account -> providerUserId.equals(account.getProviderUserId()));
+        if (current.isPresent()) {
+          try {
+            if (kakaoClient.isLinked(providerUserId)) {
+              log.info("Ignored stale Kakao unlink webhook for a currently linked account.");
+              return;
+            }
+          } catch (ExternalApiException exception) {
+            log.warn("Could not verify Kakao connection for unlink webhook.", exception);
+            return;
+          }
+          disconnectService.disconnect(current.get());
+        }
+      }
+    }
     pendingEvent.ifPresent(event -> event.complete(OffsetDateTime.now()));
   }
 
