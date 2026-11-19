@@ -51,6 +51,21 @@ class KakaoAuthIntegrationTest {
   @Autowired private UserProfileService userProfileService;
 
   @Test
+  void failedWebhookVerificationIsPersistedOnceForRetry() {
+    User user = userRepository.saveAndFlush(socialUser("webhook-retry@gachi.com", "웹훅 재시도"));
+
+    kakaoUnlinkOutboxRepository.enqueueWebhookVerificationIfAbsent(user.getId(), "kakao-retry");
+    kakaoUnlinkOutboxRepository.enqueueWebhookVerificationIfAbsent(user.getId(), "kakao-retry");
+
+    KakaoUnlinkOutbox event =
+        kakaoUnlinkOutboxRepository
+            .findByProviderUserIdAndProcessedAtIsNull("kakao-retry")
+            .orElseThrow();
+    assertThat(event.getEventType()).isEqualTo(KakaoUnlinkOutbox.EventType.WEBHOOK_VERIFY);
+    assertThat(event.isProcessed()).isFalse();
+  }
+
+  @Test
   void socialSignupPersistsAccountAndIssuesUsableGachiTokens() {
     KakaoLoginStore kakaoLoginStore = mock(KakaoLoginStore.class);
     KakaoClient.KakaoIdentity identity =

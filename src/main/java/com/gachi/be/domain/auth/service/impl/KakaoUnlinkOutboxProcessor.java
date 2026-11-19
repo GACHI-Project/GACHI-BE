@@ -1,5 +1,6 @@
 package com.gachi.be.domain.auth.service.impl;
 
+import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
@@ -45,7 +46,14 @@ public class KakaoUnlinkOutboxProcessor {
     }
 
     try {
-      kakaoClient.unlink(event.getProviderUserId());
+      if (event.getEventType() == KakaoUnlinkOutbox.EventType.WEBHOOK_VERIFY) {
+        if (kakaoClient.isLinked(event.getProviderUserId())) {
+          event.complete(now);
+          return;
+        }
+      } else {
+        kakaoClient.unlink(event.getProviderUserId());
+      }
     } catch (ExternalApiException exception) {
       long retrySeconds = Math.min(MAX_RETRY_SECONDS, 1L << Math.min(event.getAttempts() + 1, 8));
       event.scheduleRetry(exception.getMessage(), now.plusSeconds(retrySeconds));

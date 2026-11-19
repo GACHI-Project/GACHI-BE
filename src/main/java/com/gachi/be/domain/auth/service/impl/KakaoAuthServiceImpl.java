@@ -319,6 +319,10 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
             }
           } catch (ExternalApiException exception) {
             log.warn("Could not verify Kakao connection for unlink webhook.", exception);
+            if (pendingEvent.isEmpty()) {
+              kakaoUnlinkOutboxRepository.enqueueWebhookVerificationIfAbsent(
+                  userId, providerUserId);
+            }
             return;
           }
           disconnectService.disconnect(current.get());

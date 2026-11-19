@@ -27,6 +27,8 @@ import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
+import com.gachi.be.global.code.ErrorCode;
+import com.gachi.be.global.exception.ExternalApiException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -307,6 +309,35 @@ class KakaoAuthServiceImplTest {
 
     assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
     verify(socialAccountRepository, never()).delete(any(SocialAccount.class));
+  }
+
+  @Test
+  void failedWebhookConnectionCheckQueuesVerification() {
+    User user = activeUser("webhook-retry@gachi.com", "소셜 회원", null);
+    ReflectionTestUtils.setField(user, "id", 44L);
+    SocialAccount account =
+        SocialAccount.builder()
+            .user(user)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-webhook-retry")
+            .build();
+    when(kakaoProperties.adminKey()).thenReturn("admin-key");
+    when(kakaoProperties.appId()).thenReturn("1546693");
+    when(socialAccountRepository.findByProviderAndProviderUserId(
+            SocialProvider.KAKAO, "kakao-webhook-retry"))
+        .thenReturn(Optional.of(account));
+    when(userRepository.findByIdWithLock(44L)).thenReturn(Optional.of(user));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(44L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+    when(kakaoClient.isLinked("kakao-webhook-retry"))
+        .thenThrow(new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR));
+
+    service.handleUnlinkWebhook("KakaoAK admin-key", "1546693", "kakao-webhook-retry");
+
+    verify(kakaoUnlinkOutboxRepository)
+        .enqueueWebhookVerificationIfAbsent(44L, "kakao-webhook-retry");
+    verify(socialAccountRepository, never()).delete(any(SocialAccount.class));
+    assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
   }
 
   private KakaoClient.KakaoIdentity identity(

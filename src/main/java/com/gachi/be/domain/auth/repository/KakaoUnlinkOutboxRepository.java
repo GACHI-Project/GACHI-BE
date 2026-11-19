@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,6 +21,20 @@ public interface KakaoUnlinkOutboxRepository extends JpaRepository<KakaoUnlinkOu
       "select event from KakaoUnlinkOutbox event where event.providerUserId = :providerUserId and event.processedAt is null")
   Optional<KakaoUnlinkOutbox> findPendingByProviderUserIdForUpdate(
       @Param("providerUserId") String providerUserId);
+
+  @Modifying
+  @Query(
+      value =
+          """
+          INSERT INTO kakao_unlink_outbox
+            (user_id, provider_user_id, event_type, next_attempt_at, created_at, updated_at)
+          VALUES (:userId, :providerUserId, 'WEBHOOK_VERIFY', CURRENT_TIMESTAMP,
+                  CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT (provider_user_id) WHERE processed_at IS NULL DO NOTHING
+          """,
+      nativeQuery = true)
+  void enqueueWebhookVerificationIfAbsent(
+      @Param("userId") Long userId, @Param("providerUserId") String providerUserId);
 
   List<KakaoUnlinkOutbox> findTop20ByProcessedAtIsNullAndNextAttemptAtLessThanEqualOrderByIdAsc(
       OffsetDateTime now);
