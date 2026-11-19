@@ -223,6 +223,16 @@ class KakaoAuthServiceImplTest {
             .build();
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(user));
+    when(socialAccountRepository.findAllByUserIdForUpdate(42L))
+        .thenReturn(
+            List.of(
+                account,
+                SocialAccount.builder()
+                    .user(user)
+                    .provider(SocialProvider.GOOGLE)
+                    .providerUserId("google-linked")
+                    .build()));
 
     service.unlink(42L);
 
@@ -233,6 +243,31 @@ class KakaoAuthServiceImplTest {
     assertThat(eventCaptor.getValue().getProviderUserId()).isEqualTo("kakao-pending");
     assertThat(account.isDisconnectPending()).isTrue();
     verify(kakaoClient, never()).unlink(any());
+  }
+
+  @Test
+  void unlinkRejectsLastSocialLoginMethod() {
+    User user = activeUser("only-kakao@gachi.com", "소셜 회원", null);
+    ReflectionTestUtils.setField(user, "id", 45L);
+    SocialAccount account =
+        SocialAccount.builder()
+            .user(user)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("only-kakao")
+            .build();
+    when(userRepository.findByIdWithLock(45L)).thenReturn(Optional.of(user));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(45L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+    when(socialAccountRepository.findAllByUserIdForUpdate(45L)).thenReturn(List.of(account));
+
+    assertThatThrownBy(() -> service.unlink(45L))
+        .isInstanceOfSatisfying(
+            com.gachi.be.global.exception.BusinessException.class,
+            error ->
+                assertThat(error.getErrorCode())
+                    .isEqualTo(com.gachi.be.global.code.ErrorCode.AUTH_LAST_LOGIN_METHOD));
+    assertThat(account.isDisconnectPending()).isFalse();
+    verify(kakaoUnlinkOutboxRepository, never()).save(any(KakaoUnlinkOutbox.class));
   }
 
   @Test
