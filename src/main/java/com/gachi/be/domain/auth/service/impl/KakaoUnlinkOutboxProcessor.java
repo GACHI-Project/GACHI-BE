@@ -46,7 +46,8 @@ public class KakaoUnlinkOutboxProcessor {
     }
 
     try {
-      if (event.getEventType() == KakaoUnlinkOutbox.EventType.WEBHOOK_VERIFY) {
+      if (event.getEventType() == KakaoUnlinkOutbox.EventType.WEBHOOK_VERIFY
+          && !account.isDisconnectPending()) {
         if (kakaoClient.isLinked(event.getProviderUserId())) {
           event.complete(now);
           return;

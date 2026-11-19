@@ -156,6 +156,26 @@ class KakaoUnlinkOutboxProcessorTest {
     verify(disconnectService, never()).disconnect(account);
   }
 
+  @Test
+  void webhookRetryExecutesLaterExplicitUnlinkRequest() {
+    KakaoUnlinkOutbox event = event();
+    ReflectionTestUtils.setField(event, "eventType", EventType.WEBHOOK_VERIFY);
+    SocialAccount account =
+        SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
+    account.requestDisconnect();
+    when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+
+    processor.process(1L);
+
+    verify(kakaoClient).unlink("kakao-42");
+    verify(kakaoClient, never()).isLinked("kakao-42");
+    verify(disconnectService).disconnect(account);
+    assertThat(event.isProcessed()).isTrue();
+  }
+
   private KakaoUnlinkOutbox event() {
     KakaoUnlinkOutbox event =
         KakaoUnlinkOutbox.builder().userId(42L).providerUserId("kakao-42").build();
