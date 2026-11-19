@@ -1,5 +1,7 @@
 package com.gachi.be.domain.auth.service.impl;
 
+import com.gachi.be.domain.auth.config.AuthProperties;
+import com.gachi.be.domain.auth.config.GoogleAuthProperties;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
@@ -17,12 +19,13 @@ import org.springframework.util.StringUtils;
 public class SocialAccountDisconnectService {
   private final SocialAccountRepository socialAccountRepository;
   private final AuthRefreshTokenRepository authRefreshTokenRepository;
+  private final AuthProperties authProperties;
+  private final GoogleAuthProperties googleAuthProperties;
 
   public void requireUnlinkAllowed(User user, SocialProvider provider) {
     if (!hasPasswordLogin(user)
         && socialAccountRepository.findAllByUserIdForUpdate(user.getId()).stream()
-            .noneMatch(
-                account -> account.getProvider() != provider && !account.isDisconnectPending())) {
+            .noneMatch(account -> account.getProvider() != provider && isUsable(account))) {
       throw new BusinessException(ErrorCode.AUTH_LAST_LOGIN_METHOD);
     }
   }
@@ -32,9 +35,7 @@ public class SocialAccountDisconnectService {
     socialAccountRepository.delete(account);
     if (!hasPasswordLogin(user)
         && socialAccountRepository.findAllByUserIdForUpdate(user.getId()).stream()
-            .noneMatch(
-                other ->
-                    other.getProvider() != account.getProvider() && !other.isDisconnectPending())) {
+            .noneMatch(other -> other.getProvider() != account.getProvider() && isUsable(other))) {
       user.withdraw(OffsetDateTime.now());
       socialAccountRepository.deleteWithdrawnUserLinks(user.getId());
       authRefreshTokenRepository
@@ -45,5 +46,15 @@ public class SocialAccountDisconnectService {
 
   private boolean hasPasswordLogin(User user) {
     return StringUtils.hasText(user.getLoginId()) && StringUtils.hasText(user.getPasswordHash());
+  }
+
+  private boolean isUsable(SocialAccount account) {
+    if (account.isDisconnectPending()) {
+      return false;
+    }
+    return switch (account.getProvider()) {
+      case KAKAO -> authProperties.getKakao().enabled();
+      case GOOGLE -> googleAuthProperties.enabled();
+    };
   }
 }

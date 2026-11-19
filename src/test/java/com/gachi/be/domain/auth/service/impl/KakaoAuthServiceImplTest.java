@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
+import com.gachi.be.domain.auth.config.GoogleAuthProperties;
 import com.gachi.be.domain.auth.dto.request.KakaoCompleteRequest;
 import com.gachi.be.domain.auth.dto.request.KakaoSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
@@ -44,6 +45,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class KakaoAuthServiceImplTest {
   @Mock private AuthProperties authProperties;
   @Mock private AuthProperties.Kakao kakaoProperties;
+  @Mock private GoogleAuthProperties googleAuthProperties;
   @Mock private KakaoClient kakaoClient;
   @Mock private KakaoLoginStore kakaoLoginStore;
   @Mock private SocialAccountRepository socialAccountRepository;
@@ -58,6 +60,7 @@ class KakaoAuthServiceImplTest {
   void setUp() {
     when(authProperties.getKakao()).thenReturn(kakaoProperties);
     when(kakaoProperties.enabled()).thenReturn(true);
+    org.mockito.Mockito.lenient().when(googleAuthProperties.enabled()).thenReturn(true);
     service =
         new KakaoAuthServiceImpl(
             authProperties,
@@ -68,7 +71,10 @@ class KakaoAuthServiceImplTest {
             authTokenIssuer,
             kakaoUnlinkOutboxRepository,
             new SocialAccountDisconnectService(
-                socialAccountRepository, authRefreshTokenRepository));
+                socialAccountRepository,
+                authRefreshTokenRepository,
+                authProperties,
+                googleAuthProperties));
   }
 
   @Test
