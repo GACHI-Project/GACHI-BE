@@ -1,9 +1,11 @@
 package com.gachi.be.domain.auth.service.impl;
 
+import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.KakaoClient;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ public class KakaoUnlinkOutboxProcessor {
 
   private final KakaoUnlinkOutboxRepository outboxRepository;
   private final SocialAccountRepository socialAccountRepository;
+  private final UserRepository userRepository;
   private final SocialAccountDisconnectService disconnectService;
   private final KakaoClient kakaoClient;
 
@@ -25,6 +28,11 @@ public class KakaoUnlinkOutboxProcessor {
     var event = outboxRepository.findByIdForUpdate(eventId).orElse(null);
     OffsetDateTime now = OffsetDateTime.now();
     if (event == null || event.isProcessed() || event.getNextAttemptAt().isAfter(now)) {
+      return;
+    }
+
+    if (userRepository.findByIdWithLock(event.getUserId()).isEmpty()) {
+      event.complete(now);
       return;
     }
 
@@ -38,7 +46,15 @@ public class KakaoUnlinkOutboxProcessor {
     }
 
     try {
-      kakaoClient.unlink(event.getProviderUserId());
+      if (event.getEventType() == KakaoUnlinkOutbox.EventType.WEBHOOK_VERIFY
+          && !account.isDisconnectPending()) {
+        if (kakaoClient.isLinked(event.getProviderUserId())) {
+          event.complete(now);
+          return;
+        }
+      } else {
+        kakaoClient.unlink(event.getProviderUserId());
+      }
     } catch (ExternalApiException exception) {
       long retrySeconds = Math.min(MAX_RETRY_SECONDS, 1L << Math.min(event.getAttempts() + 1, 8));
       event.scheduleRetry(exception.getMessage(), now.plusSeconds(retrySeconds));

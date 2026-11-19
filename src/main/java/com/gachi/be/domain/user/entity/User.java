@@ -14,6 +14,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -129,6 +130,11 @@ public class User {
     }
     this.status = UserStatus.WITHDRAWN;
     this.deletedAt = withdrawnAt;
+    this.email = "withdrawn-" + (id != null ? id : UUID.randomUUID()) + "@deleted.gachi.invalid";
+    this.loginId = null;
+    this.passwordHash = null;
+    this.phoneNumber = null;
+    this.emailVerifiedAt = null;
   }
 
   public void resetPassword(String passwordHash, OffsetDateTime passwordUpdatedAt) {

@@ -416,6 +416,10 @@ class UserControllerIntegrationTest {
     User withdrawnUser = userRepository.findById(user.getId()).orElseThrow();
     assertThat(withdrawnUser.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
     assertThat(withdrawnUser.getDeletedAt()).isNotNull();
+    assertThat(withdrawnUser.getEmail()).isNotEqualTo("withdrawal@gachi.com");
+    assertThat(withdrawnUser.getLoginId()).isNull();
+    assertThat(withdrawnUser.getPhoneNumber()).isNull();
+    assertThat(withdrawnUser.getPasswordHash()).isNull();
 
     PushDeviceToken deletedPushToken =
         pushDeviceTokenRepository.findById(pushToken.getId()).orElseThrow();
@@ -465,6 +469,12 @@ class UserControllerIntegrationTest {
             .provider(SocialProvider.GOOGLE)
             .providerUserId("google-social-withdrawal")
             .build());
+    socialAccountRepository.saveAndFlush(
+        SocialAccount.builder()
+            .user(user)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-social-withdrawal")
+            .build());
     var tokens = authTokenIssuer.issue(user, false, "test", "127.0.0.1");
     PushDeviceToken pushToken =
         pushDeviceTokenRepository.saveAndFlush(
@@ -482,6 +492,11 @@ class UserControllerIntegrationTest {
 
     assertThat(userRepository.findById(user.getId()).orElseThrow().getStatus())
         .isEqualTo(UserStatus.WITHDRAWN);
+    assertThat(userRepository.existsByEmail("social-withdrawal@gachi.com")).isFalse();
+    assertThat(socialAccountRepository.findByUserIdAndProvider(user.getId(), SocialProvider.GOOGLE))
+        .isEmpty();
+    assertThat(socialAccountRepository.findByUserIdAndProvider(user.getId(), SocialProvider.KAKAO))
+        .isEmpty();
     assertThat(pushDeviceTokenRepository.findById(pushToken.getId()).orElseThrow().isEnabled())
         .isFalse();
     reissue(tokens.refreshToken()).andExpect(status().isUnauthorized());

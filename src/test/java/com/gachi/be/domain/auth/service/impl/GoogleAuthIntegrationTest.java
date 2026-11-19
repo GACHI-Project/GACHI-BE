@@ -6,8 +6,10 @@ import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
 import com.gachi.be.domain.auth.config.GoogleAuthProperties;
+import com.gachi.be.domain.auth.dto.request.GoogleCompleteRequest;
 import com.gachi.be.domain.auth.dto.request.GoogleSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
+import com.gachi.be.domain.auth.dto.response.GoogleCompleteResponse;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
@@ -15,10 +17,14 @@ import com.gachi.be.domain.auth.service.AuthTokenIssuer;
 import com.gachi.be.domain.auth.service.GoogleClient;
 import com.gachi.be.domain.auth.service.GoogleLoginStore;
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
+import com.gachi.be.domain.child.entity.Child;
+import com.gachi.be.domain.child.repository.ChildRepository;
+import com.gachi.be.domain.user.dto.request.UserWithdrawalRequest;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
+import com.gachi.be.domain.user.service.UserProfileService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +43,8 @@ class GoogleAuthIntegrationTest {
   @Autowired private AuthRefreshTokenRepository authRefreshTokenRepository;
   @Autowired private JwtTokenProvider jwtTokenProvider;
   @Autowired private AuthTokenIssuer authTokenIssuer;
+  @Autowired private UserProfileService userProfileService;
+  @Autowired private ChildRepository childRepository;
 
   @Test
   void socialSignupPersistsAccountAndIssuesUsableGachiTokens() {
@@ -107,5 +115,55 @@ class GoogleAuthIntegrationTest {
         .isEqualTo(UserStatus.WITHDRAWN);
     assertThat(authRefreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(user.getId()))
         .isEmpty();
+  }
+
+  @Test
+  void withdrawnGoogleUserCanSignUpAgainWithoutRestoringOldData() {
+    GoogleLoginStore store = mock(GoogleLoginStore.class);
+    GoogleClient client = mock(GoogleClient.class);
+    GoogleClient.GoogleIdentity identity =
+        new GoogleClient.GoogleIdentity(
+            "google-resignup", "google-resignup@gachi.com", true, "재가입");
+    when(store.consume("signup", "first-token")).thenReturn(identity);
+    when(store.consume("signup", "second-token")).thenReturn(identity);
+    when(client.verify("id-token")).thenReturn(identity);
+    GoogleAuthServiceImpl service =
+        new GoogleAuthServiceImpl(
+            authProperties,
+            new GoogleAuthProperties(true, List.of("test-client-id"), 1800),
+            client,
+            store,
+            socialAccountRepository,
+            disconnectService,
+            userRepository,
+            authTokenIssuer);
+
+    service.signup(
+        new GoogleSignupRequest("first-token", true, "KO", NotificationPreference.IMPORTANT, false),
+        null,
+        null);
+    User oldUser = userRepository.findByEmail(identity.email()).orElseThrow();
+    childRepository.saveAndFlush(
+        Child.builder()
+            .user(oldUser)
+            .name("기존 자녀")
+            .schoolName("학교")
+            .grade(1)
+            .colorCode("#FFFFFF")
+            .build());
+
+    userProfileService.withdraw(oldUser, new UserWithdrawalRequest(null));
+    assertThat(service.complete(new GoogleCompleteRequest("id-token", false), null, null).status())
+        .isEqualTo(GoogleCompleteResponse.Status.SIGNUP_REQUIRED);
+
+    service.signup(
+        new GoogleSignupRequest(
+            "second-token", true, "KO", NotificationPreference.IMPORTANT, false),
+        null,
+        null);
+    User newUser = userRepository.findByEmail(identity.email()).orElseThrow();
+    assertThat(newUser.getId()).isNotEqualTo(oldUser.getId());
+    assertThat(childRepository.countByUserIdAndDeletedAtIsNull(oldUser.getId())).isEqualTo(1);
+    assertThat(childRepository.countByUserIdAndDeletedAtIsNull(newUser.getId())).isZero();
   }
 }

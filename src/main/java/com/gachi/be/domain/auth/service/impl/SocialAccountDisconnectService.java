@@ -19,6 +19,7 @@ public class SocialAccountDisconnectService {
     socialAccountRepository.delete(account);
     if (!StringUtils.hasText(user.getLoginId()) || !StringUtils.hasText(user.getPasswordHash())) {
       user.withdraw(OffsetDateTime.now());
+      socialAccountRepository.deleteWithdrawnUserLinks(user.getId());
       authRefreshTokenRepository
           .findAllByUserIdAndRevokedAtIsNull(user.getId())
           .forEach(token -> token.revoke());
