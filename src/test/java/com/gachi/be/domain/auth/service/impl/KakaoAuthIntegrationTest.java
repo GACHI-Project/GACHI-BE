@@ -21,6 +21,7 @@ import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthTokenIssuer;
+import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.auth.service.JwtTokenProvider;
 import com.gachi.be.domain.auth.service.KakaoAuthService;
 import com.gachi.be.domain.auth.service.KakaoClient;
@@ -50,6 +51,7 @@ class KakaoAuthIntegrationTest {
   @Autowired private AuthRefreshTokenRepository authRefreshTokenRepository;
   @Autowired private KakaoUnlinkOutboxRepository kakaoUnlinkOutboxRepository;
   @Autowired private UserProfileService userProfileService;
+  @Autowired private EmailVerificationStore emailVerificationStore;
 
   @Test
   void failedWebhookVerificationIsPersistedOnceForRetry() {
@@ -436,7 +438,8 @@ class KakaoAuthIntegrationTest {
         socialAccountRepository,
         authRefreshTokenRepository,
         kakaoEnabledAuthProperties(),
-        new GoogleAuthProperties(true, List.of("test-client-id"), 1800));
+        new GoogleAuthProperties(true, List.of("test-client-id"), 1800),
+        emailVerificationStore);
   }
 
   private AuthProperties kakaoEnabledAuthProperties() {

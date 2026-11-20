@@ -3,6 +3,7 @@ package com.gachi.be.domain.auth.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
@@ -11,6 +12,8 @@ import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
+import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
+import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.global.code.ErrorCode;
@@ -20,6 +23,37 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class SocialAccountDisconnectServiceTest {
+  @Test
+  void withdrawingSocialOnlyAccountClearsPasswordResetVerification() {
+    SocialAccountRepository accounts = mock(SocialAccountRepository.class);
+    AuthRefreshTokenRepository refreshTokens = mock(AuthRefreshTokenRepository.class);
+    EmailVerificationStore verificationStore = mock(EmailVerificationStore.class);
+    User user =
+        User.builder().email("social@gachi.com").name("회원").status(UserStatus.ACTIVE).build();
+    ReflectionTestUtils.setField(user, "id", 42L);
+    SocialAccount target =
+        SocialAccount.builder()
+            .user(user)
+            .provider(SocialProvider.KAKAO)
+            .providerUserId("kakao-42")
+            .build();
+    SocialAccountDisconnectService service =
+        new SocialAccountDisconnectService(
+            accounts,
+            refreshTokens,
+            mock(AuthProperties.class),
+            mock(GoogleAuthProperties.class),
+            verificationStore);
+
+    service.disconnect(target);
+
+    assertThat(user.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
+    verify(verificationStore)
+        .rollbackIssuedCode("social@gachi.com", EmailVerificationPurpose.RESET_PASSWORD);
+    verify(verificationStore)
+        .consumeVerifiedEmail("social@gachi.com", EmailVerificationPurpose.RESET_PASSWORD);
+  }
+
   @Test
   void disabledRemainingProviderCannotKeepSocialOnlyAccountAccessible() {
     SocialAccountRepository accounts = mock(SocialAccountRepository.class);
@@ -43,7 +77,11 @@ class SocialAccountDisconnectServiceTest {
     when(accounts.findAllByUserIdForUpdate(42L)).thenReturn(List.of(target, disabledGoogle));
     SocialAccountDisconnectService service =
         new SocialAccountDisconnectService(
-            accounts, mock(AuthRefreshTokenRepository.class), auth, google);
+            accounts,
+            mock(AuthRefreshTokenRepository.class),
+            auth,
+            google,
+            mock(EmailVerificationStore.class));
 
     assertThatThrownBy(() -> service.requireUnlinkAllowed(user, SocialProvider.KAKAO))
         .isInstanceOfSatisfying(

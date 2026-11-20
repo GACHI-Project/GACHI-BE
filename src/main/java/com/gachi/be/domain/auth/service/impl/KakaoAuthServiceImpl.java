@@ -21,7 +21,6 @@ import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
-import com.gachi.be.global.exception.ExternalApiException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -317,20 +316,10 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
                 .findByUserIdAndProviderForUpdate(userId, SocialProvider.KAKAO)
                 .filter(account -> providerUserId.equals(account.getProviderUserId()));
         if (current.isPresent()) {
-          try {
-            if (kakaoClient.isLinked(providerUserId)) {
-              log.info("Ignored stale Kakao unlink webhook for a currently linked account.");
-              return;
-            }
-          } catch (ExternalApiException exception) {
-            log.warn("Could not verify Kakao connection for unlink webhook.", exception);
-            if (pendingEvent.isEmpty()) {
-              kakaoUnlinkOutboxRepository.enqueueWebhookVerificationIfAbsent(
-                  userId, providerUserId);
-            }
-            return;
+          if (pendingEvent.isEmpty()) {
+            kakaoUnlinkOutboxRepository.enqueueWebhookVerificationIfAbsent(userId, providerUserId);
           }
-          disconnectService.disconnect(current.get());
+          return;
         }
       }
     }

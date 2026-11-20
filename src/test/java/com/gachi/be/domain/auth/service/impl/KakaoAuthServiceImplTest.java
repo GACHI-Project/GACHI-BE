@@ -14,7 +14,6 @@ import com.gachi.be.domain.auth.dto.request.KakaoCompleteRequest;
 import com.gachi.be.domain.auth.dto.request.KakaoSignupRequest;
 import com.gachi.be.domain.auth.dto.response.AuthTokenResponse;
 import com.gachi.be.domain.auth.dto.response.KakaoCompleteResponse;
-import com.gachi.be.domain.auth.entity.AuthRefreshToken;
 import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
@@ -22,14 +21,13 @@ import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.AuthTokenIssuer;
+import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.auth.service.KakaoClient;
 import com.gachi.be.domain.auth.service.KakaoLoginStore;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
-import com.gachi.be.global.code.ErrorCode;
-import com.gachi.be.global.exception.ExternalApiException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -53,6 +51,7 @@ class KakaoAuthServiceImplTest {
   @Mock private AuthTokenIssuer authTokenIssuer;
   @Mock private AuthRefreshTokenRepository authRefreshTokenRepository;
   @Mock private KakaoUnlinkOutboxRepository kakaoUnlinkOutboxRepository;
+  @Mock private EmailVerificationStore emailVerificationStore;
 
   private KakaoAuthServiceImpl service;
 
@@ -74,7 +73,8 @@ class KakaoAuthServiceImplTest {
                 socialAccountRepository,
                 authRefreshTokenRepository,
                 authProperties,
-                googleAuthProperties));
+                googleAuthProperties,
+                emailVerificationStore));
   }
 
   @Test
@@ -277,7 +277,7 @@ class KakaoAuthServiceImplTest {
   }
 
   @Test
-  void validUnlinkWebhookWithdrawsSocialOnlyUser() {
+  void validUnlinkWebhookDefersVerificationWithoutDisconnectingUser() {
     User user = activeUser("social@gachi.com", "소셜 회원", null);
     ReflectionTestUtils.setField(user, "id", 42L);
     SocialAccount account =
@@ -286,36 +286,20 @@ class KakaoAuthServiceImplTest {
             .provider(SocialProvider.KAKAO)
             .providerUserId("kakao-5")
             .build();
-    AuthRefreshToken refreshToken =
-        AuthRefreshToken.builder()
-            .user(user)
-            .tokenHash("token-hash")
-            .jti("00000000-0000-0000-0000-000000000042")
-            .rememberMe(false)
-            .expiresAt(OffsetDateTime.now().plusDays(7))
-            .build();
-    KakaoUnlinkOutbox event =
-        KakaoUnlinkOutbox.builder().userId(42L).providerUserId("kakao-5").build();
     when(kakaoProperties.adminKey()).thenReturn("admin-key");
     when(kakaoProperties.appId()).thenReturn("1546693");
     when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "kakao-5"))
         .thenReturn(Optional.of(account));
-    when(kakaoUnlinkOutboxRepository.findPendingByProviderUserIdForUpdate("kakao-5"))
-        .thenReturn(Optional.of(event));
     when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(user));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
-    when(authRefreshTokenRepository.findAllByUserIdAndRevokedAtIsNull(42L))
-        .thenReturn(List.of(refreshToken));
 
     service.handleUnlinkWebhook("KakaoAK admin-key", "1546693", "kakao-5");
 
-    verify(socialAccountRepository).delete(account);
-    assertThat(user.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
-    assertThat(user.getDeletedAt()).isNotNull();
-    assertThat(refreshToken.getRevokedAt()).isNotNull();
-    assertThat(event.isProcessed()).isTrue();
-    verify(authRefreshTokenRepository).findAllByUserIdAndRevokedAtIsNull(42L);
+    verify(kakaoUnlinkOutboxRepository).enqueueWebhookVerificationIfAbsent(42L, "kakao-5");
+    verify(kakaoClient, never()).isLinked("kakao-5");
+    verify(socialAccountRepository, never()).delete(account);
+    assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
     var inOrder =
         org.mockito.Mockito.inOrder(
             kakaoUnlinkOutboxRepository, userRepository, socialAccountRepository);
@@ -344,7 +328,6 @@ class KakaoAuthServiceImplTest {
     when(userRepository.findByIdWithLock(43L)).thenReturn(Optional.of(user));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(43L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
-    when(kakaoClient.isLinked("kakao-reconnected")).thenReturn(true);
 
     service.handleUnlinkWebhook("KakaoAK admin-key", "1546693", "kakao-reconnected");
 
@@ -370,8 +353,6 @@ class KakaoAuthServiceImplTest {
     when(userRepository.findByIdWithLock(44L)).thenReturn(Optional.of(user));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(44L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
-    when(kakaoClient.isLinked("kakao-webhook-retry"))
-        .thenThrow(new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR));
 
     service.handleUnlinkWebhook("KakaoAK admin-key", "1546693", "kakao-webhook-retry");
 

@@ -6,6 +6,8 @@ import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.AuthRefreshTokenRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
+import com.gachi.be.domain.auth.service.EmailVerificationPurpose;
+import com.gachi.be.domain.auth.service.EmailVerificationStore;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.BusinessException;
@@ -21,6 +23,7 @@ public class SocialAccountDisconnectService {
   private final AuthRefreshTokenRepository authRefreshTokenRepository;
   private final AuthProperties authProperties;
   private final GoogleAuthProperties googleAuthProperties;
+  private final EmailVerificationStore emailVerificationStore;
 
   public void requireUnlinkAllowed(User user, SocialProvider provider) {
     if (!hasPasswordLogin(user)
@@ -36,12 +39,19 @@ public class SocialAccountDisconnectService {
     if (!hasPasswordLogin(user)
         && socialAccountRepository.findAllByUserIdForUpdate(user.getId()).stream()
             .noneMatch(other -> other.getProvider() != account.getProvider() && isUsable(other))) {
+      String withdrawnEmail = user.getEmail();
+      clearPasswordResetVerification(withdrawnEmail);
       user.withdraw(OffsetDateTime.now());
       socialAccountRepository.deleteWithdrawnUserLinks(user.getId());
       authRefreshTokenRepository
           .findAllByUserIdAndRevokedAtIsNull(user.getId())
           .forEach(token -> token.revoke());
     }
+  }
+
+  private void clearPasswordResetVerification(String email) {
+    emailVerificationStore.rollbackIssuedCode(email, EmailVerificationPurpose.RESET_PASSWORD);
+    emailVerificationStore.consumeVerifiedEmail(email, EmailVerificationPurpose.RESET_PASSWORD);
   }
 
   private boolean hasPasswordLogin(User user) {

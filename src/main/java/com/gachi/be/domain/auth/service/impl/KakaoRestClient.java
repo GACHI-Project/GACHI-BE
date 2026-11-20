@@ -110,7 +110,15 @@ public class KakaoRestClient implements KakaoClient {
               .header("Authorization", "KakaoAK " + authProperties.getKakao().adminKey())
               .retrieve()
               .body(UserResponse.class);
-      return user != null && providerUserId.equals(String.valueOf(user.id()));
+      if (user == null || user.id() == null) {
+        throw new ExternalApiException(
+            ErrorCode.EXTERNAL_API_ERROR, "Kakao connection response was empty.");
+      }
+      if (!providerUserId.equals(String.valueOf(user.id()))) {
+        throw new ExternalApiException(
+            ErrorCode.EXTERNAL_API_ERROR, "Kakao connection response user ID mismatch.");
+      }
+      return true;
     } catch (RestClientResponseException e) {
       if (isAlreadyUnlinked(e)) {
         return false;
