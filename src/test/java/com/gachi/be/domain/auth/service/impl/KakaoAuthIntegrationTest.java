@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.config.AuthProperties;
+import com.gachi.be.domain.auth.config.GoogleAuthProperties;
 import com.gachi.be.domain.auth.dto.request.KakaoCompleteRequest;
 import com.gachi.be.domain.auth.dto.request.KakaoLinkRequest;
 import com.gachi.be.domain.auth.dto.request.KakaoSignupRequest;
@@ -81,8 +82,7 @@ class KakaoAuthIntegrationTest {
             userRepository,
             authTokenIssuer,
             kakaoUnlinkOutboxRepository,
-            new SocialAccountDisconnectService(
-                socialAccountRepository, authRefreshTokenRepository));
+            disconnectService());
 
     AuthTokenResponse tokens =
         kakaoAuthService.signup(
@@ -135,7 +135,7 @@ class KakaoAuthIntegrationTest {
             kakaoUnlinkOutboxRepository,
             socialAccountRepository,
             userRepository,
-            new SocialAccountDisconnectService(socialAccountRepository, authRefreshTokenRepository),
+            disconnectService(),
             kakaoClient);
 
     processor.process(event.getId());
@@ -174,8 +174,7 @@ class KakaoAuthIntegrationTest {
             userRepository,
             authTokenIssuer,
             kakaoUnlinkOutboxRepository,
-            new SocialAccountDisconnectService(
-                socialAccountRepository, authRefreshTokenRepository));
+            disconnectService());
 
     assertThat(
             service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
@@ -224,8 +223,7 @@ class KakaoAuthIntegrationTest {
             userRepository,
             authTokenIssuer,
             kakaoUnlinkOutboxRepository,
-            new SocialAccountDisconnectService(
-                socialAccountRepository, authRefreshTokenRepository));
+            disconnectService());
 
     assertThat(
             service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
@@ -270,7 +268,7 @@ class KakaoAuthIntegrationTest {
             kakaoUnlinkOutboxRepository,
             socialAccountRepository,
             userRepository,
-            new SocialAccountDisconnectService(socialAccountRepository, authRefreshTokenRepository),
+            disconnectService(),
             client)
         .process(event.getId());
 
@@ -316,8 +314,7 @@ class KakaoAuthIntegrationTest {
             userRepository,
             authTokenIssuer,
             kakaoUnlinkOutboxRepository,
-            new SocialAccountDisconnectService(
-                socialAccountRepository, authRefreshTokenRepository));
+            disconnectService());
 
     assertThat(
             service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
@@ -339,7 +336,7 @@ class KakaoAuthIntegrationTest {
             kakaoUnlinkOutboxRepository,
             socialAccountRepository,
             userRepository,
-            new SocialAccountDisconnectService(socialAccountRepository, authRefreshTokenRepository),
+            disconnectService(),
             client)
         .process(event.getId());
     verify(client, never()).unlink(anyString());
@@ -398,8 +395,7 @@ class KakaoAuthIntegrationTest {
             userRepository,
             authTokenIssuer,
             kakaoUnlinkOutboxRepository,
-            new SocialAccountDisconnectService(
-                socialAccountRepository, authRefreshTokenRepository));
+            disconnectService());
 
     assertThat(
             service.complete(new KakaoCompleteRequest("ticket-token", false), null, null).status())
@@ -433,6 +429,14 @@ class KakaoAuthIntegrationTest {
         .consentVersion("2026-04-v1")
         .passwordUpdatedAt(now)
         .build();
+  }
+
+  private SocialAccountDisconnectService disconnectService() {
+    return new SocialAccountDisconnectService(
+        socialAccountRepository,
+        authRefreshTokenRepository,
+        kakaoEnabledAuthProperties(),
+        new GoogleAuthProperties(true, List.of("test-client-id"), 1800));
   }
 
   private AuthProperties kakaoEnabledAuthProperties() {

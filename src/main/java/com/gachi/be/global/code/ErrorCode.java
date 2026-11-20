@@ -249,6 +249,12 @@ public enum ErrorCode {
       "Google 계정 이메일이 현재 계정과 일치하지 않습니다.",
       "명시적 계정 연동 이메일 불일치",
       ErrorLogLevel.WARN),
+  AUTH_LAST_LOGIN_METHOD(
+      HttpStatus.CONFLICT,
+      "AUTH4098",
+      "마지막 로그인 수단은 연동 해제할 수 없습니다.",
+      "비밀번호 로그인 불가 계정의 마지막 소셜 연동 해제 차단",
+      ErrorLogLevel.WARN),
 
   // child
   CHILD_NOT_FOUND(
