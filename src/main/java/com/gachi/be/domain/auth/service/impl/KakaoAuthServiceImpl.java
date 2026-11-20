@@ -271,10 +271,15 @@ public class KakaoAuthServiceImpl implements KakaoAuthService {
   @Transactional
   public void unlink(Long userId) {
     enabledProperties();
+    User user =
+        userRepository
+            .findByIdWithLock(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_INVALID));
     socialAccountRepository
         .findByUserIdAndProviderForUpdate(userId, SocialProvider.KAKAO)
         .ifPresent(
             account -> {
+              disconnectService.requireUnlinkAllowed(user, SocialProvider.KAKAO);
               account.requestDisconnect();
               if (!kakaoUnlinkOutboxRepository.existsByProviderUserIdAndProcessedAtIsNull(
                   account.getProviderUserId())) {
