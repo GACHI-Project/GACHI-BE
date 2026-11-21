@@ -75,6 +75,12 @@ public class KakaoUnlinkOutbox {
     this.lastError = null;
   }
 
+  public void fail(String error, OffsetDateTime failedAt) {
+    attempts++;
+    lastError = error != null && error.length() > 500 ? error.substring(0, 500) : error;
+    processedAt = failedAt;
+  }
+
   public void scheduleRetry(String error, OffsetDateTime retryAt) {
     attempts++;
     lastError = error != null && error.length() > 500 ? error.substring(0, 500) : error;

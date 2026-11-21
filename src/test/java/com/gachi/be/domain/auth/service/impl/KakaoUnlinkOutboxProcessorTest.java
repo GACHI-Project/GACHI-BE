@@ -157,6 +157,28 @@ class KakaoUnlinkOutboxProcessorTest {
   }
 
   @Test
+  void repeatedUnknownKakaoErrorStopsRetryWithoutDisconnectingAccount() {
+    KakaoUnlinkOutbox event = event();
+    ReflectionTestUtils.setField(event, "eventType", EventType.WEBHOOK_VERIFY);
+    ReflectionTestUtils.setField(event, "attempts", 9);
+    SocialAccount account =
+        SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
+    when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+    when(kakaoClient.isLinked("kakao-42"))
+        .thenThrow(new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR));
+
+    processor.process(1L);
+
+    assertThat(event.getAttempts()).isEqualTo(10);
+    assertThat(event.isProcessed()).isTrue();
+    assertThat(event.getLastError()).isNotNull();
+    verify(disconnectService, never()).disconnect(account);
+  }
+
+  @Test
   void webhookRetryExecutesLaterExplicitUnlinkRequest() {
     KakaoUnlinkOutbox event = event();
     ReflectionTestUtils.setField(event, "eventType", EventType.WEBHOOK_VERIFY);
