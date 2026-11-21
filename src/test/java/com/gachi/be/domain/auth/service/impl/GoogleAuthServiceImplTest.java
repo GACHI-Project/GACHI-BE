@@ -227,6 +227,7 @@ class GoogleAuthServiceImplTest {
             .build();
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.GOOGLE))
         .thenReturn(Optional.of(account));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(user));
 
     service.unlink(42L);
 
@@ -246,6 +247,7 @@ class GoogleAuthServiceImplTest {
         createService(new GoogleAuthProperties(false, List.of("client-id"), 1800));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.GOOGLE))
         .thenReturn(Optional.of(account));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(user));
 
     disabledService.unlink(42L);
 
@@ -254,6 +256,8 @@ class GoogleAuthServiceImplTest {
 
   @Test
   void unlinkDoesNothingWhenGoogleAccountIsAbsent() {
+    when(userRepository.findByIdWithLock(42L))
+        .thenReturn(Optional.of(activeUser("user@gachi.com", "민주")));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.GOOGLE))
         .thenReturn(Optional.empty());
 

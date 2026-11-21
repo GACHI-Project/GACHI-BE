@@ -1,22 +1,28 @@
 package com.gachi.be.domain.auth.service.impl;
 
+import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.KakaoClient;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class KakaoUnlinkOutboxProcessor {
   private static final long MAX_RETRY_SECONDS = 300;
+  private static final int MAX_ATTEMPTS = 10;
 
   private final KakaoUnlinkOutboxRepository outboxRepository;
   private final SocialAccountRepository socialAccountRepository;
+  private final UserRepository userRepository;
   private final SocialAccountDisconnectService disconnectService;
   private final KakaoClient kakaoClient;
 
@@ -25,6 +31,11 @@ public class KakaoUnlinkOutboxProcessor {
     var event = outboxRepository.findByIdForUpdate(eventId).orElse(null);
     OffsetDateTime now = OffsetDateTime.now();
     if (event == null || event.isProcessed() || event.getNextAttemptAt().isAfter(now)) {
+      return;
+    }
+
+    if (userRepository.findByIdWithLock(event.getUserId()).isEmpty()) {
+      event.complete(now);
       return;
     }
 
@@ -38,8 +49,26 @@ public class KakaoUnlinkOutboxProcessor {
     }
 
     try {
-      kakaoClient.unlink(event.getProviderUserId());
+      if (event.getEventType() == KakaoUnlinkOutbox.EventType.WEBHOOK_VERIFY
+          && !account.isDisconnectPending()) {
+        if (kakaoClient.isLinked(event.getProviderUserId())) {
+          event.complete(now);
+          return;
+        }
+      } else {
+        kakaoClient.unlink(event.getProviderUserId());
+      }
     } catch (ExternalApiException exception) {
+      if (event.getAttempts() + 1 >= MAX_ATTEMPTS) {
+        event.fail(exception.getMessage(), now);
+        log.error(
+            "Kakao unlink outbox exhausted retries; manual review required. eventId={}, type={}, userId={}",
+            event.getId(),
+            event.getEventType(),
+            event.getUserId(),
+            exception);
+        return;
+      }
       long retrySeconds = Math.min(MAX_RETRY_SECONDS, 1L << Math.min(event.getAttempts() + 1, 8));
       event.scheduleRetry(exception.getMessage(), now.plusSeconds(retrySeconds));
       return;

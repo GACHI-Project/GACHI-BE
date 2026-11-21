@@ -146,7 +146,10 @@ public class UserProfileService {
     } else if (!socialAccountRepository.existsByUserId(currentUser.getId())) {
       throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
     }
+    String withdrawnEmail = currentUser.getEmail();
+    clearPasswordResetVerification(withdrawnEmail);
     currentUser.withdraw(OffsetDateTime.now());
+    socialAccountRepository.deleteWithdrawnUserLinks(currentUser.getId());
     revokeActiveRefreshTokens(currentUser.getId());
     pushDeviceTokenRepository
         .findAllByUserIdAndEnabledTrueAndDeletedAtIsNull(currentUser.getId())
@@ -279,6 +282,11 @@ public class UserProfileService {
     } catch (Exception e) {
       log.warn("Failed to consume email change verification mark without tx sync.", e);
     }
+  }
+
+  private void clearPasswordResetVerification(String email) {
+    emailVerificationStore.rollbackIssuedCode(email, EmailVerificationPurpose.RESET_PASSWORD);
+    emailVerificationStore.consumeVerifiedEmail(email, EmailVerificationPurpose.RESET_PASSWORD);
   }
 
   private void rollbackIssuedEmailChangeCodeSafely(String verificationSubject) {

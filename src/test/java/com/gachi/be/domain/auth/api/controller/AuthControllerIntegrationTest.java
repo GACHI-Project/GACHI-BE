@@ -9,10 +9,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gachi.be.domain.auth.service.AuthMailService;
 import com.gachi.be.domain.auth.service.TokenHashService;
+import com.gachi.be.domain.user.dto.request.UserWithdrawalRequest;
 import com.gachi.be.domain.user.entity.User;
 import com.gachi.be.domain.user.entity.enums.NotificationPreference;
 import com.gachi.be.domain.user.entity.enums.UserStatus;
 import com.gachi.be.domain.user.repository.UserRepository;
+import com.gachi.be.domain.user.service.UserProfileService;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
@@ -56,6 +58,7 @@ class AuthControllerIntegrationTest {
   @Autowired private WebApplicationContext webApplicationContext;
   @Autowired private CapturingAuthMailService capturingAuthMailService;
   @Autowired private UserRepository userRepository;
+  @Autowired private UserProfileService userProfileService;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private JdbcTemplate jdbcTemplate;
   @Autowired private TokenHashService tokenHashService;
@@ -343,6 +346,31 @@ class AuthControllerIntegrationTest {
     checkPhoneNumber("010-6666-7777")
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.code").value("AUTH4093"));
+  }
+
+  @Test
+  void withdrawnLocalUserCanSignUpAgainWithSameIdentifiersAndFreshConsent() throws Exception {
+    String email = "local-resignup@gachi.com";
+    String loginId = "local_resignup";
+    String phoneNumber = "01043218765";
+    createUser(loginId, email, phoneNumber, UserStatus.ACTIVE);
+    User oldUser = userRepository.findByEmail(email).orElseThrow();
+
+    userProfileService.withdraw(oldUser, new UserWithdrawalRequest("Policy12!"));
+
+    checkLoginId(loginId).andExpect(status().isOk());
+    checkEmail(email).andExpect(status().isOk());
+    checkPhoneNumber(phoneNumber).andExpect(status().isOk());
+    verifyEmailForSignup(email);
+    signup(signupPayload("재가입", email, loginId, "Policy12!", "Policy12!", phoneNumber, false))
+        .andExpect(status().isBadRequest());
+    signup(signupPayload("재가입", email, loginId, "Policy12!", "Policy12!", phoneNumber, true))
+        .andExpect(status().isCreated());
+
+    User newUser = userRepository.findByEmail(email).orElseThrow();
+    assertThat(newUser.getId()).isNotEqualTo(oldUser.getId());
+    assertThat(oldUser.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
+    assertThat(newUser.getConsentAgreedAt()).isAfter(oldUser.getConsentAgreedAt());
   }
 
   @Test

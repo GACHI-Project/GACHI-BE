@@ -181,9 +181,17 @@ public class GoogleAuthServiceImpl implements GoogleAuthService {
   @Override
   @Transactional
   public void unlink(Long userId) {
+    User user =
+        userRepository
+            .findByIdWithLock(userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_ACCESS_TOKEN_INVALID));
     socialAccountRepository
         .findByUserIdAndProviderForUpdate(userId, SocialProvider.GOOGLE)
-        .ifPresent(disconnectService::disconnect);
+        .ifPresent(
+            account -> {
+              disconnectService.requireUnlinkAllowed(user, SocialProvider.GOOGLE);
+              disconnectService.disconnect(account);
+            });
   }
 
   private GoogleAuthProperties enabledProperties() {

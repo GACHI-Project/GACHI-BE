@@ -91,6 +91,46 @@ public class KakaoRestClient implements KakaoClient {
     }
   }
 
+  @Override
+  public boolean isLinked(String providerUserId) {
+    ensureEnabled();
+    try {
+      UserResponse user =
+          restClient
+              .get()
+              .uri(
+                  builder ->
+                      builder
+                          .scheme("https")
+                          .host("kapi.kakao.com")
+                          .path("/v2/user/me")
+                          .queryParam("target_id_type", "user_id")
+                          .queryParam("target_id", providerUserId)
+                          .build())
+              .header("Authorization", "KakaoAK " + authProperties.getKakao().adminKey())
+              .retrieve()
+              .body(UserResponse.class);
+      if (user == null || user.id() == null) {
+        throw new ExternalApiException(
+            ErrorCode.EXTERNAL_API_ERROR, "Kakao connection response was empty.");
+      }
+      if (!providerUserId.equals(String.valueOf(user.id()))) {
+        throw new ExternalApiException(
+            ErrorCode.EXTERNAL_API_ERROR, "Kakao connection response user ID mismatch.");
+      }
+      return true;
+    } catch (RestClientResponseException e) {
+      if (isAlreadyUnlinked(e)) {
+        return false;
+      }
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, "Kakao connection check failed.", e);
+    } catch (RestClientException e) {
+      throw new ExternalApiException(
+          ErrorCode.EXTERNAL_API_ERROR, "Kakao connection check failed.", e);
+    }
+  }
+
   private boolean isAlreadyUnlinked(RestClientResponseException exception) {
     try {
       return exception.getStatusCode().value() == 400

@@ -3,6 +3,7 @@ package com.gachi.be.domain.auth.repository;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -16,6 +17,24 @@ public interface SocialAccountRepository extends JpaRepository<SocialAccount, Lo
   Optional<SocialAccount> findByUserIdAndProvider(Long userId, SocialProvider provider);
 
   boolean existsByUserId(Long userId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select account from SocialAccount account where account.user.id = :userId")
+  List<SocialAccount> findAllByUserIdForUpdate(@Param("userId") Long userId);
+
+  default void deleteWithdrawnUserLinks(Long userId) {
+    findAllByUserIdForUpdate(userId).stream()
+        .filter(
+            account ->
+                account.getProvider() != SocialProvider.KAKAO || !account.isDisconnectPending())
+        .forEach(this::delete);
+  }
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select account from SocialAccount account where account.provider = :provider and account.providerUserId = :providerUserId")
+  Optional<SocialAccount> findByProviderAndProviderUserIdForUpdate(
+      @Param("provider") SocialProvider provider, @Param("providerUserId") String providerUserId);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(

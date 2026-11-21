@@ -2,6 +2,8 @@ package com.gachi.be.domain.auth.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -29,6 +31,10 @@ public class KakaoUnlinkOutbox {
   @Column(name = "provider_user_id", nullable = false, length = 100)
   private String providerUserId;
 
+  @Enumerated(EnumType.STRING)
+  @Column(name = "event_type", nullable = false, length = 30)
+  private EventType eventType;
+
   @Column(nullable = false)
   private int attempts;
 
@@ -51,7 +57,13 @@ public class KakaoUnlinkOutbox {
   public KakaoUnlinkOutbox(Long userId, String providerUserId) {
     this.userId = userId;
     this.providerUserId = providerUserId;
+    this.eventType = EventType.UNLINK_REQUEST;
     this.nextAttemptAt = OffsetDateTime.now();
+  }
+
+  public enum EventType {
+    UNLINK_REQUEST,
+    WEBHOOK_VERIFY
   }
 
   public boolean isProcessed() {
@@ -61,6 +73,12 @@ public class KakaoUnlinkOutbox {
   public void complete(OffsetDateTime completedAt) {
     this.processedAt = completedAt;
     this.lastError = null;
+  }
+
+  public void fail(String error, OffsetDateTime failedAt) {
+    attempts++;
+    lastError = error != null && error.length() > 500 ? error.substring(0, 500) : error;
+    processedAt = failedAt;
   }
 
   public void scheduleRetry(String error, OffsetDateTime retryAt) {

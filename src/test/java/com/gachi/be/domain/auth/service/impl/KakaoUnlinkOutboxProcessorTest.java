@@ -1,16 +1,20 @@
 package com.gachi.be.domain.auth.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox;
+import com.gachi.be.domain.auth.entity.KakaoUnlinkOutbox.EventType;
 import com.gachi.be.domain.auth.entity.SocialAccount;
 import com.gachi.be.domain.auth.entity.SocialProvider;
 import com.gachi.be.domain.auth.repository.KakaoUnlinkOutboxRepository;
 import com.gachi.be.domain.auth.repository.SocialAccountRepository;
 import com.gachi.be.domain.auth.service.KakaoClient;
+import com.gachi.be.domain.user.entity.User;
+import com.gachi.be.domain.user.repository.UserRepository;
 import com.gachi.be.global.code.ErrorCode;
 import com.gachi.be.global.exception.ExternalApiException;
 import java.util.Optional;
@@ -25,6 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class KakaoUnlinkOutboxProcessorTest {
   @Mock private KakaoUnlinkOutboxRepository outboxRepository;
   @Mock private SocialAccountRepository socialAccountRepository;
+  @Mock private UserRepository userRepository;
   @Mock private SocialAccountDisconnectService disconnectService;
   @Mock private KakaoClient kakaoClient;
 
@@ -34,7 +39,11 @@ class KakaoUnlinkOutboxProcessorTest {
   void setUp() {
     processor =
         new KakaoUnlinkOutboxProcessor(
-            outboxRepository, socialAccountRepository, disconnectService, kakaoClient);
+            outboxRepository,
+            socialAccountRepository,
+            userRepository,
+            disconnectService,
+            kakaoClient);
   }
 
   @Test
@@ -43,6 +52,7 @@ class KakaoUnlinkOutboxProcessorTest {
     SocialAccount account =
         SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
     when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
 
@@ -59,6 +69,7 @@ class KakaoUnlinkOutboxProcessorTest {
     SocialAccount account =
         SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
     when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.of(account));
     org.mockito.Mockito.doThrow(new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR))
@@ -77,6 +88,7 @@ class KakaoUnlinkOutboxProcessorTest {
   void staleEventDoesNotUnlinkAccountOwnedByAnotherUser() {
     KakaoUnlinkOutbox event = event();
     when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
     when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
         .thenReturn(Optional.empty());
 
@@ -84,6 +96,105 @@ class KakaoUnlinkOutboxProcessorTest {
 
     verify(kakaoClient, never()).unlink("kakao-42");
     verify(disconnectService, never()).disconnect(org.mockito.ArgumentMatchers.any());
+    assertThat(event.isProcessed()).isTrue();
+  }
+
+  @Test
+  void webhookRetryDisconnectsOnlyWhenKakaoConnectionIsGone() {
+    KakaoUnlinkOutbox event = event();
+    ReflectionTestUtils.setField(event, "eventType", EventType.WEBHOOK_VERIFY);
+    SocialAccount account =
+        SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
+    when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+    when(kakaoClient.isLinked("kakao-42")).thenReturn(false);
+
+    processor.process(1L);
+
+    verify(disconnectService).disconnect(account);
+    verify(kakaoClient, never()).unlink("kakao-42");
+    assertThat(event.isProcessed()).isTrue();
+  }
+
+  @Test
+  void webhookRetryPreservesReconnectedAccount() {
+    KakaoUnlinkOutbox event = event();
+    ReflectionTestUtils.setField(event, "eventType", EventType.WEBHOOK_VERIFY);
+    SocialAccount account =
+        SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
+    when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+    when(kakaoClient.isLinked("kakao-42")).thenReturn(true);
+
+    processor.process(1L);
+
+    verify(disconnectService, never()).disconnect(account);
+    assertThat(event.isProcessed()).isTrue();
+  }
+
+  @Test
+  void webhookRetryRemainsPendingWhenKakaoCheckFailsAgain() {
+    KakaoUnlinkOutbox event = event();
+    ReflectionTestUtils.setField(event, "eventType", EventType.WEBHOOK_VERIFY);
+    SocialAccount account =
+        SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
+    when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+    when(kakaoClient.isLinked("kakao-42"))
+        .thenThrow(new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR));
+
+    processor.process(1L);
+
+    assertThat(event.getAttempts()).isEqualTo(1);
+    assertThat(event.isProcessed()).isFalse();
+    verify(disconnectService, never()).disconnect(account);
+  }
+
+  @Test
+  void repeatedUnknownKakaoErrorStopsRetryWithoutDisconnectingAccount() {
+    KakaoUnlinkOutbox event = event();
+    ReflectionTestUtils.setField(event, "eventType", EventType.WEBHOOK_VERIFY);
+    ReflectionTestUtils.setField(event, "attempts", 9);
+    SocialAccount account =
+        SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
+    when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+    when(kakaoClient.isLinked("kakao-42"))
+        .thenThrow(new ExternalApiException(ErrorCode.EXTERNAL_API_ERROR));
+
+    processor.process(1L);
+
+    assertThat(event.getAttempts()).isEqualTo(10);
+    assertThat(event.isProcessed()).isTrue();
+    assertThat(event.getLastError()).isNotNull();
+    verify(disconnectService, never()).disconnect(account);
+  }
+
+  @Test
+  void webhookRetryExecutesLaterExplicitUnlinkRequest() {
+    KakaoUnlinkOutbox event = event();
+    ReflectionTestUtils.setField(event, "eventType", EventType.WEBHOOK_VERIFY);
+    SocialAccount account =
+        SocialAccount.builder().provider(SocialProvider.KAKAO).providerUserId("kakao-42").build();
+    account.requestDisconnect();
+    when(outboxRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
+    when(userRepository.findByIdWithLock(42L)).thenReturn(Optional.of(mock(User.class)));
+    when(socialAccountRepository.findByUserIdAndProviderForUpdate(42L, SocialProvider.KAKAO))
+        .thenReturn(Optional.of(account));
+
+    processor.process(1L);
+
+    verify(kakaoClient).unlink("kakao-42");
+    verify(kakaoClient, never()).isLinked("kakao-42");
+    verify(disconnectService).disconnect(account);
     assertThat(event.isProcessed()).isTrue();
   }
 
